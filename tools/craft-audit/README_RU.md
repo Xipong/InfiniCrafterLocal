@@ -86,12 +86,12 @@ scenario; для этого статического аудита достато
 настроенный каталог. Это не подтверждает наличие игровых ассетов.
 
 ```sh
-python tools/item-test-workbench/examples/lunar-harpoon/build.py \
+python tools/workbench/examples/lunar-harpoon/build.py \
   --player-assets artifacts/unconfigured-player-assets --out artifacts/lunar-audit-input
 python tools/craft-audit/audit.py --item artifacts/lunar-audit-input/item.json \
-  --author-source tools/item-test-workbench/examples/lunar-harpoon/author-source.json \
-  --visual-source tools/item-test-workbench/examples/lunar-harpoon/visual-author-source.json \
-  --vfx-source tools/item-test-workbench/examples/lunar-harpoon/vfx-author-source.json \
+  --author-source tools/workbench/examples/lunar-harpoon/author-source.json \
+  --visual-source tools/workbench/examples/lunar-harpoon/visual-author-source.json \
+  --vfx-source tools/workbench/examples/lunar-harpoon/vfx-author-source.json \
   --out artifacts/lunar-audit
 ```
 
@@ -106,7 +106,7 @@ python tools/craft-audit/audit.py --item artifacts/lunar-audit-input/item.json \
 ## Проверки и пределы
 
 ```sh
-python -m pytest -q toolbox/tests/test_craft_audit.py
+python -m pytest -q tests/toolbox/test_craft_audit.py
 python tools/agentctl.py verify --changed --base origin/main
 ```
 

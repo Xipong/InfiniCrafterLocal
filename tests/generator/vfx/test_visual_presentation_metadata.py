@@ -1,0 +1,458 @@
+"""Authored presentation, exact runtime ownership and representative refusals."""
+from __future__ import annotations
+
+import copy
+
+import pytest
+
+from prompt_packet_helpers import request_dossier
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.pipelines.vfx import request as stage
+import infini_local.pipelines.visual.contract as visual_contract
+import infini_local.pipelines.visual.stage as visual_stage
+from infini_local.pipelines.images.backends import comfyui_mapping
+from infini_local.pipelines.visual.assets import apply_visual_asset_runtime_gates, build_visual_asset_plan
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+from tests.generator.authoring.test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, _vfx_output, wire_transport
+
+
+def _runtime_mechanics(data):
+    """Presentation may change visual leaves, never any mechanical component."""
+    program = copy.deepcopy(data["runtimeProgram"])
+    for entity in program["entities"]:
+        entity.pop("visual", None)
+    return program
+
+
+@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
+@pytest.mark.parametrize("asset_mode", ["full", "off"])
+def test_visual_asset_setting_reaches_real_request_before_design(wire_transport, monkeypatch, format_mode, asset_mode):
+    from infini_local.core.images import config
+    from infini_local.core.schema_validation import strict_schema_errors
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", asset_mode)
+    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["item"]["grip"] = {"normalizedX": 0.5, "normalizedY": 0.5}
+    responses, requests = wire_transport
+    responses.append(raw)
+    result = visual_stage.apply_visual_director(data, {}, {})
+    packet = request_dossier(requests[0])
+    schema = packet["responseSchema"]
+    assert not strict_schema_errors(raw, schema)
+    distinct = copy.deepcopy(raw)
+    distinct["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        grip={"normalizedX": 0.5, "normalizedY": 0.5},
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    assert bool(strict_schema_errors(distinct, schema)) == (asset_mode == "off")
+    if format_mode == "json_schema":
+        wire_schema = requests[0]["response_format"]["json_schema"]["schema"]
+        assert not strict_schema_errors(raw, wire_schema)
+        assert bool(strict_schema_errors(distinct, wire_schema)) == (asset_mode == "off")
+    # The capability-neutral export and saved wire do not lose a valid mode
+    # merely because a new craft has chosen a restricted image configuration.
+    public_schema = visual_contract.visual_response_schema(
+        [row["entityId"] for row in distinct["entities"]], False, item_body_id="item")
+    assert not strict_schema_errors(distinct, public_schema)
+    assert result["visualKit"]["entities"] == raw["entities"]
+    assert _runtime_mechanics(result) == _runtime_mechanics(data)
+    assert len(requests) == 1 and not responses
+
+
+@pytest.mark.parametrize("replacement", ["reuse_item_icon", "no_asset", "runtime_geometry"])
+def test_disabled_entity_png_repairs_only_unavailable_presentation(wire_transport, monkeypatch, replacement):
+    from infini_local.core.images import config
+    from tests.generator.visual_geometry_fixtures import segment_geometry
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    changed = {"entityId": raw["entities"][1]["entityId"], "assetMode": replacement,
+               "visualProjectRef": "item" if replacement == "reuse_item_icon" else "none", "scale": 2.0}
+    if replacement == "runtime_geometry":
+        changed["geometry"] = segment_geometry()
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+                 entitiesUpsert=[changed], note="Choose available authored presentation")
+    responses, requests = wire_transport
+    responses.extend([raw, patch])
+    result = visual_stage.apply_visual_director(data, {}, {})
+    assert len(requests) == 2 and not responses
+    fixed = result["visualKit"]["entities"][1]
+    assert fixed == {**changed, "scale": raw["entities"][1]["scale"]}
+    assert result["visualKit"]["item"] == raw["item"]
+    assert result["visualKit"]["entities"][0] == raw["entities"][0]
+    assert _runtime_mechanics(result) == _runtime_mechanics(data)
+    assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
+
+
+def test_disabled_entity_png_is_not_silently_accepted_after_failed_repair(wire_transport, monkeypatch):
+    from infini_local.core.errors import PlannerUnavailable
+    from infini_local.core.images import config
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    responses, requests = wire_transport
+    responses.extend([raw, dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+        entitiesUpsert=[raw["entities"][1]], note="still unavailable")])
+    with pytest.raises(PlannerUnavailable, match="Visual Repair did not produce"):
+        visual_stage.apply_visual_director(data, {}, {})
+    assert len(requests) == 2 and not responses
+
+
+def kit() -> dict:
+    """Opaque-ID input retained for adjacent exact Repair-location scenarios."""
+    item = dict(prompt="object", negativePrompt="", silhouette="object", visualIdentity="object", palette=["red"], preferredCanvasSize=32, renderSizePx=40, forwardAngleDegrees=45, inventoryScale=1.0, worldScale=1.0)
+    return dict(schema=visual_contract.VISUAL_KIT_SCHEMA, item=item, equipOverlay=dict(prompt="badge", silhouette="badge", visualIdentity="badge", preferredCanvasSize=32), entities=[dict(entityId="opaque_id", assetMode="baked_sprite", visualProjectRef="item", scale=1.0)], animationPlan="unchanged")
+
+
+def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    before = copy.deepcopy(data)
+    raw = _visual_kit(data)
+    raw["item"].update(preferredCanvasSize=96, renderSizePx=40, forwardAngleDegrees=45,
+                       grip={"normalizedX": 0.25, "normalizedY": 0.75},
+                       palette=["copper and verdigris"], negativePrompt="")
+    body = next(row for row in raw["entities"] if row["entityId"] == "chained_door")
+    body.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="independent door",
+                silhouette="rectangular door", visualIdentity="bronze door", preferredCanvasSize=64,
+                renderSizePx=48, forwardAngleDegrees=-30)
+    responses, requests = wire_transport
+    responses.append(raw)
+    projected = visual_stage.apply_visual_director(data, {}, {})
+    plan = {row["entityId"]: row for row in build_visual_asset_plan(projected)}
+    assert (plan["item"]["canvas"], plan["item"]["renderSizePx"], plan["item"]["forwardAngleDegrees"]) == (96, 40, 45)
+    assert (plan["chained_door"]["canvas"], plan["chained_door"]["renderSizePx"], plan["chained_door"]["forwardAngleDegrees"]) == (64, 48, -30)
+    assert plan["chained_door"]["prompt"] == "independent door"
+    delivered = sanitize_recipe_for_delivery(projected)
+    assert validate_runtime_wire(delivered)["ok"]
+    assert "visualKit" not in delivered
+    assert delivered["visual"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
+    assert delivered["visual"]["palette"] == ["copper and verdigris"]
+    assert comfyui_mapping("literal item", delivered["visual"]["negativePrompt"], "exact", seed=123)["{{NEGATIVE_PROMPT}}"] == ""
+    entities = {row["id"]: row for row in delivered["runtimeProgram"]["entities"]}
+    assert entities["chained_door"]["visual"]["renderSizePx"] == 48
+    assert "renderSizePx" not in entities["item"]["visual"]
+    assert "grip" not in entities["chained_door"]["visual"]
+    assert all("runtimeGateReason" not in row["visual"] for row in entities.values())
+    assert delivered["gameplay"] == before["gameplay"]
+    mechanics = copy.deepcopy(delivered["runtimeProgram"])
+    for row in mechanics["entities"]:
+        row["visual"] = next(old["visual"] for old in before["runtimeProgram"]["entities"] if old["id"] == row["id"])
+    assert mechanics == before["runtimeProgram"]
+    assert len(requests) == 1 and not responses
+    assert projected["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
+
+
+def test_item_body_references_root_visual_project_without_duplicate_design(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    body = next(row for row in raw["entities"] if row["entityId"] == "item")
+    for field in ("prompt", "silhouette", "visualIdentity"):
+        body.pop(field, None)
+    root_before = copy.deepcopy(raw["item"])
+    responses, requests = wire_transport
+    responses.append(raw)
+
+    projected = visual_stage.apply_visual_director(data, {}, {})
+
+    assert projected["visualKit"]["item"] == root_before
+    accepted_body = next(row for row in projected["visualKit"]["entities"] if row["entityId"] == "item")
+    assert accepted_body == {"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item", "scale": 1.0}
+    runtime_body = next(row for row in projected["runtimeProgram"]["entities"] if row["id"] == "item")
+    assert runtime_body["visual"]["prompt"] == root_before["prompt"]
+    plan = next(row for row in build_visual_asset_plan(projected) if row["role"] == "item")
+    assert plan["prompt"] == root_before["prompt"]
+    assert len(requests) == 1 and not responses
+    assert projected["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
+
+
+@pytest.mark.parametrize("field", ["prompt", "silhouette", "visualIdentity"])
+def test_root_design_repair_does_not_open_entity_permissions(wire_transport, field):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["item"][field] = ""
+    entities_before = copy.deepcopy(raw["entities"])
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+                 itemPatch={field: "repaired root design"}, entitiesUpsert=[],
+                 entityIdsDelete=[], entityIndicesDelete=[], note="root leaf only")
+    responses, requests = wire_transport
+    responses.extend([raw, patch])
+
+    result = visual_stage.apply_visual_director(data, {}, {})
+
+    assert result["visualKit"]["item"][field] == "repaired root design"
+    assert result["visualKit"]["entities"] == entities_before
+    scope = request_dossier(requests[1])["repairScope"]
+    assert scope["fieldPermissions"]["itemPaths"] == [field]
+    assert scope["fieldPermissions"]["entities"] == []
+    assert scope["mutableEntityIds"] == []
+    assert len(requests) == 2 and not responses
+
+
+@pytest.mark.parametrize("field", ["prompt", "silhouette", "visualIdentity"])
+def test_fresh_item_body_cannot_reintroduce_a_second_design(field):
+    raw = kit()
+    raw["entities"][0][field] = raw["item"][field]
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert accepted is None and any(row["path"] == f"$.entities[0].{field}" for row in errors)
+
+
+def test_repair_removes_only_forbidden_body_copies_without_reauthoring_root(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    reference = copy.deepcopy(raw["entities"][0])
+    raw["entities"][0].update({field: raw["item"][field] for field in ("prompt", "silhouette", "visualIdentity")})
+    root_before = copy.deepcopy(raw["item"])
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+                 itemPatch={"prompt": "unrequested root rewrite"}, entitiesUpsert=[reference],
+                 entityIdsDelete=[], entityIndicesDelete=[], note="remove duplicate leaves only")
+    responses, requests = wire_transport
+    responses.extend([raw, patch])
+
+    result = visual_stage.apply_visual_director(data, {}, {})
+
+    assert result["visualKit"]["item"] == root_before
+    assert result["visualKit"]["entities"][0] == reference
+    assert result["visualKit"]["entities"][1] == raw["entities"][1]
+    scope = request_dossier(requests[1])["repairScope"]
+    assert scope["fieldPermissions"]["itemPaths"] == []
+    assert scope["fieldPermissions"]["entities"] == [{"entityId": "item", "paths": ["prompt", "silhouette", "visualIdentity"]}]
+    assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
+    assert len(requests) == 2 and not responses
+
+
+def test_visual_refuses_retired_global_effect_color_without_changing_art():
+    raw = kit()
+    raw["item"]["effectColor"] = "gold"
+    before = copy.deepcopy(raw)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert accepted is None
+    assert any(row["path"] == "$.item.effectColor" for row in errors)
+    assert raw == before
+
+
+@pytest.mark.parametrize("plan", [None, 42, "", "informal visual direction"])
+def test_animation_advisory_never_spends_visual_repair(wire_transport, plan):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["animationPlan"] = plan
+    responses, requests = wire_transport
+    responses.append(raw)
+    result = visual_stage.apply_visual_director(data, {}, {})
+    assert result["visualKit"].get("animationPlan") == plan
+    assert len(requests) == 1 and not responses
+
+
+def test_descriptive_palette_survives_director_and_delivery_without_repair(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    description = "Oxidized copper with blue-green recesses and pale silver highlights; " + "restrained readable facets " * 3
+    raw["item"]["palette"] = [description]
+    responses, requests = wire_transport
+    responses.append(raw)
+    projected = visual_stage.apply_visual_director(data, {}, {})
+    assert projected["visual"]["palette"] == [description]
+    assert sanitize_recipe_for_delivery(projected)["visual"]["palette"] == [description]
+    assert len(requests) == 1 and not responses
+    assert projected["debug"]["llmStageAccounting"]["visualRepairCalls"] == 0
+
+
+def test_equipment_overlay_keeps_authored_mount_and_single_badge_plan(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat"))
+    before = copy.deepcopy(data)
+    raw = _visual_kit(data)
+    raw["equipOverlay"] = dict(kit()["equipOverlay"], accessoryMount="back")
+    responses, _ = wire_transport
+    responses.append(raw)
+    projected = visual_stage.apply_visual_director(data, {}, {})
+    badge = next(row for row in build_visual_asset_plan(projected) if row["role"] == "equip_overlay")
+    assert (badge["entityId"], badge["canvas"], badge["prompt"], badge["equipmentSlot"]) == ("item", 32, "badge", "accessory")
+    assert sanitize_recipe_for_delivery(projected)["visual"]["accessoryMount"] == "back"
+    assert projected["gameplay"] == before["gameplay"] and projected["accessory"] == before["accessory"]
+
+
+@pytest.mark.parametrize("container,field,value", [
+    pytest.param("equipOverlay", "accessoryMount", {}, id="mount-wrong-type"),
+    pytest.param("equipOverlay", "accessoryMount", "wing", id="mount-unknown"),
+    pytest.param("item", "grip", [], id="grip-not-object"),
+    pytest.param("item", "grip", {"normalizedX": 0.25}, id="grip-incomplete"),
+    pytest.param("item", "grip", {"normalizedX": 0.25, "normalizedY": 1.1}, id="grip-out-of-range"),
+])
+def test_present_metadata_refuses_representative_bad_inputs(container, field, value):
+    raw = kit()
+    raw[container][field] = value
+    before = copy.deepcopy(raw)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert accepted is None and any(row["path"].startswith(f"$.{container}.{field}") for row in errors)
+    assert raw == before
+
+
+@pytest.mark.parametrize("bad_field,value,path", [
+    pytest.param("entityId", "outside_runtime", "$.entities[0].entityId", id="outside-runtime-id"),
+    pytest.param("assetMode", "invented", "$.entities[0].assetMode", id="unknown-asset-mode"),
+    pytest.param("renderSizePx", None, "$.item.renderSizePx", id="required-size-null"),
+    pytest.param("forwardAngleDegrees", 181, "$.item.forwardAngleDegrees", id="axis-out-of-range"),
+])
+def test_visual_admission_does_not_invent_identity_or_presentation(bad_field, value, path):
+    raw = kit()
+    target = raw["entities"][0] if bad_field in {"entityId", "assetMode"} else raw["item"]
+    target[bad_field] = value
+    before = copy.deepcopy(raw)
+    accepted, errors = visual_contract._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert accepted is None and any(row["path"] == path for row in errors)
+    assert raw == before
+
+
+@pytest.mark.parametrize("repair_grip", [pytest.param(True, id="bad-y-frozen-x"), pytest.param(False, id="unrelated-repair-preserves-absence")])
+def test_scoped_visual_repair_preserves_good_siblings_absence_and_mechanics(wire_transport, repair_grip):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    before = copy.deepcopy(data)
+    raw = _visual_kit(data)
+    if repair_grip:
+        raw["item"]["grip"] = {"normalizedX": 0.25, "normalizedY": 2}
+    else:
+        raw["item"]["inventoryScale"] = 99
+    raw_before = copy.deepcopy(raw)
+    hostile_entity = dict(raw["entities"][1], scale=4)
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+                 itemPatch={"grip": {"normalizedX": 0.9, "normalizedY": 0.75}, "inventoryScale": 2,
+                            "negativePrompt": "unrequested palette rewrite", "prompt": "unrequested replacement"},
+                 entitiesUpsert=[hostile_entity], entityIdsDelete=["chained_door"], entityIndicesDelete=[],
+                 animationPlan="unrequested animation", note="repair only the bad leaf")
+    responses, requests = wire_transport
+    responses.extend([raw, patch])
+    result = visual_stage.apply_visual_director(data, {}, {})
+    repaired = result["visualKit"]
+    if repair_grip:
+        assert repaired["item"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
+        assert repaired["item"]["inventoryScale"] == 1.0
+    else:
+        assert repaired["item"]["inventoryScale"] == 2
+        assert "grip" not in repaired["item"] and "grip" not in result["visual"]
+    assert repaired["item"]["negativePrompt"] == raw_before["item"]["negativePrompt"]
+    assert "accessoryMount" not in result["visual"]
+    assert repaired["item"]["prompt"] == "literal Terraria item"
+    assert repaired["entities"] == raw_before["entities"]
+    assert repaired["animationPlan"] == raw_before["animationPlan"]
+    assert result["gameplay"] == before["gameplay"]
+    assert result["runtimeProgram"]["itemUse"] == before["runtimeProgram"]["itemUse"]
+    assert _runtime_mechanics(result) == _runtime_mechanics(before)
+    assert validate_runtime_wire(sanitize_recipe_for_delivery(result))["ok"]
+    assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
+    scope = request_dossier(requests[1])["repairScope"]
+    assert scope["fieldPermissions"]["itemPaths"] == (["grip.normalizedY"] if repair_grip else ["inventoryScale"])
+    assert scope["fieldPermissions"]["entities"] == []
+    assert [request["_infini_stage"] for request in requests] == ["visual_director", "visual_repair"]
+    assert not responses and raw == raw_before
+
+
+@pytest.mark.parametrize("design,accepted", [
+    pytest.param("complete", True, id="complete-design-only-mode-missing"),
+    pytest.param("incomplete", False, id="no-design-invention"),
+    pytest.param("explicit-no-asset", False, id="cannot-replace-explicit-choice"),
+])
+def test_item_png_fix_requires_complete_authored_design(design, accepted):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    row = next(row for row in raw["entities"] if row["entityId"] == "item")
+    row.pop("assetMode")
+    if design == "incomplete":
+        raw["item"]["prompt"] = ""
+    elif design == "explicit-no-asset":
+        row["assetMode"] = "no_asset"
+    result, errors = visual_contract._validate_kit(raw, ["item", "chained_door"], "item")
+    assert (result is not None) is accepted, errors
+    # The ordinary projector resolves root art before runtime-gate admission;
+    # the thin model row is not itself a delivered runtime visual DTO.
+    data = visual_stage._apply_kit(data, result if result is not None else raw)
+    if "assetMode" not in row:
+        body = next(entity for entity in data["runtimeProgram"]["entities"] if entity["id"] == "item")
+        body["visual"].pop("assetMode", None)
+    apply_visual_asset_runtime_gates(data, {})
+    item = next(row for row in data["runtimeProgram"]["entities"] if row["id"] == "item")
+    assert item["visual"]["assetMode"] == ("baked_sprite" if accepted else "")
+    if accepted:
+        plan = next(row for row in build_visual_asset_plan(data) if row["role"] == "item")
+        assert plan["runtimeGateReason"] == "fix:item_body_baked_sprite_from_complete_visual_design"
+        assert data["debug"]["visualAssetFixes"][0]["entityId"] == "item"
+    else:
+        assert not data.get("debug", {}).get("visualAssetFixes")
+
+
+@pytest.mark.parametrize("values,path", [
+    pytest.param({"renderSizePx": True}, "$.visual.renderSizePx", id="wire-size-type"),
+    pytest.param({"forwardAngleDegrees": 181}, "$.visual.forwardAngleDegrees", id="wire-axis-bound"),
+    pytest.param({"renderSizePx": 32}, "$.runtimeProgram.entities[1].visual.renderSizePx", id="nonowning-reused-sprite"),
+])
+def test_wire_refuses_malformed_or_nonowning_presentation(values, path):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    target = data.setdefault("visual", {})
+    if "entities" in path:
+        target = data["runtimeProgram"]["entities"][1]["visual"]
+        target["assetMode"] = "reuse_item_icon"
+    target.update(values)
+    report = validate_runtime_wire(data)
+    assert not report["ok"] and any(row["path"] == path for row in report["errors"])
+
+
+def test_legacy_absence_remains_absent_and_fresh_director_clears_stale_metadata():
+    legacy = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    assert validate_runtime_wire(legacy)["ok"]
+    delivered = sanitize_recipe_for_delivery(legacy)
+    assert all(field not in delivered.get("visual", {}) for field in ("renderSizePx", "grip", "accessoryMount"))
+    legacy["visual"] = {"grip": {"normalizedX": 0, "normalizedY": 0}, "accessoryMount": "chest"}
+    projected = visual_stage._apply_kit(legacy, _visual_kit(legacy))
+    assert all(field not in projected["visual"] for field in ("grip", "accessoryMount"))
+
+
+def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audio_inference(wire_transport):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["item"].update(palette=["dark blue copper"], grip={"normalizedX": 0.25, "normalizedY": 0.75})
+    data = visual_stage._apply_kit(data, raw)
+    before = copy.deepcopy(data)
+    from tests.generator.vfx_material_fixtures import _with_asset
+    authored = _with_asset(data)
+    authored["assets"][0].update(prompt="literal door impact", negativePrompt="", canvasSize=32)
+    authored["slots"][0].update(id="door_impact", entityId="chained_door", event="on_hit",
+                                anchor="hitPoint", layer="AfterProjectiles")
+    authored["slots"][0]["element"].update(count=1, speedMinPxPerTick=0, speedMaxPxPerTick=0,
+                                          inheritVelocity=0, accelerationYPxPerTickSquared=0)
+    responses, requests = wire_transport
+    responses.append(authored)
+    final = vfx_stage.attach_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
+    packet = request_dossier(requests[0])
+    assert packet["acceptedVisualKit"]["item"]["palette"] == ["dark blue copper"]
+    assert {("chained_door", "on_hit"), ("item", "on_use")}.issubset({(row["entityId"], row["event"]) for row in packet["runtimeSurface"]["runtimePairs"]})
+    assert final["visual"]["palette"] == ["dark blue copper"]
+    slot, = final["vfxManifest"]["slots"]
+    assert (slot["entityId"], slot["event"], slot["layer"]) == ("chained_door", "on_hit", "AfterProjectiles")
+    assert "sound" not in slot and "soundId" not in slot and "spritePrompt" not in slot
+    impact = next(row for row in build_visual_asset_plan(final) if row["role"] == "vfx:" + authored["assets"][0]["id"])
+    assert impact["prompt"] == "literal door impact" and impact["negativePrompt"] == ""
+    assert final["gameplay"] == before["gameplay"]
+    assert _runtime_mechanics(final) == _runtime_mechanics(before)
+    assert vfx_validation.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"]
+    assert not responses
+
+
+@pytest.mark.parametrize("change,path", [
+    pytest.param("outside-pair", "$.slots[0]", id="unaccepted-entity-event"),
+    pytest.param("extra-field", "inventedStyle", id="unknown-slot-field"),
+])
+def test_vfx_admission_refuses_outside_runtime_or_unknown_fields(change, path):
+    data = _accepted_visual_data("door_on_chain")
+    raw = _vfx_output(data)
+    if change == "outside-pair":
+        raw["slots"][0].update(entityId="outside_runtime", event="on_hit")
+    else:
+        raw["slots"][0]["inventedStyle"] = "must not be dropped"
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert not report["ok"] and any(path in row["path"] or path in row["message"] for row in report["errors"])

@@ -1,0 +1,300 @@
+"""Explicit sound controls survive the real VFX boundary and frozen Repair."""
+from __future__ import annotations
+
+from prompt_packet_helpers import request_dossier, dossier_text
+
+import copy
+
+import pytest
+
+from infini_local.core import llm_config
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.repair as vfx_repair
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.core.errors import PlannerUnavailable
+from infini_local.pipelines.vfx import request as stage
+from tests.generator.vfx.test_repair_vfx_contract import _offline_transport
+from tests.generator.vfx.test_vfx_sound_selection import _sound
+from tests.generator.vfx_material_fixtures import _data, _shape, _native
+
+
+@pytest.mark.parametrize("controls", [
+    {"volume": 0, "pitch": 0, "pitchVariance": 0},
+    {"volume": 1, "pitch": -0.9, "pitchVariance": 0.2},
+    {"volume": 0.13, "pitch": 0.9, "pitchVariance": 0},
+    {"volume": 0.71, "pitch": 0.7, "pitchVariance": 0.6},
+    {"volume": 0.6, "pitch": -0.7, "pitchVariance": 0.6},
+])
+def test_exact_controls_reach_source_receipts_wire_and_cache_without_alpha_coupling(controls):
+    from infini_local.storage import world_storage
+    data = _data()
+    raw = _sound(data, "Item26")
+    raw["slots"][0].update(sound=controls)
+    before = copy.deepcopy(raw)
+    final = vfx_stage.attach_vfx_manifest(data, "sound-controls", llm_director=lambda *_args, **_kwargs: raw)
+    assert final["vfxManifest"]["slots"][0]["sound"] == controls
+    assert "alpha" not in final["vfxManifest"]["slots"][0]
+    assert raw == before and vfx_validation.validate_vfx_manifest_wire(final)["ok"]
+    receipts = final["debug"]["vfxSoundReceipts"]
+    assert len(receipts) == 4
+    assert {row["finalPath"] for row in receipts} == {
+        "vfxManifest.slots[0].soundId", "vfxManifest.slots[0].sound.volume",
+        "vfxManifest.slots[0].sound.pitch", "vfxManifest.slots[0].sound.pitchVariance",
+    }
+    assert vfx_projection.audit_vfx_sound_projection(raw, final["vfxManifest"], receipts)["ok"]
+    delivered = world_storage.sanitize_recipe_for_delivery(final)
+    assert delivered["vfxManifest"]["slots"][0]["sound"] == controls
+    assert vfx_validation.validate_vfx_manifest_wire(delivered)["ok"]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("volume", -0.01), ("volume", 1.01), ("volume", None), ("volume", True),
+    ("volume", "0.4"), ("volume", {}), ("volume", []), ("volume", float("nan")),
+    ("pitch", -0.91), ("pitch", 0.91), ("pitch", None), ("pitch", False),
+    ("pitch", float("inf")), ("pitchVariance", -0.1), ("pitchVariance", 0.61),
+    ("pitchVariance", None), ("pitchVariance", True), ("pitchVariance", "native"),
+])
+def test_invalid_sound_scalar_is_strict_and_repairs_only_its_own_leaf(field, value):
+    data = _data()
+    raw = _sound(data)
+    raw["slots"][0]["sound"][field] = value
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert not report["ok"]
+    assert {row["path"] for row in report["errors"]} == {f"$.slots[0].sound.{field}"}
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": [f"sound.{field}"]}]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "invalid-sound-scalar")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+
+
+@pytest.mark.parametrize("field", ["volume", "pitch", "pitchVariance"])
+def test_positive_sound_choice_cannot_become_consumer_neutral_and_repairs_only_that_leaf(field):
+    data = _data(); raw = _sound(data)
+    raw["slots"][0]["sound"][field] = 1e-46
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {f"$.slots[0].sound.{field}"}
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    assert scope["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": [f"sound.{field}"]}]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "nonneutral-sound-control")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    for accepted in (0, 1e-40):
+        control = _sound(data); control["slots"][0]["sound"][field] = accepted
+        assert vfx_validation.validate_vfx_director_output(control, data)["ok"]
+
+
+@pytest.mark.parametrize("bad", [None, {}, [], "native", True])
+def test_present_sound_container_never_becomes_legacy_absence(bad):
+    data = _data()
+    raw = _sound(data)
+    raw["slots"][0]["sound"] = bad
+    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "invalid-sound-object")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    assert "sound" in data["vfxManifest"]["slots"][0]
+
+
+@pytest.mark.parametrize("missing", ["volume", "pitch", "pitchVariance"])
+def test_each_control_is_required_inside_both_fresh_and_persisted_presence(missing):
+    data = _data()
+    raw = _sound(data)
+    del raw["slots"][0]["sound"][missing]
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {f"$.slots[0].sound.{missing}"}
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "partial-sound")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+
+
+def test_saved_selector_and_phase_cannot_replace_explicit_sound_controls():
+    data = _data()
+    raw = _sound(data, "Item169")
+    del raw["slots"][0]["sound"]
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {"$.slots[0].sound"}
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "persisted-sound")
+    slot = data["vfxManifest"]["slots"][0]
+    slot["phaseOffset"] = -0.75
+    before = copy.deepcopy(data)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
+    assert not report["ok"]
+    assert {row["path"] for row in report["errors"]} == {"$.vfxManifest.slots[0].sound", "$.vfxManifest.slots[0].phaseOffset"}
+    assert data == before and "sound" not in slot
+    slot["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    del slot["phaseOffset"]
+    current = copy.deepcopy(data)
+    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+    assert data == current
+    del slot["soundId"]
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+
+
+def test_interval_relation_only_thaws_variance_and_never_chooses_a_new_pitch():
+    data = _data()
+    raw = _sound(data)
+    raw["slots"][0]["sound"].update(pitch=0.9, pitchVariance=0.6)
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {"$.slots[0].sound.pitchVariance"}
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    candidate = copy.deepcopy(raw["slots"][0])
+    candidate["sound"].update(volume=0.9, pitch=-0.5, pitchVariance=0.2)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "narrow interval", "slotsUpsert": [candidate]}
+    merged, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert audit["ok"]
+    assert merged["slots"][0]["sound"] == {"volume": 0.37, "pitch": 0.9, "pitchVariance": 0.2}
+    assert vfx_validation.validate_vfx_director_output(merged, data)["ok"]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("missing_container", [False, True])
+def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choices(monkeypatch, mode, missing_container):
+    data = _data()
+    accepted = _sound(data, "Item152")
+    raw = copy.deepcopy(accepted)
+    if missing_container:
+        del raw["slots"][0]["sound"]
+    else:
+        raw["slots"][0]["sound"]["volume"] = 2
+    candidate = copy.deepcopy(accepted["slots"][0])
+    candidate.update(soundId="Item26", alpha=0.9, entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
+    if not missing_container:
+        candidate["sound"].update(pitch=0.7, pitchVariance=0.6)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "restore diagnosed sound choices", "slotsUpsert": [candidate]}
+    sent = _offline_transport(monkeypatch, "sound_controls_" + mode + str(missing_container), [raw, patch])
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    final = vfx_stage.attach_vfx_manifest(data, "sound-control-repair", llm_director=stage.call_llm_vfx_director)
+    assert final["debug"]["vfxDirectorRaw"] == accepted
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == [
+        "$.slotsUpsert[0].sound" if missing_container else "$.slotsUpsert[0].sound.volume"]
+    assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
+    assert len(sent) == 2
+    director, repair = [request_dossier(row) for row in sent]
+    assert director["runtimeVocabulary"]["sound"] == repair["runtimeVocabularyReadOnly"]["sound"] == vfx_contract._sound_schema()
+
+
+@pytest.mark.parametrize("renderer", ["shape", "nativeLight", "nativeDust"])
+def test_foreign_sound_object_can_only_be_deleted_without_changing_renderer(renderer):
+    data = _data()
+    accepted = _shape(data) if renderer == "shape" else _native(data, renderer)
+    raw = copy.deepcopy(accepted)
+    raw["slots"][0]["sound"] = {"volume": 1, "pitch": 0, "pitchVariance": 0}
+    # Unknown branch payload is the error; its presence must not require a new sample.
+    raw["slots"][0]["soundId"] = "Item26"
+    report = vfx_validation.validate_vfx_director_output(raw, data)
+    assert {row["path"] for row in report["errors"]} == {"$.slots[0].sound", "$.slots[0].soundId"}
+    scope = vfx_repair._build_vfx_repair_scope(raw, report["errors"])
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "remove foreign audio", "slotsUpsert": [accepted["slots"][0]]}
+    merged, audit = vfx_repair._apply_vfx_repair_patch(data, raw, patch, scope, return_audit=True)
+    assert audit["ok"] and merged == accepted
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "foreign-sound")
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
+
+
+@pytest.mark.parametrize("mutation", ["missing_receipt", "wrong_value", "wrong_source", "duplicate", "retarget", "hidden_volume", "absent_to_default"])
+def test_source_backed_projection_audit_rejects_silent_changes(mutation):
+    data = _data()
+    raw = _sound(data)
+    manifest = vfx_projection._compile_manifest(data, raw, "audit-sound")
+    receipts = vfx_projection._sound_projection_receipts(raw)
+    if mutation == "missing_receipt":
+        receipts.pop()
+    elif mutation == "wrong_value":
+        receipts[1]["value"] = 0.999
+    elif mutation == "wrong_source":
+        receipts[1]["authoredPath"] = "slots[0].alpha"
+    elif mutation == "duplicate":
+        receipts.append(copy.deepcopy(receipts[0]))
+    elif mutation == "retarget":
+        manifest["slots"][0]["event"] = "on_kill"
+    elif mutation == "hidden_volume":
+        manifest["slots"][0]["sound"]["volume"] = 0.65
+    else:
+        del raw["slots"][0]["sound"]
+        receipts = vfx_projection._sound_projection_receipts(raw)
+    assert not vfx_projection.audit_vfx_sound_projection(raw, manifest, receipts)["ok"]
+
+
+def test_identity_receipts_do_not_alias_json_boolean_and_number():
+    data = _data()
+    raw = _sound(data)
+    raw["slots"][0]["sound"]["volume"] = 1
+    manifest = vfx_projection._compile_manifest(data, raw, "typed-sound-receipt")
+    receipts = vfx_projection._sound_projection_receipts(raw)
+    next(row for row in receipts if row["authoredPath"].endswith("sound.volume"))["value"] = True
+    assert not vfx_projection.audit_vfx_sound_projection(raw, manifest, receipts)["ok"]
+    receipts = vfx_projection._sound_projection_receipts(raw)
+    manifest["slots"][0]["sound"]["volume"] = True
+    assert not vfx_projection.audit_vfx_sound_projection(raw, manifest, receipts)["ok"]
+
+
+def test_unrelated_repair_cannot_unmute_explicit_zero_volume(monkeypatch):
+    data = _data()
+    accepted = _sound(data)
+    accepted["slots"][0]["sound"]["volume"] = 0
+    raw = copy.deepcopy(accepted)
+    raw["slots"][0]["sound"]["pitch"] = 2
+    hostile = copy.deepcopy(accepted["slots"][0])
+    hostile["sound"]["volume"] = 1
+    hostile["sound"]["pitch"] = accepted["slots"][0]["sound"]["pitch"]
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "repair pitch", "slotsUpsert": [hostile]}
+    _offline_transport(monkeypatch, "sound-frozen-zero", [raw, patch])
+    final = vfx_stage.attach_vfx_manifest(data, "sound-frozen-zero", llm_director=stage.call_llm_vfx_director)
+    assert final["debug"]["vfxDirectorRaw"] == accepted
+    assert final["vfxManifest"]["slots"][0]["sound"]["volume"] == 0
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].sound.pitch"]
+
+
+@pytest.mark.parametrize("valid_fix", [False, True])
+def test_frozen_out_of_bounds_numeric_attempt_is_ignored_before_strict_mutable_validation(monkeypatch, valid_fix):
+    data = _data()
+    accepted = _sound(data)
+    raw = copy.deepcopy(accepted)
+    raw["slots"][0]["sound"]["volume"] = 2
+    candidate = copy.deepcopy(accepted["slots"][0])
+    candidate["sound"].update(volume=0.37 if valid_fix else 2, pitch=99, pitchVariance=99)
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "fix volume while leaving other choices frozen", "slotsUpsert": [candidate]}
+    sent = _offline_transport(monkeypatch, "sound-numeric-frozen-" + str(valid_fix), [raw, patch])
+    if valid_fix:
+        final = vfx_stage.attach_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
+        assert final["debug"]["vfxDirectorRaw"] == accepted
+        audit = final["debug"]["vfxRepairFilterAudit"]
+        assert audit["acceptedPaths"] == ["$.slotsUpsert[0].sound.volume"]
+        assert {row["path"] for row in audit["ignoredChanges"]} == {"$.slotsUpsert[0].sound.pitch", "$.slotsUpsert[0].sound.pitchVariance"}
+    else:
+        with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
+            vfx_stage.attach_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
+        assert "vfxManifest" not in data
+    assert len(sent) == 2
+
+
+@pytest.mark.parametrize("bad", [True, "0", None])
+def test_repair_still_rejects_structurally_invalid_numeric_types(bad):
+    data = _data()
+    raw = _sound(data)
+    raw["slots"][0]["sound"]["volume"] = 2
+    scope = vfx_repair._build_vfx_repair_scope(raw, vfx_validation.validate_vfx_director_output(raw, data)["errors"])
+    candidate = copy.deepcopy(raw["slots"][0])
+    candidate["sound"]["volume"] = bad
+    patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "bad typed correction", "slotsUpsert": [candidate]}
+    _filtered, report = vfx_repair._filter_vfx_repair_patch(data, raw, patch, scope)
+    assert not report["ok"]
+    assert any(row["path"] == "$.slotsUpsert[0].sound.volume" for row in report["errors"])
+
+
+
+
+def test_actual_vfx_attachment_refuses_a_mutated_compiler_projection(monkeypatch):
+    data = _data()
+    raw = _sound(data)
+    compile_manifest = vfx_projection._compile_manifest
+
+    def corrupt(*args, **kwargs):
+        manifest = compile_manifest(*args, **kwargs)
+        manifest["slots"][0]["sound"]["volume"] = 0.9
+        return manifest
+
+    monkeypatch.setattr(vfx_stage, "_compile_manifest", corrupt)
+    with pytest.raises(PlannerUnavailable, match="sound projection lost"):
+        vfx_stage.attach_vfx_manifest(data, "refuse-corrupt-sound", llm_director=lambda *_args, **_kwargs: raw)
+    assert "vfxManifest" not in data

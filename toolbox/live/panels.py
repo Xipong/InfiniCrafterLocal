@@ -33,6 +33,8 @@ def load_selection(args: Namespace):
             raise ValueError('--preset belongs to a different live command')
         source_path = package['sourcePath']
         default_dump = package['runtimeDumpPath']
+    if args.runtime_dump is None and default_dump is None:
+        raise ValueError(f"{package['id']} requires an explicit current --runtime-dump; private native snapshots are not bundled")
     runtime_dump = (args.runtime_dump or default_dump).expanduser().resolve()
     if not runtime_dump.is_file():
         raise ValueError(f"parent runtime dump is missing: {runtime_dump}")

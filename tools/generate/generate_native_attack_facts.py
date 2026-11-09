@@ -13,7 +13,7 @@ from generate_native_hit_status import decode
 from native_attack_fact_analysis import shoot_facts, line_collision_facts
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeAttackFactsCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeAttackFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_attack_sources.generated.json"
 
 

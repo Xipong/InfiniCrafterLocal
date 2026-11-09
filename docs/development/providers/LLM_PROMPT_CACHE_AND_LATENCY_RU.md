@@ -46,7 +46,7 @@ case-specific `user` dossier. `schemaDefinitions.$defs` в DEVELOPER содер�
   настоящий native serializer на трёх разных runtime rosters; это не новый live
   cache hit или измерение ускорения.
 
-Регрессии: `LocalGenerator/tests/test_director_schema_cache_extraction.py` — literal
+Регрессии: `tests/generator/authoring/test_director_schema_cache_extraction.py` — literal
 reconstruction, native wire/affinity, changed-tail/static-revision и valid/invalid
 parity; frozen merge проверяется существующими Repair contract tests.
 
@@ -64,8 +64,8 @@ Cache key/стабильный prefix не доказывают hit, latency spe
 
 ## Владельцы и регрессии
 
-[Prefix](../../../LocalGenerator/infini_local/core/llm_prompt_cache.py): `json_prefix_chars`/`with_prompt_cache_prefix`; [Author/Repair](../../../LocalGenerator/infini_local/pipelines/author/request.py), [VFX transport](../../../LocalGenerator/infini_local/pipelines/vfx/request.py), [Visual](../../../LocalGenerator/infini_local/pipelines/visual/request.py), [VFX packet](../../../LocalGenerator/infini_local/pipelines/vfx/prompt.py); [transport](../../../LocalGenerator/infini_local/pipelines/transport/client.py), [Codex whitelist](../../../LocalGenerator/infini_local/services/codex_text_backend.py).
+[Prefix](../../../generator/infini_local/core/llm_prompt_cache.py): `with_instruction_segments`/`with_prompt_cache_prefix`; [Author/Repair](../../../generator/infini_local/pipelines/author/request.py), [VFX transport](../../../generator/infini_local/pipelines/vfx/request.py), [Visual](../../../generator/infini_local/pipelines/visual/request.py), [VFX packet](../../../generator/infini_local/pipelines/vfx/prompt.py); [transport](../../../generator/infini_local/pipelines/transport/client.py), [Codex whitelist](../../../generator/infini_local/services/codex_text_backend.py).
 
-[Request](../../../LocalGenerator/tests/test_provider_request_contract.py)/[transport](../../../LocalGenerator/tests/test_provider_transport_contract.py) regressions: identity/invalidation/processes/exact split/stripped marker/unknown endpoints/zero-vs-missing usage/self-contained requests. [Offline QA](../../user/START_RU.md); HTTP fixtures не GPU cache proof.
+[Request](../../../tests/generator/providers/test_provider_request_contract.py)/[transport](../../../tests/generator/providers/test_provider_transport_contract.py) regressions: identity/invalidation/processes/exact split/stripped marker/unknown endpoints/zero-vs-missing usage/self-contained requests. [Offline QA](../../user/START_RU.md); HTTP fixtures не GPU cache proof.
 
 [OpenAI](https://developers.openai.com/api/docs/guides/prompt-caching) · [OpenRouter](https://openrouter.ai/docs/guides/best-practices/prompt-caching) · [Gemini](https://ai.google.dev/gemini-api/docs/generate-content/caching) · [Codex upstream key](https://github.com/openai/codex/blob/main/codex-rs/codex-api/src/common.rs).

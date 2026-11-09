@@ -79,7 +79,7 @@ Compiler receipts и C# wire/execution не изменяются.
 ## Offline capture production requests
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/diagnostics/measure_llm_request_sizes.py --out request-sizes.json
+PYTHONPATH=generator python tools/diagnostics/measure_llm_request_sizes.py --out request-sizes.json
 ```
 
 Скрипт использует реальные builders/adapters/serializers и блокирует network/LLM calls. Родители — synthetic fixtures; measured JSON bytes/chars не являются billed tokens, latency или model quality. Сравнение baseline допускается отдельным `--repo /path/to/base-checkout`, не через восстановление старого контракта в production.

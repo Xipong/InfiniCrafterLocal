@@ -43,7 +43,7 @@ def _host_path(executable: str, value: str, root: Path) -> str:
 def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str, str] | None = None) -> dict[str, Any]:
     start = time.monotonic()
     environment = dict(os.environ if env is None else env)
-    environment.update(PYTHONPATH=str(root / 'LocalGenerator'), PYTHONUTF8='1', INFINI_SKIP_CONFIG_FILE='1', INFINI_TEST_USE_PROJECT_CONFIG='0')
+    environment.update(PYTHONPATH=str(root / 'generator'), PYTHONUTF8='1', INFINI_SKIP_CONFIG_FILE='1', INFINI_TEST_USE_PROJECT_CONFIG='0')
     command = list(command)
 
     def result(status: str, output: str = '', code: int | None = None) -> dict[str, Any]:
@@ -56,13 +56,19 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         report = environment.get('INFINI_AGENT_SELFTEST_REPORT', '')
         if not report or not (root / report).is_file():
             return result('notRun', 'Real tModLoader runtime self-test report unavailable; run tML with INFINI_AGENT_SELFTEST=1')
+        targets = [("--mod-dll", environment.get('INFINI_AGENT_SELFTEST_MOD_DLL', '')),
+                   ("--tml-dll", environment.get('INFINI_AGENT_SELFTEST_TML_DLL', ''))]
+        if any(not value for _, value in targets):
+            return result('notRun', 'Self-test target DLLs required: set INFINI_AGENT_SELFTEST_MOD_DLL and INFINI_AGENT_SELFTEST_TML_DLL')
         command = [sys.executable, 'tools/checks/check_tml_selftest_report.py', report]
+        for option, value in targets:
+            command += [option, value]
     if name == 'item_workbench_build':
         # The workbench owns readiness and compilation; missing references are not a PASS.
         for variable in ('INFINI_TML_REFERENCE_DIR', 'INFINI_TML_DEPS_SRC'):
             if environment.get(variable):
                 environment[variable] = str((root / Path(environment[variable]).expanduser()).resolve())
-        readiness = _execute([sys.executable, 'tools/item-test-workbench/workbench.py', 'doctor'], root, environment)
+        readiness = _execute([sys.executable, 'tools/workbench/workbench.py', 'doctor'], root, environment)
         try:
             state = json.loads(readiness.stdout)
         except (ValueError, TypeError):
@@ -78,7 +84,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         deps = environment.get('INFINI_TML_DEPS_SRC', '')
         if deps:
             deps = str((root / Path(deps).expanduser()).resolve())
-        project = environment.get('INFINI_VALIDATION_PROJECT', 'ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj')
+        project = environment.get('INFINI_VALIDATION_PROJECT', 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj')
         project_path = root / project
         if name == 'tml_build' and not project_path.is_file():
             return result('failed', f'Project not found: {project_path}', 2)
@@ -108,12 +114,12 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
             if not refs or not (Path(refs) / 'tModLoader.dll').is_file():
                 return result('notRun', 'Native CPU checks need INFINI_TML_REFERENCE_DIR containing tModLoader.dll')
             filters = command[command.index('--check-filter'):] if '--check-filter' in command else []
-            command = [dotnet, 'build', _host_path(dotnet, 'tools/native/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
+            command = [dotnet, 'build', _host_path(dotnet, 'tests/native/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
                        f'/p:InfiniTmlReferenceDir={_host_path(dotnet, refs, root)}', f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']
             build = _execute(command, root, environment)
             if build.returncode:
                 return result('failed', build.stdout, build.returncode)
-            run = _execute([dotnet, _host_path(dotnet, 'tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
+            run = _execute([dotnet, _host_path(dotnet, 'tests/native/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
             return result('passed' if run.returncode == 0 else 'failed', build.stdout + run.stdout, run.returncode)
         command = [dotnet, 'build', _host_path(dotnet, str(project_path), root), '-c', 'Debug', '--nologo', '-v:minimal', '-warnaserror',
                    f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']
@@ -178,6 +184,8 @@ def main() -> int:
     parser.add_argument('--project')
     parser.add_argument('--external-deps-root')
     parser.add_argument('--runtime-selftest-report')
+    parser.add_argument('--runtime-selftest-mod-dll')
+    parser.add_argument('--runtime-selftest-tml-dll')
     parser.add_argument('--report', type=Path, default=ROOT / 'artifacts/validation/validation_report.json')
     args = parser.parse_args()
     manifest = json.loads((ROOT / '.agent/manifest.json').read_text(encoding='utf-8'))
@@ -186,7 +194,9 @@ def main() -> int:
         return 0 if rows and all(row['status'] == 'passed' for row in rows) else 1
     env = dict(os.environ)
     for key, value in [('INFINI_VALIDATION_PROJECT', args.project), ('INFINI_TML_DEPS_SRC', args.external_deps_root),
-                       ('INFINI_AGENT_SELFTEST_REPORT', args.runtime_selftest_report)]:
+                       ('INFINI_AGENT_SELFTEST_REPORT', args.runtime_selftest_report),
+                       ('INFINI_AGENT_SELFTEST_MOD_DLL', args.runtime_selftest_mod_dll),
+                       ('INFINI_AGENT_SELFTEST_TML_DLL', args.runtime_selftest_tml_dll)]:
         if value:
             env[key] = value
     checks: list[dict[str, Any]] = []

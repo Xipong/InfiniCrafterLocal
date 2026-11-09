@@ -4,7 +4,7 @@
 
 ## Быстрый вход по задаче
 
-Если файл/метод уже известен, открой его и прямых callers. Если неизвестен — выбери один маршрут в [карте задач и исходников](docs/development/CODE_MAP_RU.md#fast-start); это единственная навигационная карта. Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Не перечитывай инструкции, карту и generated catalogs перед каждой правкой. Правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
+Если файл/метод уже известен, открой его и прямых callers; `python tools/agentctl.py context --path <файл> --find "<уникальная сигнатура>"` сразу покажет нужное место без поиска номера строки. Если неизвестен — выбери один маршрут в [карте задач и исходников](docs/development/CODE_MAP_RU.md#fast-start); это единственная навигационная карта. Scoped инструкции: [Python](generator/infini_local/AGENTS.md) и [C#](mod/InfiniCrafterLocal/AGENTS.md). Не перечитывай инструкции, карту и generated catalogs перед каждой правкой. Правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
 
 ## Масштаб проверки
 
@@ -66,9 +66,11 @@ Owners: authored shape — `program_schema.py`; mechanical/event facts — `capa
 
 ```bash
 # Для затронутого runtime: точный вход вместо обхода дерева; --path тоже поддерживается.
-python tools/agentctl.py context --task "описание задачи" --area runtime
+python tools/agentctl.py context --area runtime
+# Известный owner: literal anchor, не поиск по всему репозиторию.
+python tools/agentctl.py context --path generator/infini_local/pipelines/author/stage.py --find "def compile_and_validate_authored_runtime("
 # Известный файл или область: проверка без чтения Git diff.
-python tools/agentctl.py verify --path LocalGenerator/infini_local/core/runtime_authoring/validator.py
+python tools/agentctl.py verify --path generator/infini_local/core/runtime_authoring/validator.py
 python tools/agentctl.py verify --area transport
 # После правок: owner-area проверки. --base включает уже закоммиченный diff ветки.
 python tools/agentctl.py verify --changed --base origin/main --plan

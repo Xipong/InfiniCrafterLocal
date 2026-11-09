@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
-from toolbox.infini_toolbox import discover_project
+from toolbox.project import discover_project
 from toolbox.live.options import build_parser
 from toolbox.live.panels import load_selection
 from toolbox.live.preflight import prepare
@@ -36,7 +36,7 @@ if args.real_images:
 os.environ.update(environment)
 os.environ['INFINI_SKIP_CONFIG_FILE'] = '1'
 ROOT = discover_project(args.project)
-LOCAL = ROOT / 'LocalGenerator'
+LOCAL = ROOT / 'generator'
 OUT = args.output.expanduser().resolve()
 OUT.mkdir(parents=True, exist_ok=True)
 configured_provider = preflight['configured']['provider']
@@ -56,7 +56,6 @@ os.environ['INFINI_WORLD_RECIPES_DIR'] = str(OUT / 'cache/world_recipes')
 os.environ['INFINI_SDCPP_SERVER_AUTOSTART'] = '0'
 os.environ['INFINI_TRACE_PROMPTS'] = '1'
 os.environ['INFINI_TRACE_MAX_PROMPT_CHARS'] = '200000'
-os.environ['INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK'] = '0'
 os.environ['INFINI_VISUAL_REQUIRE_ITEM_SPRITE'] = '0'
 # Pacing is owned by this harness. Do not permit lower-level transport retries
 # to fire immediately, or their attempts would escape the one-minute ledger.

@@ -55,9 +55,7 @@
 Вторых `playerEffect.lifeRegenHpPerSecond`, `playerEffect.lifeRegenUnits` и
 `playerEffect.highlightTreasure` нет. Старые длинные Author-spellings
 `lifeRegenHpPerSecond` и `oreSenseEnabled` не являются вторым свежим API.
-Существующие native wire-значения и их исторические receipt-пути сохраняются
-объявленным lowering; сохранённые определения без условий остаются безусловными
-и не получают выдуманных полей при сериализации.
+Native wire-значения задаёт текущий lowering с exact current receipts. Отсутствующее условие допустимо только по объявленной нейтрали; сериализация не добавляет невыбранную механику.
 
 ## Поля компонента `playerEffect`
 
@@ -102,7 +100,7 @@ leaf receipts. `PlayerEffectSpec` отвергает присутствующи�
 новая длительность лечебного КД проходят native `GlobalItem` hooks, ловля —
 `ModPlayer.ModifyFishingAttempt`, попадания — реальные item/projectile callbacks.
 
-Generated utility snapshot имеет версию 9; клиент и сервер должны обновляться
+Generated utility snapshot имеет версию 10; клиент и сервер должны обновляться
 вместе. Новый reader не принимает старый пакет как новый. Сохранённые определения
 без optional `playerEffect` сохраняют прежнее отсутствие. Истечение, refresh,
 смерть и authority остаются у существующего buff lifecycle.
@@ -115,7 +113,7 @@ Generated utility snapshot имеет версию 9; клиент и серве
 
 Пассивные native-поля `playerEffect` материализуются и для remote-player presentation; исполнение автоматического QuickMana и сокращения действующего cooldown отдельно owner-local. Native lifecycle checks проверяют actual potion consumption/Mana Sickness, reset/dead/remote/server negatives и настоящий PostHurt callback, но не полную сетевую игровую сессию или входящий Player.Hurt целиком.
 
-Utility snapshot wire использует версию9. Старые7/8 и неизвестныеверсии отвергаются явно; это не обещание обратной совместимости. Неполный пакет не заменяет уже принятые таймеры/модификаторы.
+Utility snapshot wire использует версию 10. Старые 7/8/9 и неизвестные версии отвергаются явно; это не обещание обратной совместимости. Неполный пакет не заменяет уже принятые таймеры/модификаторы.
 
 ## Обычная нативная рыбалка
 

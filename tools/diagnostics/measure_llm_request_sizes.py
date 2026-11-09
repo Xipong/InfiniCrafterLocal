@@ -72,7 +72,7 @@ class OfflineCapture:
     def __init__(self, root):
         self.root = Path(root).resolve()
         sys.dont_write_bytecode = True
-        sys.path[:0] = [str(self.root / "LocalGenerator"), str(self.root / "LocalGenerator/tests")]
+        sys.path[:0] = [str(self.root / "generator"), str(self.root / "tests/generator")]
         from infini_local.core import llm_config
         from infini_local.core.vfx import validation as vfx_validation, repair as vfx_repair
         from infini_local.pipelines.vfx import stage as vfx_stage, prompt as vfx_prompt
@@ -88,8 +88,8 @@ class OfflineCapture:
         from infini_local.pipelines.context.generated_summary import attach_generated_parent_summary
         from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         from infini_local.services import codex_auth
-        from test_low_level_three_stage_pipeline import _visual_kit
-        from test_low_level_three_stage_pipeline import _vfx_output
+        from tests.generator.authoring.test_low_level_three_stage_pipeline import _visual_kit
+        from tests.generator.authoring.test_low_level_three_stage_pipeline import _vfx_output
         self.config = llm_config
         self.vfx_validation, self.vfx_repair = vfx_validation, vfx_repair
         self.vfx_stage, self.vfx_prompt = vfx_stage, vfx_prompt
@@ -366,8 +366,8 @@ def main():
                          "envelope": "Exact HTTP JSON body bytes after production serialization; excludes URL/headers/TLS. Static/dynamic literal message content and compact component JSON are overlapping diagnostics, not additive token costs."}}
     # Hash imported production and fixture files after capture too: concurrent
     # edits must not silently produce a mixed-version before/after result.
-    sources = list((root / "LocalGenerator/infini_local").rglob("*.py")) + [
-        root / "LocalGenerator/tests/test_low_level_three_stage_pipeline.py", root / "LocalGenerator/tests/vfx_material_fixtures.py"]
+    sources = list((root / "generator/infini_local").rglob("*.py")) + [
+        root / "tests/generator/authoring/test_low_level_three_stage_pipeline.py", root / "tests/generator/vfx_material_fixtures.py"]
     hashes = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
     with OfflineCapture(root) as capture:
         result["tokenizer"], encode = tokenizer_status()

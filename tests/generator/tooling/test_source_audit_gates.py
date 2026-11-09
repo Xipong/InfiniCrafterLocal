@@ -1,0 +1,157 @@
+"""Small lint-tool contracts. Product behavior belongs to Python/native consumers."""
+from __future__ import annotations
+from suite_paths import REPO_ROOT
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+ROOT = REPO_ROOT
+
+
+@pytest.fixture(scope="module")
+def gates():
+    modules = []
+    for name in ("check_project_hygiene", "check_csharp_contracts"):
+        spec = importlib.util.spec_from_file_location(name, ROOT / "tools/checks" / (name + ".py"))
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        modules.append(module)
+    return modules
+
+
+def python_sources(source):
+    return {"generator/infini_local/pipelines/pipeline_runtime_constants.py": "BAD_NAME_PATTERNS = ()\n",
+            "generator/infini_local/renamed_probe.py": source}
+
+
+def test_validator_inventory_follows_explicit_diagnostic_code_arguments(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("audit_targeted_repair", ROOT / "tools/checks/audit_targeted_repair.py")
+    assert spec is not None and spec.loader is not None
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    path = tmp_path / "generator/infini_local/core/runtime_authoring/validator.py"
+    path.parent.mkdir(parents=True)
+    path.write_text('''
+def reject(row, field, code, message):
+    return ValidationIssue(field, code, message)
+reject({}, "window", "overlapping_motion_windows", "not_an_error_code")
+ValidationIssue("path", "first" if name == "not_a_code" else "second", "message")
+unrelated("not_a_code")
+''')
+    monkeypatch.setattr(audit, "ROOT", tmp_path)
+    assert audit._emitted_validator_codes() == {"overlapping_motion_windows", "first", "second"}
+
+
+@pytest.mark.parametrize("source,code", [
+    ('values = {"name": 1, "name": 2}', "duplicate_dict_key"),
+    ('def f():\n    x = 1\n    x = 1', "duplicate_assignment"),
+    ('__all__ = [name for name in globals()]', "dynamic_exports"),
+    ('import os as system\nx = system.environ.get("INFINI_DIRECT")', "raw_environment_read"),
+    ('from os import getenv as read_env\nx = read_env("INFINI_DIRECT")', "raw_environment_read"),
+    ('BAD_NAME_PATTERNS = ()', "constant_owner"),
+    ('from tools.checks.check_csharp_contracts import source_policy_issues', "tooling_import"),
+])
+def test_python_lint_reports_invalid_source(gates, source, code):
+    hygiene, _ = gates
+    assert any(issue.startswith(code + ":") for issue in hygiene.python_source_issues(python_sources(source)))
+
+
+def test_python_lint_accepts_decoys_and_reports_import_cycle(gates):
+    hygiene, _ = gates
+    sources = python_sources('# os.getenv("COMMENT")\nimport os\nsnapshot = os.environ.copy()')
+    assert hygiene.python_source_issues(sources) == []
+    sources.update({"generator/infini_local/a.py": "import infini_local.b",
+                    "generator/infini_local/b.py": "value = 1"})
+    assert hygiene.python_source_issues(sources) == []
+    sources["generator/infini_local/b.py"] = "import infini_local.a"
+    assert any(issue.startswith("import_cycle:") for issue in hygiene.python_source_issues(sources))
+
+
+@pytest.mark.parametrize("path,source,code", [
+    ("Common/Models/Contracts/GeneratedItemData.Renamed.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Common/Models/Runtime/GeneratedItemData.Renamed.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Content/Items/GeneratedItem.Equipment.cs", "player.setBonus = authoredText;", "authored_tooltip"),
+    ("Content/Items/GeneratedItem.Use.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Content/Items/GeneratedItem.RuntimeEvents.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Content/Items/GeneratedItem.RenamedHooks.cs", "public string Tooltip { get; set; }", "authored_tooltip"),
+    ("Renamed.cs", "#pragma warning disable CS0246", "warning_suppression"),
+])
+def test_csharp_lint_reports_invalid_source_not_comment_or_string_decoys(gates, path, source, code):
+    _, scanner = gates
+    decoy = "// " + source + "\nstring text = " + json.dumps(source) + ";"
+    assert scanner.source_policy_issues({path: decoy}) == []
+    assert any(issue.startswith(code + ":") for issue in scanner.source_policy_issues({path: source}))
+
+
+@pytest.mark.parametrize("mutation,diagnostic", [
+    ("unguarded", "selftest_opt_in"),
+    ("spawn", "selftest_projectile_spawn"),
+])
+def test_selftest_safety_policy_rejects_unguarded_or_world_mutating_emitter(gates, mutation, diagnostic):
+    _, scanner = gates
+    path = "Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs"
+    source = (scanner.SRC / path).read_text(encoding="utf-8")
+    assert scanner.source_policy_issues({path: source}) == []
+    body = scanner.method_body(source, "PostSetupContent")
+    guard_end = body.index("return;") + len("return;")
+    if mutation == "unguarded":
+        changed = source.replace(body, body[guard_end:], 1)
+    else:
+        changed = source.replace("var checks =", "Projectile.NewProjectile(default);\n        var checks =", 1)
+    assert diagnostic + ":" + path in scanner.source_policy_issues({path: changed})
+    # A comment/string mention of a spawn is not executable world mutation.
+    decoy = source + '\n// Projectile.NewProjectile(default);\n' + 'class Note { const string Text = "Projectile.NewProjectile"; }'
+    assert scanner.source_policy_issues({path: decoy}) == []
+
+
+def test_forbidden_gameplay_router_policy_ignores_layout_and_decoys(gates):
+    _, scanner = gates
+    assert scanner.architecture_issues({"Moved.cs": '// AttackSpec\nstring text = "WeaponFamily";'}) == []
+    assert scanner.architecture_issues({"Moved.cs": "class AttackSpec {}"}) == [
+        "forbidden_gameplay_router:Moved.cs:AttackSpec"]
+
+
+
+
+def test_packet_collision_is_reported(gates, monkeypatch):
+    _, scanner = gates
+    monkeypatch.setattr(scanner, "read", lambda _: "public const byte SyncGeneratedProjectileVfxEvent = 9; public const byte Other = 9;")
+    scanner.ERRORS.clear()
+    scanner.check_packet_ids()
+    assert any(issue.startswith("packet id collision:") for issue in scanner.ERRORS)
+    scanner.ERRORS.clear()
+
+
+@pytest.mark.parametrize("source,valid", [
+    ('"""Import defining runtime owners directly."""\n', True),
+    ('from __future__ import annotations\n', True),
+    ('from infini_local.core.runtime_authoring.compiler import compile_runtime_program\n', False),
+    ('import infini_local.core.runtime_authoring.repair_scope\n', False),
+])
+def test_runtime_package_keeps_eager_owner_imports_out(gates, source, valid):
+    hygiene, _ = gates
+    sources = python_sources("value = 1")
+    sources["generator/infini_local/core/runtime_authoring/__init__.py"] = source
+    issues = hygiene.python_source_issues(sources)
+    has_barrel_import = any(issue.startswith("runtime_barrel_import:") for issue in issues)
+    assert has_barrel_import is not valid
+
+
+@pytest.mark.parametrize("source,valid", [
+    ('from infini_local.core.runtime_authoring import compile_runtime_program\n', False),
+    ('from infini_local.core.runtime_authoring import *\n', False),
+    ('from infini_local.core.runtime_authoring import program_schema\n', False),
+    ('import infini_local.core.runtime_authoring.program_schema as program_schema\n', True),
+    ('from infini_local.core.runtime_authoring.compiler import compile_runtime_program\n', True),
+])
+@pytest.mark.parametrize("path", ["generator/infini_local/pipelines/example.py", "tests/generator/**/test_example.py"])
+def test_runtime_consumers_import_defining_module(gates, source, valid, path):
+    hygiene, _ = gates
+    sources = python_sources("value = 1")
+    sources[path] = source
+    issues = hygiene.python_source_issues(sources)
+    assert any(issue.startswith("runtime_barrel_consumer:") for issue in issues) is not valid

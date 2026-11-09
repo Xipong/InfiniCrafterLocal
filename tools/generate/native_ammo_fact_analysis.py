@@ -1,11 +1,14 @@
 """Bounded IL source shapes for ammo projectile rewrites; never execute game code.
 
-Only complete literal assignment blocks and equality-guarded literal assignments
-are certificates. Spawn arguments are source references, not simulated gameplay.
+Complete literal blocks and bounded CFG-certified literal write sites are
+source certificates. Predicates retain source snapshots; no gameplay is simulated.
 """
 from __future__ import annotations
 
 from native_attack_fact_analysis import Unrecognized, direct_call_count, straight_line_arguments, type_blocks
+from native_ammo_control_flow import literal_store_predicates
+from native_shot_variant_analysis import conditional_arithmetic_variants
+from native_spawn_argument_analysis import spawn_argument_facts
 
 
 def adjusted_counted_spawn(block, call_offset):
@@ -119,7 +122,7 @@ def item_type_mentions(instructions, item_argument):
                    and isinstance(c.arg, int)})
 
 
-def literal_rewrite(code, target):
+def literal_rewrite(code, target, contradictory=None):
     code = [i for i in code if i.op != "nop"]
     kind, slot = target
     read = [("ldarg", slot), ("ldind.i4", None)] if kind == "argument" else [("ldloc", slot)]
@@ -127,16 +130,18 @@ def literal_rewrite(code, target):
     store = "stind.i4" if kind == "argument" else "stloc"
     pairs = [(i.op, i.arg) for i in code]
     condition = None
+    input_conditions = []
     cursor = 0
     guards = []
     while (pairs[cursor:cursor + len(read)] == read and len(code) > cursor + len(read) + 1
            and code[cursor + len(read)].op == "const"):
         value, branch = code[cursor + len(read):cursor + len(read) + 2]
-        if branch.op != "bne" or branch.arg <= branch.offset or not isinstance(value.arg, int):
+        if branch.op != "bne" or branch.arg <= branch.offset:
             return None
-        if condition is not None and condition != value.arg:
+        if not isinstance(value.arg, int):
             return None
         condition = value.arg
+        input_conditions.append(condition)
         guards.append(branch)
         cursor += len(read) + 2
     body = code[cursor:]
@@ -154,17 +159,23 @@ def literal_rewrite(code, target):
     if any(branch.arg <= assignment.offset for branch in guards):
         return None
     rule = {"outputProjectileId": literal.arg, "sourceStoreIlOffset": assignment.offset}
+    if len(set(input_conditions)) > 1:
+        if contradictory is not None:
+            contradictory.append(dict(rule, sourceInputProjectileIds=input_conditions))
+        return None
     if condition is not None:
         rule["whenInputProjectileId"] = condition
     return [rule]
 
 
 def item_literal_rewrite(code, guard_offset, block, target):
-    """Certify the item write only with its complete contiguous input guards.
+    """Certify a literal write with its complete contiguous enclosing guards.
 
-    type_blocks proves the item test, not predicates outside that block.
-    Accept equalities of the same current projectile in either nesting order;
-    refuse other predicates, mutations, contradictions and bypassing entries.
+    type_blocks proves only the item test, not conditions outside that block.
+    Accept surrounding equality tests of the same current projectile, in either
+    nesting order. Refuse gaps, other expressions, contradictory conditions or
+    foreign entries instead of turning a partial proof into an unconditional
+    rewrite. This is a bounded source shape, not control-flow execution.
     """
     item_guard = next(n for n, ins in enumerate(code) if ins.offset == guard_offset)
     start = item_guard - 3  # ldarg; Item.type; constant; bne
@@ -177,38 +188,65 @@ def item_literal_rewrite(code, guard_offset, block, target):
     first, end = code[start].offset, code[item_guard].arg
     if any(not first <= ins.offset < end and any(first < destination < end for destination in targets(ins))
            for ins in code):
-        return None
+        return None, "foreign_entry_into_item_guard", "unproved_item_guard"
     rules = literal_rewrite(block, target)
     if not rules:
-        return None
+        return None, "unrecognized_or_contradictory_item_write", "proved_item_guard"
     enclosing = [(n, ins) for n, ins in enumerate(code[:start])
                  if any(destination > code[start].offset for destination in targets(ins))]
     condition = rules[0].get("whenInputProjectileId")
     store = rules[0]["sourceStoreIlOffset"]
     for n, branch in reversed(enclosing):
         first = n - len(read) - 1
-        if branch.op != "bne" or branch.arg <= store or n + 1 != start:
-            return None
+        if branch.op != "bne":
+            return None, "unsupported_enclosing_branch", "proved_item_guard"
+        if branch.arg <= store:
+            return None, "enclosing_guard_reenters_write", "proved_item_guard"
+        if n + 1 != start:
+            return None, "intervening_instructions_after_enclosing_guard", "proved_item_guard"
         if first < 0 or [(ins.op, ins.arg) for ins in code[first:n - 1]] != read:
-            return None
+            return None, "unrecognized_enclosing_projectile_expression", "proved_item_guard"
         value = code[n - 1]
         if value.op != "const" or not isinstance(value.arg, int):
-            return None
+            return None, "unrecognized_enclosing_projectile_expression", "proved_item_guard"
         if condition is not None and condition != value.arg:
-            return None
+            return None, "contradictory_projectile_guards", "proved_item_guard"
         condition, start = value.arg, first
     first = code[start].offset
     for ins in code:
         if first <= ins.offset <= store:
             continue
         if any(first < destination <= store for destination in targets(ins)):
-            return None
+            return None, "foreign_entry_bypasses_enclosing_guard", "proved_item_guard"
     if condition is not None:
         rules[0]["whenInputProjectileId"] = condition
-    return rules
+    return rules, None, "proved_item_guard"
+
+
+def unresolved_literal_writes(block, target, guard, reason, ownership):
+    """Keep independently visible literal sites, not an effective rewrite rule."""
+    # Preserve a complete literal item block even if its surrounding admission
+    # is unknown. Do not harvest arbitrary constants from a complex block with
+    # multiple writes or opaque value production.
+    contradictory = []
+    literals = literal_rewrite(block, target, contradictory) or contradictory
+    if contradictory and ownership == "proved_item_guard":
+        reason = "contradictory_projectile_guards"
+    return [dict(rule, sourceGuardIlOffset=guard, applicability="unknown",
+                 reason=reason, ownershipStatus=ownership) for rule in literals]
+
+
+def projectile_write_offsets(block, target):
+    kind, slot = target
+    if kind == "local":
+        return [ins.offset for ins in block if ins.op in ("stloc", "ldloca") and ins.arg == slot]
+    # A byref use, even without a direct store, can expose the output elsewhere.
+    return [ins.offset for ins in block if ins.op == "ldarg" and ins.arg == slot]
 
 
 def ammo_method_facts(instructions, method):
+    if getattr(instructions, "has_exception_handlers", False):
+        raise ValueError("exception handlers are outside ammo control-flow certificates")
     code = [i for i in instructions if i.op != "nop"]
     pick = method == "PickAmmo"
     if pick:
@@ -220,8 +258,14 @@ def ammo_method_facts(instructions, method):
             raise ValueError("unknown native shot-projectile local")
         target, item_arg = ("local", locals_[0]), 2
     rows = {}
-    for item_id, guard, block in type_blocks(code, "Terraria.Item.type", item_arg):
-        row = rows.setdefault(item_id, {"itemId": item_id, "rules": [], "spawnSites": [], "spawnOriginSetups": [], "unrecognizedProjectileWriteOffsets": []})
+    rejected = []
+    blocks = [(item_id, guard, block, None) for item_id, guard, block in type_blocks(code, "Terraria.Item.type", item_arg, rejected)]
+    for item_id, guard, block, rejection in blocks + rejected:
+        row = rows.setdefault(item_id, {"itemId": item_id, "rules": [], "conditionalArithmeticVariants": [], "unresolvedLiteralWrites": [], "spawnSites": [], "spawnOriginSetups": [], "unrecognizedProjectileWriteOffsets": []})
+        if rejection is not None:
+            row["unresolvedLiteralWrites"].extend(unresolved_literal_writes(block, target, guard, rejection, "unproved_item_guard"))
+            row["unrecognizedProjectileWriteOffsets"].extend(projectile_write_offsets(block, target))
+            continue
         for n in range(5, len(block)):
             call = block[n]
             if call.op != "call" or call.arg[0] != "Microsoft.Xna.Framework.Vector2..ctor":
@@ -234,15 +278,17 @@ def ammo_method_facts(instructions, method):
                 row["spawnOriginSetups"].append({"sourceConstructorIlOffset": call.offset,
                     "initialYRelativeToMountedCenterPx": -prefix[3].arg,
                     "scope": "Vector2 constructor Y argument inside this native spawn branch; later origin mutations, X coordinate and final spawn position not modeled"})
-        rules = item_literal_rewrite(code, guard, block, target)
+        variants = conditional_arithmetic_variants(code, guard, block, target, item_id)
+        row["conditionalArithmeticVariants"].extend(variants)
+        rules, reason, ownership = item_literal_rewrite(code, guard, block, target)
+        if not rules:
+            rules = literal_store_predicates(code, guard, block, target)
+            certified = {r["sourceStoreIlOffset"] for r in rules}
+            row["unrecognizedProjectileWriteOffsets"].extend(offset for offset in projectile_write_offsets(block, target) if offset not in certified)
         if rules:
             row["rules"].extend(dict(r, sourceGuardIlOffset=guard) for r in rules)
-        elif target[0] == "local":
-            row["unrecognizedProjectileWriteOffsets"].extend(i.offset for i in block if i.op in ("stloc", "ldloca") and i.arg == target[1])
         else:
-            # In the source PickAmmo subset, passing this byref elsewhere is
-            # not a proof of a constant rewrite.
-            row["unrecognizedProjectileWriteOffsets"].extend(i.offset for i in block if i.op == "ldarg" and i.arg == target[1])
+            row["unresolvedLiteralWrites"].extend(unresolved_literal_writes(block, target, guard, reason, ownership))
         for n, call in enumerate(block):
             if call.op != "call" or call.arg[0] != "Terraria.Projectile.NewProjectile":
                 continue
@@ -255,6 +301,8 @@ def ammo_method_facts(instructions, method):
                 basis = "current_shot_projectile" if projectile == ("ldloc", target[1]) else "fixed_projectile" if projectile[0] == "const" else "unknown_expression"
                 spawn = {"sourceSpawnIlOffset": call.offset, "sourceGuardIlOffset": guard,
                          "projectileBasis": basis, "nativeItemSpecificDelivery": True,
+                         "projectileArgumentSource": projectile,
+                         "damageArgumentSource": args[4 if count == 10 else 6],
                          "scope": "Explicit native branch spawn site; not ordinary direct-ammo delivery, spawn count or guaranteed execution"}
                 count_bounds = adjusted_counted_spawn(block, call.offset)
                 if count_bounds is not None:
@@ -263,7 +311,22 @@ def ammo_method_facts(instructions, method):
                                                 "scope": "Retained projectile does not imply direct origin, authored straight movement, fixed spread or an inherited native attack"}
                 if basis == "fixed_projectile":
                     spawn["projectileId"] = projectile[1]
+                spawn.update(spawn_argument_facts(code, guard, block, n, getattr(instructions, "method_provenance", None)))
                 row["spawnSites"].append(spawn)
             except (Unrecognized, IndexError):
                 continue
-    return [rows[k] for k in sorted(rows) if any(rows[k][f] for f in ("rules", "spawnSites", "unrecognizedProjectileWriteOffsets"))]
+    for row in rows.values():
+        for variant in row["conditionalArithmeticVariants"]:
+            for update in variant["localUpdates"]:
+                update["laterSpawnArgumentUses"] = [
+                    {"sourceSpawnIlOffset": spawn["sourceSpawnIlOffset"], "argument": role,
+                     "scope": "Same local read at later spawn; intervening writes and hooks are not excluded"}
+                    for spawn in row["spawnSites"] if spawn["sourceSpawnIlOffset"] > update["sourceStoreIlOffset"]
+                    for role, key in (("projectile", "projectileArgumentSource"), ("damage", "damageArgumentSource"))
+                    if spawn.get(key) == ("ldloc", update["local"])]
+        if not row["conditionalArithmeticVariants"]:
+            del row["conditionalArithmeticVariants"]
+            for spawn in row["spawnSites"]:
+                spawn.pop("projectileArgumentSource", None)
+                spawn.pop("damageArgumentSource", None)
+    return [rows[k] for k in sorted(rows) if any(rows[k].get(f) for f in ("rules", "conditionalArithmeticVariants", "unresolvedLiteralWrites", "spawnSites", "unrecognizedProjectileWriteOffsets"))]

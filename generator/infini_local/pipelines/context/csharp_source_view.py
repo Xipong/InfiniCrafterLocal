@@ -1,0 +1,590 @@
+"""Read-only projection of producer-certified native C# source.
+
+The native capture keeps its original graphs. This owner only replaces explicitly
+named, certificate-matched graph locations in a detached model-facing copy.
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import re
+from typing import Any
+
+from infini_local.pipelines.context.attack_behavior import _PROGRAM_FIELDS, _ROW_FIELDS
+
+SOURCE_READING = (
+    "Read-only decompiled C# source, never executable Author code or an imported behavior. "
+    "A certified whole-method C# record takes priority over a partial captured graph, regardless of size. "
+    "Its proved identity specialization may replace it when smaller. Conditional region records compete "
+    "with their matching graphs by size only after exact coverage checks. Unused source records stay diagnostic. "
+    "nativeCSharpSourceRef resolves to nativeCSharpSource.records.id in this same parent reference. "
+    "A whole_method record retains all its source branches; identity_specialized_method retains the producer-proven identity paths with explicit identitySpecialization limits; conditional_ast_regions retains only the "
+    "producer-certified closed regions and their explicit entry/coverage limits. Source calls/hooks and "
+    "enclosing flow are not evaluated. Record coverage, entry limits and unresolveds remain here; "
+    "graphCapture failures stay unknown; other limits and proof receipts remain in raw diagnostics. The view does not prove "
+    "effects of unshown callees/property accessors, behavior under native detours/global aliases, or "
+    "caller identity preservation. sourceLocation binds requiredPredicates IDs to certified IL/source "
+    "locations; unavailable mappings remain unknown, never true conditions or guaranteed spawns."
+)
+_CERT = ("method", "sourceModuleVersionId", "sourceMethodSha256")
+_REFERENCE_FIELDS = {"source", "version", "identityPredicates", "scope", "units", "motionDispatch",
+    "motionDispatchEffects", "motion", "collision", "draw", "positionIntegration", "sourceMethods", "coverage",
+    "admission", "nativeCSharpSource", "lifecycle", "interactionSources"}
+_RECORD_FIELDS = {"id", *_CERT, "metadataToken", "assemblySha256", "decompiler", "coverage", "graphPaths",
+    "code", "codeSha256", "locations", "unresolved", "entryGuards", "coveredWindows"}
+_CAPTURE_FIELDS = _PROGRAM_FIELDS | {"identitySelected", "identitySelection", "identitySelectionUnavailable"}
+_MODEL_SOURCE = "read_only_native_csharp_view"
+_MODEL_SCOPE = ("Gameplay source view: code, entry conditions, coverage and unresolveds retain the selected certified representation. "
+    "PE/IL/decompiler certificates, hashes and graph-proof paths remain in the raw diagnostic capture.")
+_LIFECYCLE_SCOPE = ("Conditional source regions only. The original guard must be reached; enclosing flow, hooks, captured-entry identity preservation and all other Kill regions remain unknown. Live type/owner/state predicates are not evaluated. No source record proves execution or absence of other effects.")
+_LIFECYCLE_CALL_SCOPE = ("conditional_lifecycle_source_candidate; full_guards_and_arguments_in_source_region; enclosing_flow_hooks_and_entry_identity_unknown; not_an_executed_spawn")
+
+
+def project_lifecycle_source(reference: dict[str, Any]) -> dict[str, Any]:
+    """Project the separate direct-source contract, never a tiny replacement graph.
+
+    A malformed/new record is literal passthrough. Complete region code, live
+    guards, call anchors, and all refusals survive independently of graph sizes.
+    """
+    out = copy.deepcopy(reference)
+    if (reference.get("source") != "read_only_native_attack_source"
+            or type(reference.get("version")) is not int or reference["version"] != 1
+            or not set(reference) <= _REFERENCE_FIELDS):
+        return out
+    value = reference.get("lifecycle")
+    fields = {"source", "version", "root", "relevanceIdentity", "scope", "records", "unresolved", "rootCertificate"}
+    if (not isinstance(value, dict) or set(value) != fields
+            or value["source"] != "verified_conditional_native_lifecycle_csharp"
+            or type(value["version"]) is not int or value["version"] != 1 or value["root"] != "Kill"
+            or not _identity(value["relevanceIdentity"]) or value["relevanceIdentity"] != reference.get("identityPredicates")
+            or value["scope"] != _LIFECYCLE_SCOPE
+            or not isinstance(value["unresolved"], list) or any(not isinstance(row, str) for row in value["unresolved"])
+            or not isinstance(value["records"], list)):
+        return out
+    cert = _certificate(value["rootCertificate"])
+    if (cert is None or set(value["rootCertificate"]) != set(_CERT) or cert[0] != "Terraria.Projectile.Kill"
+            or not _sha(cert[2])):
+        return out
+    record_fields = {*_CERT, "id", "metadataToken", "assemblySha256", "decompiler", "coverage", "code",
+                     "codeSha256", "entryCondition", "identityWitnesses", "spawnSites", "locations"}
+    call_fields = {*_CERT, "at", "projectileTypes", "requiredPredicates", "unresolved"}
+    projected, ids, sites = [], set(), set()
+    for record in value["records"]:
+        if (not isinstance(record, dict) or set(record) != record_fields or _certificate(record) != cert
+                or not _integer(record["metadataToken"]) or not _sha(record["assemblySha256"])
+                or not isinstance(record["code"], str) or not record["code"].strip()
+                or not _sha(record["codeSha256"])
+                or hashlib.sha256(record["code"].encode("utf-8")).hexdigest() != record["codeSha256"]
+                or record["coverage"] != "conditional_closed_lexical_region"
+                or not isinstance(record["entryCondition"], str) or not record["entryCondition"]
+                or not record["code"].startswith("if (" + record["entryCondition"] + ")")
+                or record["id"] != f'lifecycle:{cert[1]}:{record["metadataToken"]}:{record["codeSha256"]}'
+                or record["id"] in ids):
+            return out
+        ids.add(record["id"])
+        engine = record["decompiler"]
+        if (not isinstance(engine, dict) or engine != {"name": "ICSharpCode.Decompiler", "version": "8.2.0.7535",
+                "assemblySha256": "d174072a16aa758a39d160f70ce924103898fae2b8506b48f70d6909e25a1fd0",
+                "settings": "csharp_default_no_indentation_v1"}):
+            return out
+        witnesses = record["identityWitnesses"]
+        if not isinstance(witnesses, list) or not witnesses:
+            return out
+        for witness in witnesses:
+            if (not isinstance(witness, dict) or set(witness) != {"field", "literal"}
+                    or not isinstance(witness["field"], str) or witness["field"] not in {"Terraria.Projectile.type", "Terraria.Projectile.aiStyle"}
+                    or type(witness["literal"]) is not int
+                    or witness["literal"] != value["relevanceIdentity"][witness["field"].removeprefix("Terraria.")]):
+                return out
+        locations = record["locations"]
+        if not isinstance(locations, list):
+            return out
+        anchors = set()
+        for location in locations:
+            if not isinstance(location, dict) or not _integer(location.get("ilOffset")) or location["ilOffset"] in anchors:
+                return out
+            anchors.add(location["ilOffset"])
+            if set(location) == {"ilOffset", "unresolved"}:
+                if location["unresolved"] != "decompiler_source_location_unavailable":
+                    return out
+            elif (set(location) != {"ilOffset", "startLine", "endLine"}
+                    or not _integer(location["startLine"]) or not _integer(location["endLine"])
+                    or not 1 <= location["startLine"] <= location["endLine"] <= len(record["code"].split("\n"))):
+                return out
+        if not isinstance(record["spawnSites"], list) or not record["spawnSites"]:
+            return out
+        calls = []
+        for call in record["spawnSites"]:
+            if (not isinstance(call, dict) or set(call) != call_fields or _certificate(call) != cert
+                    or not _integer(call["at"]) or call["at"] not in anchors or call["at"] in sites
+                    or not isinstance(call["projectileTypes"], list) or len(call["projectileTypes"]) > 1
+                    or any(type(item) is not int for item in call["projectileTypes"])
+                    or not isinstance(call["requiredPredicates"], list)
+                    or any(not isinstance(item, str) or not re.fullmatch(r"b\d+", item)
+                           or int(item[1:]) not in anchors for item in call["requiredPredicates"])
+                    or len(call["requiredPredicates"]) != len(set(call["requiredPredicates"]))
+                    or call["unresolved"] != _LIFECYCLE_CALL_SCOPE + ("; spawn_type_requires_runtime_expression" if not call["projectileTypes"] else "")):
+                return out
+            sites.add(call["at"])
+            calls.append({key: copy.deepcopy(child) for key, child in call.items() if key not in _CERT})
+        projected.append({"id": f"l{len(projected)}", **{key: copy.deepcopy(record[key]) for key in (
+            "method", "coverage", "code", "entryCondition", "identityWitnesses", "locations")}, "spawnSites": calls})
+    out["lifecycle"] = {key: copy.deepcopy(value[key]) for key in ("version", "root", "relevanceIdentity", "scope", "unresolved")}
+    out["lifecycle"].update(source="read_only_conditional_native_lifecycle_csharp", records=projected)
+    return out
+
+
+def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    envelope = reference.get("nativeCSharpSource")
+    if (not isinstance(envelope, dict) or set(envelope) != {"source", "version", "records", "unresolved", "scope"}
+            or envelope["source"] != _MODEL_SOURCE or type(envelope["version"]) is not int or envelope["version"] != 1
+            or envelope["scope"] != _MODEL_SCOPE or not isinstance(envelope["records"], list)
+            or not isinstance(envelope["unresolved"], list)):
+        return None
+    if any(not isinstance(row, dict) or set(row) != {"method", "unresolved"}
+           or not all(isinstance(value, str) for value in row.values()) for row in envelope["unresolved"]):
+        return None
+    result = {}
+    for record in envelope["records"]:
+        if (not isinstance(record, dict) or set(record) not in ({"id", "method", "code", "coverage", "entryGuards", "unresolved"}, {"id", "method", "code", "coverage", "entryGuards", "unresolved", "identitySpecialization"})
+                or any(not isinstance(record[key], str) or not record[key] for key in ("id", "method", "code"))
+                or record["id"] in result or not isinstance(record["coverage"], str)
+                or record["coverage"] not in {"whole_method", "conditional_ast_regions", "identity_specialized_method"}
+                or not isinstance(record["unresolved"], list) or any(not isinstance(value, str) for value in record["unresolved"])
+                or not isinstance(record["entryGuards"], list)):
+            return None
+        if record["coverage"] == "identity_specialized_method":
+            identity = record.get("identitySpecialization")
+            if not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"} or not _identity(identity["identityPredicates"]) or identity["scope"] != _IDENTITY_SCOPE:
+                return None
+        elif "identitySpecialization" in record:
+            return None
+        for guard in record["entryGuards"]:
+            if (not isinstance(guard, dict) or set(guard) != {"field", "operator", "literal", "scope"}
+                    or not isinstance(guard["field"], str) or guard["field"] not in {
+                        "Terraria.Projectile.type", "Terraria.Projectile.aiStyle"}
+                    or guard["operator"] != "==" or type(guard["literal"]) is not int
+                    or guard["scope"] != "only_if_original_guard_is_reached; enclosing_dispatch_unknown"):
+                return None
+        result[record["id"]] = record
+    return result
+
+
+def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] | None, selected_records: dict | None = None
+                        ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    out, linked = copy.deepcopy(reference), copy.deepcopy(calls)
+    records = selected_records if selected_records is not None else _records(out)
+    if not records or out.get("nativeCSharpSourceReading") != SOURCE_READING:
+        return out, linked
+    ids = {identity: f"s{index}" for index, identity in enumerate(records)}
+
+    def visit(value: Any) -> Any:
+        if known_native_csharp_program(value):
+            diagnostic = _identity_failure_capture(value.get("graphCapture", {}))
+            return {"nativeCSharpSourceRef": ids[value["nativeCSharpSourceRef"]],
+                    **({"graphCapture": diagnostic} if diagnostic else {})}
+        if isinstance(value, dict):
+            return {key: visit(child) for key, child in value.items() if key != "nativeCSharpSource"}
+        return [visit(child) for child in value] if isinstance(value, list) else value
+
+    out = visit(out)
+    out["nativeCSharpSource"] = {"source": _MODEL_SOURCE, "version": 1, "scope": _MODEL_SCOPE,
+        "unresolved": copy.deepcopy(reference["nativeCSharpSource"]["unresolved"]),
+        "records": [{"id": ids[identity], **{key: copy.deepcopy(record[key]) for key in (
+            "method", "code", "coverage", "unresolved")}, **({"identitySpecialization": copy.deepcopy(record["identitySpecialization"])} if "identitySpecialization" in record else {}), "entryGuards": [{key: copy.deepcopy(value)
+                for key, value in guard.items() if key != "ilOffset"} for guard in record["entryGuards"]]}
+            for identity, record in records.items()]}
+    if linked is not None:
+        for call in linked:
+            location = call.get("sourceLocation")
+            if isinstance(location, dict) and location.get("sourceRecord") in ids:
+                location["sourceRecord"] = ids[location["sourceRecord"]]
+    return out, linked
+
+
+def _integer(value: Any) -> bool:
+    return type(value) is int and value >= 0
+
+
+def _sha(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value) is not None
+
+
+def _certificate(value: Any) -> tuple[str, str, str] | None:
+    if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key] for key in _CERT):
+        return None
+    return tuple(value[key] for key in _CERT)
+
+
+def _records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
+    envelope = reference.get("nativeCSharpSource")
+    if (not isinstance(envelope, dict) or set(envelope) != {"source", "version", "records", "unresolved", "scope"}
+            or envelope["source"] != "verified_decompiled_native_csharp" or type(envelope["version"]) is not int
+            or envelope["version"] != 1 or not isinstance(envelope["records"], list)
+            or not isinstance(envelope["unresolved"], list) or not isinstance(envelope["scope"], str)):
+        return None
+    if any(not isinstance(row, dict) or set(row) != {"method", "unresolved"}
+           or not all(isinstance(value, str) for value in row.values()) for row in envelope["unresolved"]):
+        return None
+    result, certificates = {}, set()
+    for record in envelope["records"]:
+        if (not isinstance(record, dict) or not _RECORD_FIELDS <= set(record) <= _RECORD_FIELDS | {"identitySpecialized"}
+                or not isinstance(record.get("id"), str) or not record["id"] or record["id"] in result
+                or _certificate(record) is None or _certificate(record) in certificates
+                or not _sha(record["sourceMethodSha256"]) or not _sha(record["assemblySha256"]) or not _sha(record["codeSha256"])
+                or not _integer(record["metadataToken"]) or not isinstance(record["code"], str)
+                or not record["code"].strip() or not isinstance(record["coverage"], str)
+                or record["coverage"] not in {"whole_method", "conditional_ast_regions"}
+                or not isinstance(record["unresolved"], list) or any(not isinstance(value, str) for value in record["unresolved"])
+                or not isinstance(record["graphPaths"], list)
+                or not record["graphPaths"] or not isinstance(record["locations"], list)):
+            return None
+        if hashlib.sha256(record["code"].encode("utf-8")).hexdigest() != record["codeSha256"]:
+            return None
+        engine = record["decompiler"]
+        if (not isinstance(engine, dict) or set(engine) != {"name", "version", "assemblySha256", "settings"}
+                or engine["name"] != "ICSharpCode.Decompiler" or not isinstance(engine["version"], str)
+                or engine["version"] != "8.2.0.7535" or not _sha(engine["assemblySha256"])
+                or engine["settings"] != "csharp_default_no_indentation_v1"):
+            return None
+        if any(not isinstance(path, list) or not path or any(
+                not (isinstance(part, str) and part or _integer(part)) for part in path) for path in record["graphPaths"]):
+            return None
+        lines = len(record["code"].split("\n"))
+        for location in record["locations"]:
+            if not isinstance(location, dict) or not _integer(location.get("ilOffset")):
+                return None
+            if set(location) == {"ilOffset", "unresolved"}:
+                if location["unresolved"] != "decompiler_source_location_unavailable":
+                    return None
+            elif (set(location) != {"ilOffset", "startLine", "endLine"}
+                    or not _integer(location["startLine"]) or not _integer(location["endLine"])
+                    or not 1 <= location["startLine"] <= location["endLine"] <= lines):
+                return None
+        guards = record.get("entryGuards", [])
+        if not isinstance(guards, list) or record["coverage"] == "conditional_ast_regions" and not guards:
+            return None
+        for guard in guards:
+            if (not isinstance(guard, dict) or set(guard) != {"field", "operator", "literal", "ilOffset", "scope"}
+                    or not isinstance(guard["field"], str) or guard["field"] not in {"Terraria.Projectile.aiStyle", "Terraria.Projectile.type"}
+                    or guard["operator"] != "==" or type(guard["literal"]) is not int or not _integer(guard["ilOffset"])
+                    or guard["scope"] != "only_if_original_guard_is_reached; enclosing_dispatch_unknown"):
+                return None
+        if not isinstance(record["coveredWindows"], list) or any(not isinstance(window, dict)
+                or set(window) != {"field", "literal", "guardOffset"} or not isinstance(window["field"], str)
+                or window["field"] not in {"aiStyle", "type"}
+                or type(window["literal"]) is not int or not _integer(window["guardOffset"])
+                for window in record["coveredWindows"]):
+            return None
+        result[record["id"]] = record
+        certificates.add(_certificate(record))
+    return result
+
+
+def _known_row(row: Any) -> bool:
+    if not isinstance(row, dict) or not set(row) <= _ROW_FIELDS:
+        return False
+    if any(key in row and not isinstance(row[key], str)
+           for key in ("kind", "expression", "call", "receiver", "scope", "id", "op")):
+        return False
+    if any(key in row and not _integer(row[key]) for key in ("at", "block")):
+        return False
+    if any(key in row and (not isinstance(row[key], list) or any(not isinstance(value, str) for value in row[key]))
+           for key in ("requiredPredicates", "inputs")):
+        return False
+    if "successors" in row and (not isinstance(row["successors"], list) or any(not _integer(value) for value in row["successors"])):
+        return False
+    if "arguments" in row and (not isinstance(row["arguments"], dict)
+            or any(not isinstance(key, str) or not isinstance(value, str) for key, value in row["arguments"].items())):
+        return False
+    return "orderedSourceUses" not in row or isinstance(row["orderedSourceUses"], list) and all(
+        _known_row(use) for use in row["orderedSourceUses"])
+
+
+def _known_graph(program: Any) -> bool:
+    if not isinstance(program, dict) or not set(program) <= _CAPTURE_FIELDS or _certificate(program) is None:
+        return False
+    if "identitySelectionUnavailable" in program and (
+            not isinstance(program["identitySelectionUnavailable"], str) or not program["identitySelectionUnavailable"]):
+        return False
+    if "identityWindows" in program:
+        windows = program["identityWindows"]
+        if not isinstance(windows, list) or any(not isinstance(window, dict)
+                or set(window) != {"field", "literal", "guardOffset"} or not isinstance(window["field"], str)
+                or window["field"] not in {"aiStyle", "type"} or type(window["literal"]) is not int
+                or not _integer(window["guardOffset"]) for window in windows):
+            return False
+    graph_keys = {"observations", "dependencies", "predicates", "symbols"}
+    if graph_keys.intersection(program):
+        if (not graph_keys <= set(program) or not isinstance(program["observations"], list)
+                or not isinstance(program["dependencies"], dict) or not isinstance(program["predicates"], list)
+                or not isinstance(program["symbols"], dict)
+                or any(not isinstance(key, str) or not isinstance(value, str) for key, value in program["symbols"].items())):
+            return False
+        rows = [*program["observations"], *program["dependencies"].values(), *program["predicates"]]
+        if any(not _known_row(row) for row in rows):
+            return False
+    if program.get("predicateSources"):
+        return False  # A separate callee graph requires its own explicit replacement.
+    selected = program.get("identitySelected")
+    return selected is None or _known_graph(selected) and _certificate(selected) == _certificate(program)
+
+
+def _at_path(reference: dict[str, Any], path: list[str | int]) -> tuple[Any, str | int, Any] | None:
+    owner: Any = reference
+    for part in path[:-1]:
+        if isinstance(owner, dict) and isinstance(part, str) and part in owner:
+            owner = owner[part]
+        elif isinstance(owner, list) and _integer(part) and part < len(owner):
+            owner = owner[part]
+        else:
+            return None
+    leaf = path[-1]
+    if isinstance(owner, dict) and isinstance(leaf, str) and leaf in owner:
+        return owner, leaf, owner[leaf]
+    if isinstance(owner, list) and _integer(leaf) and leaf < len(owner):
+        return owner, leaf, owner[leaf]
+    return None
+
+
+def _windows(program: dict[str, Any]) -> list[dict[str, Any]]:
+    selected = program.get("identitySelected")
+    return [*program.get("identityWindows", []), *(_windows(selected) if isinstance(selected, dict) else [])]
+
+
+def _capture_metadata(program: dict[str, Any]) -> dict[str, Any]:
+    result = {key: copy.deepcopy(value) for key, value in program.items()
+              if key not in {*_CERT, "observations", "dependencies", "predicates", "symbols", "identitySelected"}}
+    if isinstance(program.get("identitySelected"), dict):
+        result["selectedCapture"] = _capture_metadata(program["identitySelected"])
+    return result
+
+
+def _identity_failure_capture(capture: dict[str, Any]) -> dict[str, Any]:
+    """Keep source-analysis failures at the graph that reported them.
+
+    This is capture diagnostics, not an identity proof or a callee-effect fact.
+    """
+    result = {}
+    if capture.get("coverage") == "unknown":
+        result["coverage"] = "unknown"
+        unresolved = capture.get("unresolved")
+        if isinstance(unresolved, str) or isinstance(unresolved, list) and all(isinstance(value, str) for value in unresolved):
+            result["unresolved"] = copy.deepcopy(unresolved)
+    failure = capture.get("identitySelectionUnavailable")
+    if isinstance(failure, str) and failure:
+        result["identitySelectionUnavailable"] = failure
+    if isinstance(capture.get("selectedCapture"), dict):
+        selected = _identity_failure_capture(capture["selectedCapture"])
+        if selected:
+            result["selectedCapture"] = selected
+    return result
+
+
+def known_native_csharp_program(program: Any) -> bool:
+    if not isinstance(program, dict) or not isinstance(program.get("nativeCSharpSourceRef"), str):
+        return False
+    return set(program) == {"nativeCSharpSourceRef"} or (
+        set(program) == {"nativeCSharpSourceRef", "graphCapture"} and isinstance(program["graphCapture"], dict)
+        and bool(program["graphCapture"]) and _identity_failure_capture(program["graphCapture"]) == program["graphCapture"]
+    ) or (
+        set(program) == {*_CERT, "nativeCSharpSourceRef", "graphCapture"} and _certificate(program) is not None
+        and isinstance(program["graphCapture"], dict))
+
+
+def known_native_csharp_context(reference: dict[str, Any]) -> bool:
+    if "nativeCSharpSource" not in reference:
+        return reference.get("nativeCSharpSourceReading") == SOURCE_READING and not has_native_csharp_reference(reference)
+    if isinstance(reference.get("nativeCSharpSource"), dict) and reference["nativeCSharpSource"].get("source") == _MODEL_SOURCE:
+        records = _model_records(reference)
+        if records is None or reference.get("nativeCSharpSourceReading") != SOURCE_READING:
+            return False
+        used = set()
+
+        def bound(value: Any) -> bool:
+            if isinstance(value, dict):
+                if "nativeCSharpSourceRef" in value:
+                    identity = value["nativeCSharpSourceRef"]
+                    if (not set(value) <= {"nativeCSharpSourceRef", "graphCapture"}
+                            or not known_native_csharp_program(value) or identity not in records):
+                        return False
+                    used.add(identity)
+                return all(bound(child) for key, child in value.items() if key != "nativeCSharpSource")
+            return not isinstance(value, list) or all(bound(child) for child in value)
+
+        return bound(reference) and used == set(records)
+    records = _records(reference)
+    if records is None:
+        return False
+    if not records:
+        return "nativeCSharpSourceReading" not in reference
+    if reference.get("nativeCSharpSourceReading") != SOURCE_READING:
+        return False
+    declared = set()
+    for record in records.values():
+        for path in record["graphPaths"]:
+            target = _at_path(reference, path)
+            if (target is None or not known_native_csharp_program(target[2])
+                    or target[2]["nativeCSharpSourceRef"] != record["id"]
+                    or _certificate(target[2]) != _certificate(record)):
+                return False
+            declared.add(tuple(path))
+
+    def linked(value: Any, path: tuple[str | int, ...] = ()) -> bool:
+        if isinstance(value, dict):
+            if "nativeCSharpSourceRef" in value and path not in declared:
+                return False
+            return all(linked(child, (*path, key)) for key, child in value.items() if key != "nativeCSharpSource")
+        return not isinstance(value, list) or all(linked(child, (*path, index)) for index, child in enumerate(value))
+
+    return linked(reference)
+
+
+def has_native_csharp_reference(value: Any) -> bool:
+    if known_native_csharp_program(value):
+        return True
+    if isinstance(value, dict):
+        return any(has_native_csharp_reference(child) for child in value.values())
+    return isinstance(value, list) and any(has_native_csharp_reference(child) for child in value)
+
+
+def prune_native_csharp_records(reference: dict[str, Any]) -> dict[str, Any]:
+    """Remove source records made unused by an already-admitted stage omission."""
+    out = copy.deepcopy(reference)
+    model = _model_records(out)
+    if model is not None and out.get("nativeCSharpSourceReading") == SOURCE_READING:
+        used = set()
+
+        def collect(value: Any) -> None:
+            if isinstance(value, dict):
+                if set(value) <= {"nativeCSharpSourceRef", "graphCapture"} and known_native_csharp_program(value):
+                    used.add(value["nativeCSharpSourceRef"])
+                for key, child in value.items():
+                    if key != "nativeCSharpSource": collect(child)
+            elif isinstance(value, list):
+                for child in value: collect(child)
+
+        collect(out)
+        if not used <= set(model):
+            return out
+        out["nativeCSharpSource"]["records"] = [record for identity, record in model.items() if identity in used]
+        if not used:
+            out.pop("nativeCSharpSource")
+            out.pop("nativeCSharpSourceReading")
+        return out
+    records = _records(out)
+    if records is None or out.get("nativeCSharpSourceReading") != SOURCE_READING:
+        return out
+    retained = []
+    for record in records.values():
+        paths = []
+        for path in record["graphPaths"]:
+            found = _at_path(out, path)
+            if found is None:
+                continue
+            if (not known_native_csharp_program(found[2]) or found[2]["nativeCSharpSourceRef"] != record["id"]
+                    or _certificate(found[2]) != _certificate(record)):
+                return copy.deepcopy(reference)
+            paths.append(path)
+        if paths:
+            retained.append({**record, "graphPaths": paths})
+    if retained:
+        out["nativeCSharpSource"]["records"] = retained
+    else:
+        out.pop("nativeCSharpSource")
+        out.pop("nativeCSharpSourceReading")
+    return out
+
+
+def _linked_calls(calls: list[dict[str, Any]] | None, records: dict[str, dict[str, Any]], predicates: dict
+                  ) -> list[dict[str, Any]] | None:
+    out = copy.deepcopy(calls)
+    if out is None:
+        return None
+    by_cert = {_certificate(record): record for record in records.values()}
+    for call in out:
+        record = by_cert.get(_certificate(call))
+        if record is None:
+            continue
+
+        def location(offset: int | None) -> dict[str, Any]:
+            matches = [copy.deepcopy(row) for row in record["locations"]
+                       if row["ilOffset"] == offset and "startLine" in row]
+            return {"mapping": "source_lines" if matches else "unavailable", "ilOffset": offset,
+                    **({"locations": matches} if matches else {})}
+
+        call["sourceLocation"] = {"sourceRecord": record["id"], "statement": location(call["at"]),
+            "predicates": [{"id": guard, "sourceSites": [location(offset) for offset in
+                dict.fromkeys(predicates.get((_certificate(call), guard), []))],
+                "mapping": "raw_predicate_sites" if predicates.get((_certificate(call), guard)) else "unavailable"}
+                for guard in call["requiredPredicates"]]}
+    return out
+
+
+
+
+_IDENTITY_SCOPE = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage."
+
+
+def _identity(value: Any) -> bool:
+    return isinstance(value, dict) and set(value) == {"Projectile.type", "Projectile.aiStyle"} and all(type(v) is int for v in value.values())
+
+
+def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> dict[str, Any] | None:
+    """Admit only the producer's versioned proof bound to the original capture."""
+    view = record.get("identitySpecialized")
+    if not isinstance(view, dict) or set(view) != {"id", "code", "codeSha256", "coverage", "locations", "proof", "sourceMap"}:
+        return None
+    proof = view["proof"]
+    if (not isinstance(proof, dict) or set(proof) != {"version", "source", "originalCodeSha256", "identityPredicates", "scope", "selectedEdges", "removedGuards"}
+            or type(proof["version"]) is not int or proof["version"] != 1 or proof["source"] != "certified_receiver_identity_ast"
+            or proof["originalCodeSha256"] != record["codeSha256"] or not _identity(proof["identityPredicates"])
+            or proof["identityPredicates"] != reference.get("identityPredicates") or proof["scope"] != _IDENTITY_SCOPE
+            or view["coverage"] != "identity_specialized_method" or record["coverage"] != "whole_method"
+            or not isinstance(view["code"], str) or not view["code"].strip()
+            or hashlib.sha256(view["code"].encode()).hexdigest() != view["codeSha256"]):
+        return None
+    identity = proof["identityPredicates"]
+    if view["id"] != f'csharp-specialized:{record["id"]}:{view["codeSha256"]}:{identity["Projectile.type"]}:{identity["Projectile.aiStyle"]}':
+        return None
+    edges = proof["selectedEdges"]
+    if (not isinstance(edges, list) or not edges or any(not isinstance(e, dict) or set(e) != {"at", "block", "op", "successor"}
+            or any(not _integer(e[k]) for k in ("at", "block", "successor")) or not isinstance(e["op"], str) for e in edges)
+            or not isinstance(proof["removedGuards"], list) or not proof["removedGuards"]
+            or any(not _integer(at) or at not in {e["at"] for e in edges} for at in proof["removedGuards"])):
+        return None
+    matched_receipt = False
+    for path in record["graphPaths"]:
+        found = _at_path(reference, path)
+        graph = found[2] if found else {}
+        if _certificate(graph) != _certificate(record):
+            return None
+        selected = graph.get("identitySelected", graph)
+        receipt = selected.get("identitySelection") if isinstance(selected, dict) else None
+        if isinstance(selected, dict) and "identitySelection" not in selected:
+            continue
+        if (not isinstance(receipt, dict) or receipt.get("source") != "certified_receiver_identity_cfg"
+                or type(receipt.get("version")) is not int or receipt["version"] != 1
+                or any(receipt.get(k) != proof[k] for k in ("identityPredicates", "scope"))
+                or not isinstance(receipt.get("selectedEdges"), list)
+                or any(edge not in edges for edge in receipt["selectedEdges"])):
+            return None
+        matched_receipt = True
+    if not matched_receipt:
+        return None
+    locations = view["locations"]
+    if not isinstance(locations, list) or len(locations) != len(record["locations"]):
+        return None
+    for old, row in zip(record["locations"], locations):
+        if not isinstance(row, dict) or row.get("ilOffset") != old["ilOffset"]:
+            return None
+        if set(row) == {"ilOffset", "unresolved"}:
+            if row["unresolved"] not in {"decompiler_source_location_unavailable", "excluded_by_identity_proof"}:
+                return None
+        elif (set(row) != {"ilOffset", "startLine", "endLine"} or not _integer(row["startLine"])
+              or not _integer(row["endLine"]) or not 1 <= row["startLine"] <= row["endLine"] <= len(view["code"].split("\n"))):
+            return None
+    if view["sourceMap"] != {"kind": "il_source_locations_v1", "original": record["locations"], "specialized": locations}:
+        return None
+    return {**record, **{k: copy.deepcopy(view[k]) for k in ("code", "codeSha256", "coverage", "locations")},
+            "identitySpecialization": {k: copy.deepcopy(proof[k]) for k in ("identityPredicates", "scope")}}

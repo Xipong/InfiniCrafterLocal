@@ -1,0 +1,211 @@
+#nullable enable
+using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.Runtime;
+using InfiniCrafterLocal.Common.VFX;
+using InfiniCrafterLocal.Content.Projectiles;
+using Terraria.ModLoader;
+
+namespace InfiniCrafterLocal;
+
+// AGENT MAP: root composition and packet router for the C# runtime.
+// Load() owns the long-lived services; HandlePacket() is the single packet
+// demux; Call() is the small public API for other mods. Do not add gameplay
+// authoring here — generated behavior must already be explicit GeneratedItemData.
+public sealed class InfiniCrafterLocalMod : Mod
+{
+    public const string ModVersion = "0.6.0";
+    public static InfiniCrafterLocalMod Instance { get; private set; } = null!;
+    public static GeneratorClient Generator { get; private set; } = null!;
+    public static RuntimeSpriteCache Sprites { get; private set; } = null!;
+    public static GeneratedAssetSyncService AssetSync { get; private set; } = null!;
+    public static GeneratedItemRegistryService GeneratedItems { get; private set; } = null!;
+    internal static BundledStudio? Studio { get; private set; }
+
+    public override void Load()
+    {
+        Instance = this;
+        global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Register(this);
+        Generator = new GeneratorClient();
+        Sprites = new RuntimeSpriteCache();
+        AssetSync = new GeneratedAssetSyncService();
+        GeneratedItems = new GeneratedItemRegistryService();
+        if (!Terraria.Main.dedServ)
+            Studio = new BundledStudio(this, Terraria.Main.SavePath);
+    }
+
+
+    public override void HandlePacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        byte packetType = reader.ReadByte();
+        if (packetType == InfiniNetPacketIds.EquipmentEnemyKill)
+        {
+            InfiniCraftPlayer.HandleEquipmentKillPacket(reader);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedHitNpcPull)
+        {
+            RuntimeHitPullBridge.HandlePacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedAsset)
+        {
+            AssetSync?.HandleAssetRequestPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedAssetChunk)
+        {
+            AssetSync?.HandleAssetChunkPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestServerCraft)
+        {
+            InfiniCraftPlayer.HandleRequestServerCraftPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.CancelServerCraft)
+        {
+            InfiniCraftPlayer.HandleCancelServerCraftPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestStationEscrow)
+        {
+            InfiniCraftPlayer.HandleStationEscrowRequestPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.StationEscrowResult)
+        {
+            InfiniCraftPlayer.HandleStationEscrowResultPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.CraftCommitResult)
+        {
+            InfiniCraftPlayer.HandleCraftCommitResultPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedQuickUtilityActivation)
+        {
+            Common.Runtime.GeneratedQuickUtilityActivation.HandlePacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestAirJumpPredictionFence)
+        {
+            InfiniCraftPlayer.HandleAirJumpPredictionFenceRequest(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.AirJumpPredictionFence)
+        {
+            InfiniCraftPlayer.HandleAirJumpPredictionFence(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedUtilityRespawnSync)
+        {
+            InfiniCraftPlayer.HandleGeneratedUtilityRespawnRequest(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedUtilityRespawnSync)
+        {
+            InfiniCraftPlayer.HandleGeneratedUtilityRespawnSync(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedUtilityBuff)
+        {
+            InfiniCraftPlayer.HandleGeneratedUtilityBuffSyncPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent)
+        {
+            GeneratedProjectile.HandleVfxEventSyncPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.NotifyGeneratedItem || packetType == InfiniNetPacketIds.RequestGeneratedRegistry || packetType == InfiniNetPacketIds.RequestGeneratedRegistryForceAssets || packetType == InfiniNetPacketIds.RequestGeneratedItemById)
+        {
+            GeneratedItems?.HandlePacket(packetType, reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedItemVfxEvent)
+        {
+            InfiniItemVfxRuntime.HandleUseEventPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.SetMultiDevCraftMode)
+        {
+            InfiniCraftPlayer.HandleSetMultiDevCraftModePacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedPlacementIntent)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedPlacedBodySnapshot)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacedBodySnapshotPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.SyncGeneratedPlacedBodyLedger)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacedBodyLedgerPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedPlacementIntentReady)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementReadyPacket(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.NotifyGeneratedPlacement)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementPacket(reader, whoAmI);
+            return;
+        }
+    }
+
+
+    public override object? Call(params object[] args)
+    {
+        if (args is null || args.Length <= 0) return null;
+        string command = args[0]?.ToString() ?? "";
+        if (string.Equals(command, "IsGeneratedItem", System.StringComparison.OrdinalIgnoreCase))
+            return args.Length > 1 && args[1] is Terraria.Item item && item.ModItem is Content.Items.GeneratedItem;
+        if (string.Equals(command, "TryGetGeneratedItemData", System.StringComparison.OrdinalIgnoreCase))
+            return args.Length > 1 && args[1] is Terraria.Item item2
+                ? item2.ModItem is Content.Items.GeneratedItem gi ? gi.Data
+                : null
+                : null;
+        if (string.Equals(command, "GetGeneratedSummary", System.StringComparison.OrdinalIgnoreCase))
+            return args.Length > 1 && args[1] is Terraria.Item item3
+                ? item3.ModItem is Content.Items.GeneratedItem gi2 ? gi2.Data.GeneratedParentSummary
+                : null
+                : null;
+        if (string.Equals(command, "RegisterGeneratedParentHint", System.StringComparison.OrdinalIgnoreCase))
+            return false; // reserved stable API hook; no runtime mutation yet.
+        return null;
+    }
+
+    public override void Close()
+    {
+        Studio?.Dispose();
+        Studio = null;
+        base.Close();
+    }
+
+    public override void Unload()
+    {
+        global::InfiniCrafterLocal.Content.Tiles.GeneratedOwnedTiles.Clear();
+        Studio?.Dispose();
+        Studio = null;
+        GeneratedHeldItemPresentation.ClearAssetRequests();
+        GeneratedEquipOverlayDrawLayerBase.ClearNetCaches();
+        InfiniItemVfxRuntime.ClearUseEventCaches();
+        GeneratedProjectile.ClearVfxEventSyncCaches();
+        GeneratedItems?.Dispose();
+        AssetSync?.Dispose();
+        Sprites?.Dispose();
+        GeneratedItems = null!;
+        AssetSync = null!;
+        Sprites = null!;
+        Generator = null!;
+        Instance = null!;
+    }
+}

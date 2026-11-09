@@ -59,7 +59,7 @@ def straight_line_arguments(block, call_index, count):
     return args
 
 
-def type_blocks(instructions, field, argument):
+def type_blocks(instructions, field, argument, rejected=None):
     code = [i for i in instructions if i.op != "nop"]
     # No fallthrough proof is valid in the presence of an unmodeled transfer,
     # including transfers outside the candidate that could enter its interior.
@@ -84,6 +84,8 @@ def type_blocks(instructions, field, argument):
                     break
             if not external_entry:
                 yield c.arg, guard.offset, block
+            elif rejected is not None:
+                rejected.append((c.arg, guard.offset, block, "foreign_entry_into_item_branch"))
 
 
 def direct_call_count(block, call_offset):

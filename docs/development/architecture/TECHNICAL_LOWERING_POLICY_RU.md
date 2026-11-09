@@ -1,6 +1,6 @@
 # Technical lowering — классификация и proof boundary
 
-[Generated boundary/manifest](../../reference/generated/LOWERY_RU.md) · [Machine receipts audit](../../reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md) · [Executable owner](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py)
+[Generated boundary/manifest](../../reference/generated/LOWERY_RU.md) · [Machine receipts audit](../../reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md) · [Executable owner](../../../generator/infini_local/core/runtime_authoring/technical_lowering.py)
 
 <a id="transformations"></a>
 ## Четыре разных класса

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from native_hit_status_analysis import Instruction, analyze
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeHitStatusCatalog.g.cs"
+OUTPUT = ROOT / "mod/InfiniCrafterLocal/Common/Services/Generation/NativeHitStatusCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_hit_status_sources.generated.json"
 
 
@@ -128,6 +128,7 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
     if body.exception_handlers and not allow_opaque:
         raise ValueError("exception handlers are outside supported native subset")
     instructions = DecodedInstructions()
+    instructions.has_exception_handlers = bool(body.exception_handlers)
     called_methods = {}
     module_id = str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value))
 

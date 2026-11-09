@@ -89,13 +89,68 @@ input на 357; Hellwing меняет только current projectile 1 на 485
 Нет нового progression solver, recommended damage corridor или скрытого
 перебаланса сохранённого ребёнка при смене патронов.
 
+## Условные item dispatcher sources
+
+`nativeItemDispatchReference` сохраняет item-relevant C# из `ApplyEquipFunctional`,
+`ItemCheck_Inner`, `ItemCheck_Shoot` и `UpdateEquips`. Для одного прямого helper-call
+допускается неизменяемый `int`, полученный из typed `Item.type`; каждый фрагмент
+содержит точный caller binding, IL offset и исходные условия/циклы вызывающего кода.
+Это source relevance, не доказательство receiver identity или исполнения.
+Arbitrary integers, вычисленные/изменяемые аргументы, virtual dispatch, неподдержанные
+control scopes и рекурсивный обход не используются для такого отбора. На root
+остаются bounds: 8 helper call sites, 16 фрагментов, 24000 символов на фрагмент и
+64000 суммарно; отказы и пропуски видимы, код не обрезается посередине.
+
 ## Причины неполного identity window
 
-Общий `parentSourceGraph` сохраняет предел 1024 сырых IL инструкций и character
-budget 16000. Узкое наблюдение `VanillaAI` допускает до 1024 значимых инструкций
-при отдельном hard bound 4096 сырых: `nop` и исходные offsets не удаляются.
-Отказы по raw/meaningful budget отличаются от неподдержанного dispatch и
-non-forward перехода. Превышение границы остаётся unknown, не пустой механикой.
+Общий `parentSourceGraph` разделяет обнаружение исходных связей и отбор для
+передачи: discovery ограничен 256 узлами, 1024 рёбрами и глубиной helper 6,
+экспорт — 48 узлами и 192 рёбрами. Начальный бюджет всего JSON — 30000
+символов; только для механического core с причинными условиями он может
+увеличиваться до 40000. Optional helpers и общие hooks не увеличивают бюджет.
+Metadata, diagnostics и production catalog-coverage envelope учитываются внутри
+границы; фактически выделенный бюджет указывается отдельно. До 1024 методов могут быть просмотрены при поиске consumers;
+это не лимит сырых инструкций одного метода. Проекция одного метода
+ограничена 18000 символами. Исходный IL/CFG сохраняет свои отдельные bounds.
+Author сохраняет producer-owned `local_entry:<index>` с typed member reference как
+`unresolved_local_entry`, поэтому ссылки на входные локальные определения не теряются
+и не превращаются в известное исполненное значение. Неизвестные формы остаются omissions.
+
+Сначала отбираются основные dispatch roots, их причинные пути, spawn и
+array/ref-output bundles с условиями, затем связанные state consumers и общие
+хуки. Сначала выделяется минимальный механический фрагмент с его controls. Расширение
+не может удалить уже сохранённые statements, значения или guard links. Малые
+тела получают первоначальное место до расширения соседей;
+недостающие guards, локальные зависимости, тела и рёбра остаются явно unknown.
+Удержанное ребро без исходного callsite помечается отдельно. Все выбранные
+узлы должны быть достижимы по экспортированным рёбрам от удержанных roots;
+взаимные ссылки внутри оторванного цикла не считаются корневым путём.
+
+Concrete receiver берётся из захваченного owner типа. Только доказанный
+`callvirt` на этом receiver разрешается через соответствующий virtual slot;
+прямой base `call`, скрытый newslot и чужой receiver не подменяются override.
+Контексты вызова и captured native type/aiStyle разделены. Native helper
+использует существующий строгий identity selector только при доказанной
+привязке actor; отказ optional proof сохраняет доступный raw source отдельно
+от identity-based child admission. Unknown actor не получает type родителя.
+Readonly static reference не означает неизменность содержимого объекта.
+
+Native mechanical roots используют существующий owner наблюдения движения и
+эффектов; несвязанные alpha/frame/oldRot не становятся обязательными mechanics.
+Они могут остаться dependencies, если нужны выбранному эффекту или условию.
+Для address-exposed local граф сохраняет `possibleLocalWrites`: исходные записи
+и вызовы через доказанный адрес той же локальной переменной на возможном CFG
+пути до чтения. Это provenance, не точные reaching definitions и не результат
+исполнения ref-call. Само чтение остаётся `address_exposed_local` с explicit
+unknown; запись и её guards замыкаются вместе. Чужие visual temporaries не
+подставляются общей коллекцией всех ref-writes. Обход общего alias DAG ограничен
+128 различными значениями, список possible writes — 128; превышение явно
+обозначается, а model-facing запись не становится безусловной.
+
+Узкое наблюдение `VanillaAI` допускает до 1024 значимых инструкций при отдельном
+hard bound 4096 сырых: `nop` и исходные offsets не удаляются. Отказы по
+raw/meaningful budget отличаются от неподдержанного dispatch и non-forward
+перехода. Превышение границы остаётся unknown, не пустой механикой.
 
 Существующий certified identity selector применяется также к inline dispatch:
 выбираются только доказанные ветви captured type/aiStyle; живые условия, alias
@@ -107,13 +162,13 @@ Opaque helper/global effects остаются unknown; даже value-only ар�
 доказывает чистоту вызова. Счётчики означают AI invocations, а не автоматически
 тики мира, секунды, точную частоту попаданий или DPS. Полный AI не обещается.
 
-## Условные дочерние source profiles: один переход
+## Условные дочерние source profiles: ограниченный граф
 
 `referencedProjectiles` собирает тот же `ProjectileRawSnapshot`, который
 используется обычным `Prepare` и `/infinidump`; внешний dump для live-запроса
-не нужен. Producer связывает literal candidates из уже выбранных source
-observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
-ID остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
+не нужен. Producer связывает literal и конечные вычислимые candidates из уже выбранных
+source observations с исходными callsites, conditions и сертификатами. Runtime/dynamic
+ID вне поддержанного конечного выражения остаётся явно unresolved; соседняя исключённая identity-ветка не возвращается
 через каталог. Один профиль может обслуживать несколько условных вызовов.
 
 Вложенный snapshot содержит native defaults/source, не состояние реально
@@ -122,13 +177,63 @@ owner и AI arguments читаются из родительского вызо�
 Python передаёт read-only profile через существующие compaction и exact-sharing,
 не выбирая механику и не меняя input/fingerprint.
 
-Раскрывается ровно один переход: вложенные вызовы имеют
-`includeChildReferences:false`, поэтому self/cyclic references не вызывают
-рекурсию. Технический предел — восемь **целых** profiles на snapshot; все callsites
-и overflow identities сохраняются с причиной unknown. Это бюджет наблюдения,
-не ограничение игрового числа дочерних снарядов и не рекомендация Author.
+Producer `native_bounded_projectile_references` обходит связи в ширину:
+сначала прямые дети, затем их source-вызовы. Общий предел — восемь **целых**
+profiles и четыре перехода на граф одного snapshot. `profileRefType` связывает
+повторную identity с первым captured profile того же графа; self/cyclic связи
+не создают рекурсию. Все callsites и identities за пределом сохраняются с
+причиной unknown. Это бюджет наблюдения, не ограничение игрового числа дочерних
+снарядов и не рекомендация Author. Python разрешает повторную ссылку через
+исходный capture path, даже если первая ведущая к нему ветка была исключена.
+
+Конечный source-анализ допускает int32 literals, копии/joins, сложение и вычитание,
+а также `Projectile.type`/`aiStyle` только через существующее доказательство
+receiver identity и отсутствия мутаций до конкретного чтения. Неизвестные ветки
+дают объединение альтернатив, не выбор runtime-ветки. Unchecked int32 arithmetic
+сохраняет wraparound. Signed checked overflow,
+неподдержанные значения, циклы, адреса/ref, чужой receiver и исчерпание бюджета
+остаются unknown; частичное множество не доказывает исключение. Бюджет одного
+выражения: 256 посещений/операций, глубина 64 и восемь арифметических альтернатив.
+Прежние literal candidates и их порядок внутри одного callsite сохраняются
+отдельно, поэтому новый арифметический предел не отбрасывает ранее доступные
+source links. Общий BFS-бюджет profiles остаётся прежним; новые candidates
+могут конкурировать за него, а отказ capture всегда остаётся явным. Этот анализ
+не запускает метод, loop, getter или spawn и не расширяет бюджет дочернего графа.
+
+В approximate mechanics view literal local stores сопоставляются с точным
+spawn callsite: последовательная запись заменяет прежнее значение, неизвестные
+ветки объединяются, loops и неподдержанные scopes сохраняют консервативное
+множество. Локальная переменная должна иметь declaration в полном методе или
+retained closed region; внешний local, runtime expression, ref/address exposure
+и неподтверждённый control flow остаются unknown. Это source-проекция с прежним
+identity assumption, не доказательство выполнения. Исключение child profile
+требует совпадающих method/module/hash/call offsets; strict source не переписывается.
 Отдельный catalog snapshot может содержать больше собственного source-контекста,
 чем неполная ссылка на него; отсутствие профиля не доказывает отсутствие эффекта.
+
+## Условные hit и tile-collision sources
+
+`interactionSources` дополняет AI/lifecycle контекст исходниками native
+`Projectile.Damage`, `StatusNPC` и `HandleMovement`. Отбор использует положительные
+типизированные сравнения и literal switch sections для `this.type`/`this.aiStyle`,
+без item names и таблиц ID.
+Оригинальный guard сохраняется целиком; внешние locals и параметры перечислены
+как неизвестные entry values. Наличие подходящего сравнения означает релевантность
+source, а не доказанное исполнение, сохранение identity от входа или отсутствие
+других эффектов. Неподдержанные control transfers и превышенные лимиты видны
+в refusal receipts.
+
+Для каждого root допускается максимум 12 целых regions, 16 000 символов на
+record и 48 000 суммарно, включая bodies не более четырёх exact same-module
+instance helpers. Это один helper hop, без выполнения и подстановки значений
+аргументов. Сертификаты методов сохраняются отдельно от читаемого view.
+Из уже принятых regions/helpers извлекаются только точные типизированные literal
+spawn callsites; они могут открыть child profile в прежнем ограниченном графе,
+но остаются условными source candidates с неизвестными runtime gates. Dynamic
+ID не угадывается. Эти открытые source regions не заменяют strict graph и
+не служат доказательством исключения child profile. Python убирает лишь
+проверенное дублирование сертификатов, сохраняя code, guards, helper links,
+внешние inputs и unknowns; неизвестный формат остаётся исходным.
 
 ## Неопределённость не запрещает новый дизайн
 
@@ -162,7 +267,7 @@ ID, proc probability и duration не теряются, если downstream де
 Author явно составляет бафф/дебафф из зарегистрированных generated-effect
 примитивов: выбирает получателя, характеристики, триггер, длительность и
 поддержанный шанс. Знаковые player modifiers выражают также штрафы и обмены;
-`apply_npc_effect_on_event` выражает временные NPC эффекты без нативного
+`npc_effect_on_event` выражает временные NPC эффекты без нативного
 buff-ID. Код не переводит имя родителя или source-reference в автоматически
 выбранную механику. Точные значения нового эффекта — решение Author,
 а не исправление факта о родителе. См. [construction contract](../../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#полезная-композиция-баффов-и-дебаффов).
@@ -339,3 +444,8 @@ SHA всего tModLoader — диагностическая идентично�
 В provenance различаются исходная проверенная экстракция (audited certificate и сохранённые данные экстракции) и текущая наблюдаемая сборка (`observed*`); старые signature tokens не объявляются токенами новой сборки. Existing registry values остаются текущими наблюдениями, а не константами из прошлого DLL.
 
 Карта сертификатов генерируется metadata-only инструментом `tools/generate/native_source_certificates/NativeSourceCertificates.csproj` из официального DLL и существующих `contracts/reports/native_*_sources.generated.json`; общий `NativeSourceFingerprint` используется и генератором, и runtime. Аргументы: `<assembly> <reports directory> <output NativeSourceCertificates.g.cs> [--check]`, MSBuild property `InfiniTmlReferenceDir` указывает существующие tML reference assemblies. Неразрешённый или неоднозначный обязательный source key прерывает генерацию, а не создаёт частичный сертификат.
+
+
+## Source analysis и compact Author view
+
+[Контракт source analysis, сжатия, warning и транспорта](PARENT_SOURCE_ANALYSIS_RU.md). Сохраняются main inventory/fallback ammo observations, отдельные root/fingerprint envelopes и source-only cache isolation.

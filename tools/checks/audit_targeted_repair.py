@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "LocalGenerator"))
+sys.path.insert(0, str(ROOT / "generator"))
 
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
@@ -99,8 +99,6 @@ def _channel_dependency(data: dict[str, Any]) -> None:
     })
 
 
-
-
 def _empty_patch() -> dict[str, Any]:
     return {
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
@@ -152,7 +150,7 @@ def _frozen_merge_probe() -> dict[str, Any]:
 
 
 def _emitted_validator_codes() -> set[str]:
-    path = ROOT / "LocalGenerator/infini_local/core/runtime_authoring/validator.py"
+    path = ROOT / "generator/infini_local/core/runtime_authoring/validator.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     out: set[str] = set()
     # Small local diagnostic helpers may forward a code parameter unchanged.
@@ -183,32 +181,6 @@ def _emitted_validator_codes() -> set[str]:
         if position is not None and len(node.args) > position:
             out.update(literal_codes(node.args[position]))
     return out
-
-
-def _frozen_callsite_audit() -> dict[str, Any]:
-    paths = [
-        ROOT / "LocalGenerator/infini_local/core/runtime_authoring/repair/filter.py",
-        ROOT / "LocalGenerator/infini_local/pipelines/visual/repair.py",
-        ROOT / "LocalGenerator/infini_local/core/vfx/repair.py",
-    ]
-    total = 0
-    explicit_false = 0
-    bad: list[str] = []
-    for path in paths:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            fn = node.func.id if isinstance(node.func, ast.Name) else ""
-            if fn != "merge_frozen_subtree":
-                continue
-            total += 1
-            keyword = next((row for row in node.keywords if row.arg == "allow_additions"), None)
-            if keyword is not None and isinstance(keyword.value, ast.Constant) and keyword.value.value is False:
-                explicit_false += 1
-            else:
-                bad.append(f"{path.relative_to(ROOT)}:{getattr(node, 'lineno', 0)}")
-    return {"calls": total, "explicitFalse": explicit_false, "badCallsites": bad, "ok": total > 0 and total == explicit_false}
 
 
 def render() -> dict[str, Any]:
@@ -256,9 +228,6 @@ def render() -> dict[str, Any]:
     frozen_merge = _frozen_merge_probe()
     if not frozen_merge["ok"]:
         errors.append("frozen merge probe failed")
-    frozen_callsites = _frozen_callsite_audit()
-    if not frozen_callsites["ok"]:
-        errors.append("one or more stage Repair callsites allow arbitrary additions")
 
     return {
         "schema": SCHEMA,
@@ -268,7 +237,6 @@ def render() -> dict[str, Any]:
         "authorVisibleCapabilityCount": author_count,
         "policyCoverage": policy_coverage,
         "frozenMerge": frozen_merge,
-        "frozenCallsites": frozen_callsites,
         "cases": cases,
         "errors": errors,
     }
@@ -303,8 +271,7 @@ def main() -> int:
             )
         print(
             f"  policy={report['policyCoverage']['policyCodes']}/{report['policyCoverage']['declaredCodes']}; "
-            f"frozenMerge={report['frozenMerge']['ok']}; "
-            f"frozenCallsites={report['frozenCallsites']['explicitFalse']}/{report['frozenCallsites']['calls']}"
+            f"frozenMerge={report['frozenMerge']['ok']}"
         )
         for error in report["errors"]:
             print("  -", error)

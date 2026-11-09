@@ -1,0 +1,225 @@
+#nullable enable
+using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Runtime;
+using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.VFX;
+using Microsoft.Xna.Framework;
+using System;
+using System.Linq;
+using Terraria;
+
+namespace InfiniCrafterLocal.Content.Projectiles;
+
+public sealed partial class GeneratedProjectile
+{
+    // The explicit hand driver has zero translational velocity. Its authored
+    // initial/cursor axis still owns event direction, including delayed captures.
+    private Vector2 GameplayEventDirection()
+        => _entity?.Aim is not null ? MotionAxis(Owner(), publish: false)
+            : Projectile.velocity.SafeNormalize(_initialDirection);
+
+    private void RunRuntimeEvent(string eventName, NPC? target, int damageDone)
+    {
+        if (_data is null || _entity is null) return;
+        Vector2 direction = GameplayEventDirection();
+        foreach (RuntimeEventActionSpec action in _entity.ActionsFor(eventName))
+        {
+            if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect) continue; // hit bridge owns admission/RNG
+            Vector2 eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, Projectile.Center, target);
+            if (action.DelayTicks > 0)
+            {
+                if (RuntimeDelayedActionScheduler.TrySchedule(
+                    _data,
+                    _entity,
+                    action,
+                    Owner(),
+                    Projectile.GetSource_FromThis(),
+                    eventPosition,
+                    direction,
+                    target,
+                    damageDone,
+                    _childDepth,
+                    _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
+                    Projectile.netUpdate = true;
+                continue;
+            }
+            RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), eventPosition, direction, target, damageDone, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
+        }
+    }
+
+    private void EmitAndSyncVfxEvent(string eventName, Vector2 center)
+    {
+        if (_data is null || _entity is null) return;
+        if (Main.netMode == Terraria.ID.NetmodeID.Server)
+        {
+            BroadcastAuthoritativeVfxEvent(eventName, center);
+            return;
+        }
+        // Nonowner discrete events have one producer: the validated server relay.
+        // Local callbacks still register live paths, never a second simple emission.
+        InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center,
+            includeEventEmissions: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
+        SendOwnerProducedVfxEvent(eventName,center);
+    }
+
+    private void RunPeriodicActions()
+    {
+        if (_data is null || _entity is null) return;
+        int dueActions = 0;
+        // Periodic VFX is owned by OnTick/Draw and each VFX slot cadence,
+        // not by the independent gameplay action periods below.
+        foreach (RuntimeEventActionSpec action in _entity.ActionsFor(RuntimeEventKind.Periodic))
+        {
+            int period = AuthoredTicksToProjectileUpdates(Math.Max(6, action.PeriodTicks));
+            if (_age % period != 0) continue;
+            if (dueActions++ >= InfiniRuntimeLimits.MaxRuntimePeriodicActionsPerTick)
+                break;
+            Vector2 direction = GameplayEventDirection();
+            if (action.DelayTicks > 0)
+            {
+                if (RuntimeDelayedActionScheduler.TrySchedule(
+                    _data,
+                    _entity,
+                    action,
+                    Owner(),
+                    Projectile.GetSource_FromThis(),
+                    Projectile.Center,
+                    direction,
+                    null,
+                    Projectile.damage,
+                    _childDepth,
+                    _activationSpawnBudget ?? new RuntimeSpawnBudget(0))
+                    && action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
+                    Projectile.netUpdate = true;
+            }
+            else
+                RuntimeProgramExecutor.ExecuteAction(_data, _entity, action, Owner(), Projectile.GetSource_FromThis(), Projectile.Center, direction, null, Projectile.damage, _childDepth, _activationSpawnBudget ?? new RuntimeSpawnBudget(0));
+        }
+    }
+
+    public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
+    {
+        if (!_configured || _entity is null || _activationDelayTicks > 0) return false;
+        if (HasBeamGeometry)
+        {
+            GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width);
+            if ((end - start).LengthSquared() <= 0.01f) return false;
+            float collisionPoint = 0f;
+            return Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), start, end, width, ref collisionPoint);
+        }
+        if (HasLashGeometry && _whipPoints.Count > 1)
+        {
+            float width = WhipCollisionWidth();
+            for (int i = 1; i < _whipPoints.Count; i++)
+            {
+                float collisionPoint = 0f;
+                if (Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), _whipPoints[i - 1], _whipPoints[i], width, ref collisionPoint))
+                    return true;
+            }
+            return false;
+        }
+        return null;
+    }
+
+    // Shared by collision and runtime_geometry presentation; no sprite scale or pose offsets.
+    private void GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width)
+    {
+        var beam = _entity!.BeamGeometry!;
+        Vector2 direction = MotionAxis(Owner(), publish: false);
+        start = Projectile.Center + direction * (beam.StartOffsetPx ?? 0f);
+        double initialWidth = _entity.BeamRamp?.InitialWidthMultiplier ?? 1d;
+        width = (float)(beam.WidthPx * (initialWidth + (1d - initialWidth) * BeamWarmupProgress()));
+        float length = beam.LengthPx;
+        if (beam.RaycastTiles)
+        {
+            Collision.LaserScan(start, direction, width, length, _beamScanSamples);
+            foreach (float sample in _beamScanSamples)
+            {
+                if (!float.IsFinite(sample))
+                    throw new InvalidOperationException("native beam LaserScan returned a non-finite distance");
+                // The explicit tile-raycast contract uses the shortest of three
+                // width samples. No interpolation may extend past a current wall.
+                length = Math.Min(length, Math.Max(0f, sample));
+            }
+        }
+        end = start + direction * length;
+    }
+
+    public override void ModifyHitNPC(NPC target, ref NPC.HitModifiers modifiers)
+    {
+        if (!_configured || !HasBeamGeometry) return;
+        double initial = BeamInitialDamage;
+        modifiers.SourceDamage *= (float)(initial + (1d - initial) * BeamWarmupProgress());
+    }
+
+    private float WhipCollisionWidth()
+        => Math.Max(4f, _entity!.Hitbox.WidthPx * _entity.Hitbox.HitboxScale * 0.5f);
+
+    public override void ModifyDamageHitbox(ref Rectangle hitbox)
+    {
+        if (_entity is null) return;
+        float scale = _entity.Hitbox.HitboxScale * HitboxCurveScale();
+        if (Math.Abs(scale - 1f) < 0.001f) return;
+        int width = Math.Max(2, (int)MathF.Round(hitbox.Width * scale));
+        int height = Math.Max(2, (int)MathF.Round(hitbox.Height * scale));
+        hitbox = new Rectangle(hitbox.Center.X - width / 2, hitbox.Center.Y - height / 2, width, height);
+    }
+
+    public override bool? CanHitNPC(NPC target)
+        => !_configured || _activationDelayTicks > 0 || _entity?.Damage.Enabled != true
+            || _initialNpcExclusion.AppliesTo(target) ? false : null;
+
+    public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
+    {
+        if (_data is null || _entity is null) return;
+        RuntimeHitPullBridge.SendProjectileHit(Projectile, target, hit.Crit);
+        RunRuntimeEvent(RuntimeEventKind.OnHit, target, damageDone);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnHit, target.Center);
+        if (hit.Crit)
+        {
+            RunRuntimeEvent(RuntimeEventKind.OnCrit, target, damageDone);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnCrit, target.Center);
+        }
+    }
+
+    public override bool OnTileCollide(Vector2 oldVelocity)
+    {
+        if (_data is null || _entity is null) return true;
+        RunRuntimeEvent(RuntimeEventKind.OnTileCollision, null, Projectile.damage);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnTileCollision, Projectile.Center);
+        if (_entity.ReturnTrigger is { OnTileCollision: true } trigger)
+        {
+            if (InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
+                LatchReturn(trigger.DisableTileCollisionOnReturn, startsNextUpdate: true);
+            return false; // no implicit recoil, bounce, catch or seek
+        }
+        if (_remainingBounces <= 0) return true;
+        _remainingBounces--;
+        float retention = _entity.Collision.BounceSpeedRetention ?? 0.78f;
+        if (Math.Abs(Projectile.velocity.X - oldVelocity.X) > 0.01f) Projectile.velocity.X = -oldVelocity.X * retention;
+        if (Math.Abs(Projectile.velocity.Y - oldVelocity.Y) > 0.01f) Projectile.velocity.Y = -oldVelocity.Y * retention;
+        Projectile.netUpdate = true;
+        return false;
+    }
+
+    public override void OnKill(int timeLeft)
+    {
+        // Release occupancy before terminal authored events, permitting a
+        // bounded replacement. Lifetime ledgers never refill from this path.
+        _spawnBudgetLease?.Release();
+        _spawnBudgetLease = null;
+        if (_data is null || _entity is null) return;
+        RuntimeHitPullBridge.RememberRetired(Projectile);
+        if (!_expireEventRan && timeLeft <= 1)
+        {
+            _expireEventRan = true;
+            RunRuntimeEvent(RuntimeEventKind.OnExpire, null, Projectile.damage);
+            EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
+        }
+        RunRuntimeEvent(RuntimeEventKind.OnKill, null, Projectile.damage);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnKill, Projectile.Center);
+        _presentationRetired=true;
+    }
+}

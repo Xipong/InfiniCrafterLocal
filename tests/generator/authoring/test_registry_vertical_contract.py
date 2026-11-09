@@ -1,0 +1,220 @@
+"""Canonical registry inventories and real schema/validator/Repair/compiler consumers."""
+
+from __future__ import annotations
+
+import json
+from copy import deepcopy
+from dataclasses import replace
+from types import MappingProxyType
+
+import infini_local.core.runtime_authoring.capability_registry as capability_registry
+import infini_local.core.runtime_authoring.capability_registry as registry_module
+import infini_local.core.runtime_authoring.repair.scope as repair_scope
+import infini_local.core.runtime_authoring.validator as validator
+import infini_local.core.runtime_authoring.validator as validator_module
+import pytest
+from infini_local.core.runtime_authoring.capability_registry import (
+    BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+    INPUT_KIND_REGISTRY,
+)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+from infini_local.core.runtime_authoring.registry_views import runtime_authoring_registry_manifest
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.qa.capability_witnesses import build_capability_witness
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+
+@pytest.mark.parametrize(
+    "key,identity,registry",
+    [
+        pytest.param("entityKinds", "kind", ENTITY_KIND_REGISTRY, id="entity-kinds"),
+        pytest.param("inputs", "input", INPUT_KIND_REGISTRY, id="inputs"),
+        pytest.param("bindingActions", "action", BINDING_ACTION_REGISTRY, id="binding-actions"),
+        pytest.param("events", "event", EVENT_KIND_REGISTRY, id="events"),
+        pytest.param("capabilities", "fn", {cap.name: cap for cap in CAPABILITY_REGISTRY.values()}, id="capabilities"),
+    ],
+)
+def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
+    rows = runtime_authoring_registry_manifest()[key]
+    expected = ({name for name, cap in registry.items() }
+                if key == "capabilities" else set(registry))
+    assert {r[identity] for r in rows} == expected
+    assert len(rows) == len(expected)
+    if key == "capabilities":
+        assert all(r["slot"] and r["authority"] for r in rows)
+        assert all(
+            {"requires", "positionOwnership", "activationSpawnCountParam", "meaningfulForStationary", "multiplicity"} <= r.keys()
+            for r in rows
+        )
+
+
+@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible])
+def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
+    from infini_local.pipelines.author.item_contract import author_item_response_schema
+    from jsonschema import Draft202012Validator
+
+    item = build_capability_witness(fn)
+    before = deepcopy(item)
+    assert Draft202012Validator(author_item_response_schema()).is_valid(item)
+    report = validator.validate_runtime_program(item)
+    assert report["ok"], report["errors"]
+    raw_wire = compile_runtime_program(item)
+    # Validate the producer before JSON can normalize tuple arrays or object
+    # keys into valid transport shapes.
+    report = validate_runtime_wire(raw_wire)
+    assert report["ok"], report["errors"]
+    report = audit_compiler_receipts(raw_wire["runtimeContract"]["finalWireReceipts"],
+                                     authored_document=item, final_document=raw_wire)
+    assert report["ok"], report["violations"]
+    wire = json.loads(json.dumps(raw_wire))
+    report = validate_runtime_wire(wire)
+    assert report["ok"], report["errors"]
+    # A shape-valid DTO alone does not prove that an optional authored effect
+    # reached the wire. Authenticate every receipt against both real endpoints.
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    report = audit_compiler_receipts(receipts, authored_document=item, final_document=wire)
+    assert report["ok"], report["violations"]
+    assert any(row.get("callId") == "witness_call" for row in receipts)
+    # Saved definitions may omit compiler proof, but still need strict wire
+    # admission. Keep that boundary in the same full-capability vertical pass.
+    stripped = deepcopy(raw_wire)
+    stripped.pop("runtimeContract")
+    report = validate_runtime_wire(stripped)
+    assert report["ok"], report["errors"]
+    assert item == before
+
+
+def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeypatch: pytest.MonkeyPatch) -> None:
+    source = CAPABILITY_REGISTRY["projectile_light"]
+    synthetic = replace(
+        source,
+        name="emit_test_light",
+        summary="Synthetic mutation witness over an existing parameter surface.",
+        compiler_owner="synthetic.missing.vertical.slice",
+        csharp_owner="SyntheticMissingExecutor.cs",
+    )
+    mutated = dict(CAPABILITY_REGISTRY)
+    mutated[synthetic.name] = synthetic
+    frozen = MappingProxyType(mutated)
+    monkeypatch.setattr(registry_module, "CAPABILITY_REGISTRY", frozen)
+    monkeypatch.setattr(validator_module, "CAPABILITY_REGISTRY", frozen)
+    schema = runtime_program_author_schema()
+    variants = schema["properties"]["calls"]["items"]["oneOf"]
+    assert any(row["properties"]["fn"].get("const") == synthetic.name for row in variants)
+
+    authored = build_runtime_fixture("door_on_chain")
+    authored["runtimeProgram"]["calls"].append(
+        {
+            "id": "synthetic_light",
+            "fn": synthetic.name,
+            "target": "chained_door",
+            "params": {"strength": 0.5, "color": "white"},
+        }
+    )
+    with pytest.raises(AssertionError, match="unhandled runtime entity capability"):
+        compile_runtime_program(authored)
+
+
+def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeypatch) -> None:
+    # Without damage, this on_hit has no producer under the original registry;
+    # its existing collision call becomes the producer after the registry edit.
+    without_damage = build_runtime_fixture("workbench_blade")
+    without_damage["runtimeProgram"]["calls"] = [
+        row for row in without_damage["runtimeProgram"]["calls"] if row["id"] != "workbench_blade_damage"
+    ]
+    original_errors = validator.validate_runtime_program(without_damage)["errors"]
+    assert [(row["code"], row["allowed"]) for row in original_errors] == [
+        ("event_not_emitted", ["projectile_damage"]),
+    ]
+
+    # Conversely, removing collision leaves an unrelated required-component
+    # error, but on_hit itself is still emitted by the original damage call.
+    without_collision = build_runtime_fixture("workbench_blade")
+    without_collision["runtimeProgram"]["calls"] = [
+        row for row in without_collision["runtimeProgram"]["calls"] if row["id"] != "workbench_blade_collision"
+    ]
+    assert [row["code"] for row in validator.validate_runtime_program(without_collision)["errors"]] == [
+        "missing_required_component",
+    ]
+
+    registry = dict(EVENT_KIND_REGISTRY)
+    registry["on_hit"] = replace(
+        registry["on_hit"],
+        producer_capabilities=("projectile_collision",),
+    )
+    monkeypatch.setattr(capability_registry, "EVENT_KIND_REGISTRY", registry)
+    assert validator.validate_runtime_program(without_damage)["ok"] is True
+
+    changed_errors = validator.validate_runtime_program(without_collision)["errors"]
+    event_errors = [row for row in changed_errors if row["code"] == "event_not_emitted"]
+    assert len(event_errors) == 1
+    assert event_errors[0]["allowed"] == ["projectile_collision"]
+    assert event_errors[0]["relatedIds"] == ["workbench_blade"]
+    scope = repair_scope.build_runtime_repair_scope(without_collision, event_errors)
+    assert scope["create"]["calls"]["allowedFns"] == ["projectile_collision"]
+    assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
+    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["projectile_collision"]
+
+
+def test_event_dependency_groups_survive_json_rows_and_repair_without_registry_requery(monkeypatch):
+    from infini_local.core.runtime_authoring.event_dependencies import EventCallRequirement, EventDependencyAlternative
+    from infini_local.core.runtime_authoring.repair import facts
+
+    authored = build_runtime_fixture("workbench_blade")
+    assert validator.validate_runtime_program(authored)["ok"]
+    calls = authored["runtimeProgram"]["calls"]
+    next(row for row in calls if row["id"] == "shed_nails")["params"]["when"] = "on_tile_collision"
+    alternatives = (EventDependencyAlternative(required_calls=(
+        EventCallRequirement.create("projectile_collision", {"tileCollide": True}),
+        EventCallRequirement.create("projectile_damage"),
+    )),)
+    original = validator.event_dependency_alternatives
+    monkeypatch.setattr(validator, "event_dependency_alternatives",
+                        lambda event, kind: alternatives if event == "on_tile_collision" else original(event, kind))
+    errors = json.loads(json.dumps(validator.validate_runtime_program(authored)["errors"]))
+    assert [row["code"] for row in errors] == ["event_not_emitted"]
+    assert EventDependencyAlternative.from_row(errors[0]["eventDependencies"][0]) == alternatives[0]
+    errors[0]["allowed"] = ["A translated grouped producer requirement"]
+    def unexpected_requery(*args):
+        raise AssertionError("Repair must consume the validator's grouped alternatives")
+    monkeypatch.setattr(facts, "event_dependency_alternatives", unexpected_requery)
+    scope = repair_scope.build_runtime_repair_scope(authored, errors)
+    option = scope["eventAlternatives"][0]["allowed"][0]
+    assert option["requiredCalls"] == [
+        {"fn": "projectile_collision", "targetId": "workbench_blade", "exactParams": [{"param": "tileCollide", "value": True}]},
+        {"fn": "projectile_damage", "targetId": "workbench_blade", "exactParams": []},
+    ]
+    permissions = {row["id"]: row["paths"] for row in scope["fieldPermissions"]["calls"]}
+    assert permissions["workbench_blade_collision"] == ["params.tileCollide"]
+    assert not permissions.get("workbench_blade_damage")
+
+
+@pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
+def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
+    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
+
+    source = EVENT_KIND_REGISTRY[name].prompt_card()
+    rows = [row for row in sharp_engine_fn_catalog_for_llm()["events"] if row["event"] == name]
+    assert len(rows) == 1
+    delivered = rows[0]
+    for key, value in source.items():
+        if value is None or value == [] or value == {}:
+            assert key not in delivered
+        else:
+            assert delivered[key] == value
+
+
+def test_author_event_metadata_omission_does_not_drop_false_or_exact_zero():
+    event = replace(EVENT_KIND_REGISTRY["on_hit"], producer_binding_contact_damage=False,
+                    producer_exact_params={"producer": {"count": 0, "enabled": False}})
+    card = event.author_prompt_card()
+    assert card["producerBindingContactDamage"] is False
+    assert card["producerExactParams"] == {"producer": {"count": 0, "enabled": False}}
+    # The complete registry view is still available for non-prompt consumers.
+    assert "producedByBindingInputs" in replace(event, producer_binding_inputs=()).prompt_card()
+    assert "producedByBindingInputs" not in replace(event, producer_binding_inputs=()).author_prompt_card()

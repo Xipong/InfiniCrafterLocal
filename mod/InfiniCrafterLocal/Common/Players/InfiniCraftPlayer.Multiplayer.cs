@@ -1,0 +1,1575 @@
+#nullable enable
+using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Config;
+using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.Systems;
+using InfiniCrafterLocal.Content.Items;
+using Microsoft.Xna.Framework;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Terraria;
+using Terraria.ID;
+using Terraria.ModLoader;
+using Terraria.ModLoader.IO;
+
+namespace InfiniCrafterLocal.Common.Players;
+
+// AGENT MAP: server-authoritative multiplayer craft protocol.
+// Client station deposits are transferred through synchronized mouse slot 58 into
+// server-owned A/B escrow. Craft requests carry compact refs, but the host consumes
+// only those escrow slots, runs GeneratorClient, then sends ACK/FAIL.
+// Never add a client-authored GeneratedItemData commit path here.
+public sealed partial class InfiniCraftPlayer
+{
+    // Version 3 adds bounded client tooltip observations and optional exact
+    // lane/ingredient identity on cancellation before initial craft admission.
+    private const int RemoteStationProtocolVersion = 3;
+
+    private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
+    {
+        writer.Write(RemoteStationProtocolVersion);
+        writer.Write(_stationEscrowOriginScope);
+    }
+
+    private static string ReadRemoteStationScope(System.IO.BinaryReader reader)
+    {
+        if (reader.ReadInt32() != RemoteStationProtocolVersion)
+            throw new System.IO.InvalidDataException("Unsupported remote station protocol");
+        return reader.ReadString();
+    }
+
+    private enum StationEscrowAction : byte
+    {
+        Deposit = 1,
+        TakeToMouse = 2,
+        ReturnOne = 3,
+        ReturnAll = 4,
+    }
+
+    private bool BeginRemoteServerCraft(Item a, Item b)
+    {
+        if (HasPendingCraft)
+            return false;
+
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[0] = false;
+
+        string requestId = Guid.NewGuid().ToString("N");
+        string parentA = LocalParentName(a);
+        string parentB = LocalParentName(b);
+
+        var refundA = a.Clone();
+        refundA.stack = 1;
+        var refundB = b.Clone();
+        refundB.stack = 1;
+
+        _request = new GeneratorClient.PreparedGenerationRequest
+        {
+            PayloadJson = "{}",
+            ParentA = parentA,
+            ParentB = parentB,
+            RefundA = refundA,
+            RefundB = refundB
+        };
+        CaptureClientParentTooltips(_request, a, b);
+        _label = $"{parentA} + {parentB}";
+        _ticksLeft = CraftDurationTicks;
+        _elapsedTicks = 0;
+        _totalCraftTicks = 0;
+        _announceTick = 0;
+        _lateMessageShown = false;
+        _generationAttempt = 0;
+        _retryWaitTicks = 0;
+        _lastRetryNoticeTick = 0;
+        _lastGeneratorOfflineNoticeTick = 0;
+        _serverRequestId = requestId;
+        _awaitingServerCommit = true;
+        _serverCraftWaitTicks = 0;
+        _task = null;
+
+        if (!SendServerCraftRequest(requestId, 0, a, b, _request.ClientTooltipA, _request.ClientTooltipB))
+        {
+            ClearCraft();
+            return false;
+        }
+
+        CombatText.NewText(Player.Hitbox, Color.LightSkyBlue, "InfiniCraft: запрос крафта отправлен хосту");
+        return true;
+    }
+
+    private bool BeginServerAuthoritativeCraft(GeneratorClient.PreparedGenerationRequest request, string label, string requestId)
+    {
+        if (HasPendingCraft)
+            return false;
+
+        _request = request;
+        _label = label;
+        _ticksLeft = CraftDurationTicks;
+        _elapsedTicks = 0;
+        _totalCraftTicks = 0;
+        _announceTick = 0;
+        _lateMessageShown = false;
+        _generationAttempt = 0;
+        _retryWaitTicks = 0;
+        _lastRetryNoticeTick = 0;
+        _lastGeneratorOfflineNoticeTick = 0;
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.None, "");
+        _remoteCraftCancelRequested[0] = false;
+        _serverRequestId = requestId ?? "";
+        _awaitingServerCommit = false;
+        _serverCraftWaitTicks = 0;
+        _task = null;
+
+        StartGenerationTask("server_authoritative");
+        return true;
+    }
+
+    private void ResendPendingRemoteCrafts()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority())
+            return;
+        if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
+        {
+            if (_remoteCraftCancelRequested[0]) SendRemoteServerCraftCancel("client cancel");
+            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB, _request.ClientTooltipA, _request.ClientTooltipB);
+        }
+        foreach (MultiDevCraftJob? job in _multiDevJobs)
+        {
+            if (job is not null && job.AwaitingServerCommit && HasCraftRequestId(job.RequestId))
+            {
+                if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client cancel");
+                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB, job.Request.ClientTooltipA, job.Request.ClientTooltipB);
+            }
+        }
+    }
+
+    private void RestoreRemoteCraftMirror(int laneIndex, GeneratorClient.PreparedGenerationRequest? request)
+    {
+        if (laneIndex is < 0 or > 2 || request is null)
+            return;
+        int first = laneIndex * 2;
+        InputSlot(first) = request.RefundA?.Clone() ?? NewAirItem();
+        InputSlot(first + 1) = request.RefundB?.Clone() ?? NewAirItem();
+        if (!InputSlot(first).IsAir) InputSlot(first).stack = 1;
+        if (!InputSlot(first + 1).IsAir) InputSlot(first + 1).stack = 1;
+    }
+
+    private void ClearRemoteCraftMirror(int laneIndex)
+    {
+        if (laneIndex is < 0 or > 2)
+            return;
+        InputSlot(laneIndex * 2).TurnToAir();
+        InputSlot(laneIndex * 2 + 1).TurnToAir();
+    }
+
+    private bool HasActiveServerCraftRequest(string requestId)
+    {
+        if (IsServerAuthoritativeCraft && string.Equals(_serverRequestId, requestId, StringComparison.Ordinal))
+            return true;
+        return _multiDevJobs.Any(job => job is not null
+            && !job.AwaitingServerCommit
+            && string.Equals(job.RequestId, requestId, StringComparison.Ordinal));
+    }
+
+    private bool SendStationEscrowRequest(StationEscrowAction action, int index, Item item)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || HasPendingStationEscrowOperation)
+            return false;
+        if (action == StationEscrowAction.ReturnAll ? HasAnyCraftLanePending : IsCraftLanePending(index / 2))
+            return false;
+        if (action != StationEscrowAction.ReturnAll && index is < 0 or > 5)
+            return false;
+
+        string operationId = Guid.NewGuid().ToString("N");
+        if (GeneratedStationEscrowStateSystem.NormalizeClientId(_stationEscrowClientId).Length == 0)
+            _stationEscrowClientId = Guid.NewGuid().ToString("N");
+        _stationEscrowUsesRemoteAuthority = true;
+        _pendingStationEscrowOperationId = operationId;
+        _pendingStationEscrowAction = (byte)action;
+        _pendingStationEscrowIndex = index;
+        _pendingStationEscrowWaitTicks = 0;
+        if (action == StationEscrowAction.Deposit && item is not null && !item.IsAir)
+        {
+            _pendingStationEscrowItem = item.Clone();
+            _pendingStationEscrowItem.stack = 1;
+        }
+        else
+        {
+            _pendingStationEscrowItem = null;
+        }
+
+        if (!FlushPendingStationEscrowRequest())
+        {
+            ClearPendingStationEscrowOperation();
+            return false;
+        }
+        return true;
+    }
+
+    private bool ResendPendingStationEscrowRequest()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !HasPendingStationEscrowOperation || IsCraftLanePending(_pendingStationEscrowIndex / 2))
+            return false;
+        return FlushPendingStationEscrowRequest();
+    }
+
+    private bool FlushPendingStationEscrowRequest()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !HasPendingStationEscrowOperation)
+            return false;
+        try
+        {
+            var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+            packet.Write(InfiniNetPacketIds.RequestStationEscrow);
+            WriteRemoteStationScope(packet);
+            packet.Write(_stationEscrowClientId);
+            packet.Write(_pendingStationEscrowOperationId);
+            packet.Write(_pendingStationEscrowAction);
+            packet.Write((sbyte)_pendingStationEscrowIndex);
+            if ((StationEscrowAction)_pendingStationEscrowAction == StationEscrowAction.Deposit)
+            {
+                Item refItem = _pendingStationEscrowItem is not null && !_pendingStationEscrowItem.IsAir
+                    ? _pendingStationEscrowItem
+                    : NewAirItem();
+                WriteCraftItemRef(packet, refItem);
+            }
+            packet.Send();
+            _pendingStationEscrowWaitTicks = 0;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void TickPendingStationEscrow()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !HasPendingStationEscrowOperation)
+            return;
+        _pendingStationEscrowWaitTicks++;
+        if (_pendingStationEscrowWaitTicks < StationEscrowRetryIntervalTicks)
+            return;
+        _pendingStationEscrowWaitTicks = 0;
+        // Network drop / lost result: resend the same operationId until ACK/FAIL.
+        ResendPendingStationEscrowRequest();
+    }
+
+    private void RestoreRejectedLocalDeposit(int index)
+    {
+        if (index is < 0 or > 5)
+            return;
+
+        Item restored;
+        if (_pendingStationEscrowItem is not null && !_pendingStationEscrowItem.IsAir)
+        {
+            restored = _pendingStationEscrowItem.Clone();
+            restored.stack = 1;
+        }
+        else
+        {
+            ref Item slot = ref InputSlot(index);
+            if (slot is null || slot.IsAir)
+                return;
+            restored = slot.Clone();
+            restored.stack = 1;
+        }
+
+        ref Item optimistic = ref InputSlot(index);
+        if (optimistic is not null && !optimistic.IsAir)
+            optimistic.TurnToAir();
+
+        // Never blind-increment whatever currently sits on the cursor: only merge
+        // onto a matching stack, put on empty mouse, or refund exact clone to inventory.
+        if (CanRestoreRejectedDepositOntoMouse(restored))
+        {
+            if (Main.mouseItem is null || Main.mouseItem.IsAir)
+                Main.mouseItem = restored;
+            else if (!ItemLoader.TryStackItems(Main.mouseItem, restored, out int moved) || moved != 1)
+            {
+                RefundOne(restored); // failed merge retains the remaining exact claim
+                return;
+            }
+            if (Player.inventory.Length > 58)
+                Player.inventory[58] = Main.mouseItem.Clone();
+            return;
+        }
+
+        RefundOne(restored);
+    }
+
+    private bool CanRestoreRejectedDepositOntoMouse(Item restored)
+    {
+        if (restored is null || restored.IsAir)
+            return false;
+        if (Main.mouseItem is null || Main.mouseItem.IsAir)
+            return true;
+        if (Main.mouseItem.type != restored.type || Main.mouseItem.prefix != restored.prefix)
+            return false;
+        if (Main.mouseItem.stack <= 0 || Main.mouseItem.stack >= Main.mouseItem.maxStack)
+            return false;
+        // Two unrelated modded items both used to produce empty generated ids,
+        // so an unrelated cursor item could absorb a rejected escrow unit.
+        // Let the installed Item/GlobalItem stacking hooks prove exact compatibility.
+        return ItemLoader.CanStack(Main.mouseItem, restored);
+    }
+
+    private void ClearPendingStationEscrowOperation()
+    {
+        _pendingStationEscrowOperationId = "";
+        _pendingStationEscrowAction = 0;
+        _pendingStationEscrowIndex = -1;
+        _pendingStationEscrowItem = null;
+        _pendingStationEscrowWaitTicks = 0;
+    }
+
+
+    private void ApplyStationEscrowResult(string operationId, StationEscrowAction action, int index, bool success, string message)
+    {
+        if (!string.Equals(_pendingStationEscrowOperationId, operationId, StringComparison.Ordinal)
+            || _pendingStationEscrowAction != (byte)action
+            || _pendingStationEscrowIndex != index)
+            return;
+
+        if (!success)
+        {
+            if (action == StationEscrowAction.Deposit)
+                RestoreRejectedLocalDeposit(index);
+            ClearPendingStationEscrowOperation();
+            Main.NewText(string.IsNullOrWhiteSpace(message) ? "InfiniCraft: escrow отклонён сервером" : $"InfiniCraft: {message}", 255, 120, 90);
+            return;
+        }
+
+        if (action == StationEscrowAction.TakeToMouse && index is >= 0 and <= 5)
+        {
+            ref Item slot = ref InputSlot(index);
+            // The empty-cursor precondition was checked before the round trip.
+            // The player may now own a different item there: never overwrite it.
+            if (Main.mouseItem is null || Main.mouseItem.IsAir)
+            {
+                Main.mouseItem = slot.Clone();
+                if (Player.inventory.Length > 58)
+                {
+                    Player.inventory[58] = Main.mouseItem.Clone();
+                    SyncRefundedInventorySlot(58);
+                }
+            }
+            else
+                RefundOne(slot); // exact inventory delivery or durable deferred claim
+            slot.TurnToAir();
+        }
+        else if (action == StationEscrowAction.ReturnOne && index is >= 0 and <= 5)
+        {
+            ref Item slot = ref InputSlot(index);
+            RefundOne(slot);
+            slot.TurnToAir();
+        }
+        else if (action == StationEscrowAction.ReturnAll)
+        {
+            for (int slotIndex = 0; slotIndex < 6; slotIndex++)
+            {
+                ref Item slot = ref InputSlot(slotIndex);
+                if (slot is null || slot.IsAir)
+                    continue;
+                RefundOne(slot);
+                slot.TurnToAir();
+            }
+        }
+        ClearPendingStationEscrowOperation();
+    }
+
+    public static void HandleStationEscrowResultPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        string scope = ReadRemoteStationScope(reader);
+        string operationId = reader.ReadString();
+        StationEscrowAction action = (StationEscrowAction)reader.ReadByte();
+        int index = reader.ReadSByte();
+        bool success = reader.ReadBoolean();
+        string message = reader.ReadString();
+        if (Main.netMode != NetmodeID.MultiplayerClient || Main.LocalPlayer is null)
+            return;
+        var modPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)
+            || !string.Equals(modPlayer._stationEscrowOriginScope, scope, StringComparison.Ordinal)
+            || !modPlayer.EnsureRemoteStationAuthority()) return;
+        modPlayer.ApplyStationEscrowResult(operationId, action, index, success, message);
+    }
+
+    public static void HandleStationEscrowRequestPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        string scope = ReadRemoteStationScope(reader);
+        string clientId = reader.ReadString();
+        string operationId = reader.ReadString();
+        StationEscrowAction action = (StationEscrowAction)reader.ReadByte();
+        int index = reader.ReadSByte();
+        CraftItemRef itemRef = action == StationEscrowAction.Deposit ? ReadCraftItemRef(reader) : default;
+        if (Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers
+            || !GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope))
+            return;
+
+        Player player = Main.player[whoAmI];
+        if (player is null || !player.active)
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "игрок неактивен");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(operationId))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "пустой operationId");
+            return;
+        }
+
+        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
+        if (clientId.Length == 0)
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "некорректный escrow clientId");
+            return;
+        }
+        if (!GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, modPlayer))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow owner недоступен для этой сессии");
+            return;
+        }
+        modPlayer._stationEscrowClientId = clientId;
+        modPlayer._stationEscrowOriginScope = scope;
+        modPlayer._stationEscrowUsesRemoteAuthority = true;
+        if (GeneratedStationEscrowStateSystem.TryReplay(clientId, operationId, out GeneratedStationEscrowStateSystem.ReplayOutcome replay))
+        {
+            var replayAction = (StationEscrowAction)replay.Action;
+            LogServerCraftTransaction(whoAmI, "station", "escrow_replay", $"op={operationId} action={replay.Action} success={replay.Success}");
+            SendStationEscrowResult(whoAmI, operationId, replayAction, replay.Index, replay.Success, replay.Message);
+            return;
+        }
+        if (!GeneratedStationEscrowStateSystem.CanAcceptNewOperation(clientId, operationId))
+        {
+            SendStationEscrowResult(whoAmI, operationId, action, index, false, "server escrow outcome journal заполнен");
+            return;
+        }
+
+        if (action != StationEscrowAction.ReturnAll && !modPlayer.IsCraftLaneVisible(index / 2))
+        {
+            FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, false, "multi-dev окно не разблокировано", modPlayer);
+            return;
+        }
+        if (action == StationEscrowAction.ReturnAll ? modPlayer.HasAnyCraftLanePending : modPlayer.IsCraftLanePending(index / 2))
+        {
+            FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, false, "это окно крафта уже запущено", modPlayer);
+            return;
+        }
+
+        bool success;
+        string error;
+        switch (action)
+        {
+            case StationEscrowAction.Deposit:
+                success = modPlayer.TryDepositServerMouseItem(index, itemRef, out error);
+                break;
+            case StationEscrowAction.TakeToMouse:
+                success = modPlayer.TryTakeServerEscrowToMouse(index, out error);
+                break;
+            case StationEscrowAction.ReturnOne:
+                success = modPlayer.TryReturnServerEscrowToInventory(index, out error);
+                break;
+            case StationEscrowAction.ReturnAll:
+                success = modPlayer.TryReturnAllServerEscrowToInventory(out error);
+                break;
+            default:
+                success = false;
+                error = "неизвестное escrow-действие";
+                break;
+        }
+        FinishStationEscrowRequest(whoAmI, clientId, operationId, action, index, success, success ? "" : error, modPlayer);
+    }
+
+    private static void FinishStationEscrowRequest(
+        int whoAmI,
+        string clientId,
+        string operationId,
+        StationEscrowAction action,
+        int index,
+        bool success,
+        string message,
+        InfiniCraftPlayer modPlayer)
+    {
+        GeneratedStationEscrowStateSystem.CaptureOwnerState(clientId, modPlayer);
+        GeneratedStationEscrowStateSystem.RememberOutcome(
+            clientId,
+            operationId,
+            (byte)action,
+            index,
+            success,
+            message ?? "");
+        SendStationEscrowResult(whoAmI, operationId, action, index, success, message ?? "");
+    }
+
+
+    private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
+    {
+        writer.Write((byte)Player.whoAmI);
+        writer.Write((byte)10); // canonical stat conditions and exact air-jump source lifetime
+        writer.Write(_generatedBuffTicks);
+        writer.Write(_generatedMiningSpeedMultiplier);
+        writer.Write(_generatedLightStrength);
+        writer.Write(_generatedLightColorName ?? "");
+        writer.Write(_generatedOreSenseRadiusTiles);
+        writer.Write(_generatedMovementSpeed);
+        writer.Write(_generatedJumpBoost);
+        writer.Write(_generatedManaRegen);
+        writer.Write(_generatedLifeRegen);
+        writer.Write(_generatedMobilityCooldownTicks);
+        int buffCount = Math.Min(32, _activeGeneratedUtilityBuffs.Count);
+        writer.Write((byte)buffCount);
+        for (int index = 0; index < buffCount; index++)
+            WriteGeneratedUtilityBuffEntry(writer, _activeGeneratedUtilityBuffs[index]);
+        WriteGeneratedItemExhaustion(writer);
+    }
+
+    // A received authority correction is not a new local resync request.
+    private uint _generatedBuffSnapshotRevision;
+
+    private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
+        => ReadGeneratedBuffStateCore(reader, acceptsRespawn: false);
+
+    private void ReadGeneratedBuffStateCore(System.IO.BinaryReader reader, bool acceptsRespawn)
+    {
+        byte version = reader.ReadByte();
+        if (version != 10)
+            throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
+        // Decode before replacing owner prediction; malformed packets do not
+        // erase a valid timer table or leave half-read buff state behind.
+        int ticks = reader.ReadInt32();
+        float mining = reader.ReadSingle(), light = reader.ReadSingle();
+        string color = ReadGeneratedBuffText(reader, 128);
+        int ore = reader.ReadInt32();
+        float movement = reader.ReadSingle(), jump = reader.ReadSingle();
+        int mana = reader.ReadInt32(), life = reader.ReadInt32(), mobility = reader.ReadInt32();
+        int count = reader.ReadByte();
+        if (count > 32) throw new System.IO.InvalidDataException("generated utility row limit");
+        var buffs = new List<ActiveGeneratedUtilityBuff>(count);
+        for (int i = 0; i < count; i++) buffs.Add(ReadGeneratedUtilityBuffEntry(reader));
+        var exhaustion = ReadGeneratedItemExhaustion(reader);
+        // Ordinary snapshots cannot identify the new life, even when their
+        // bytes match a valid fresh activation. Keep current short survivors
+        // and fresh local predictions ticking normally until the correlated
+        // authority reply; do not merge two independently bounded row tables.
+        EnsureGeneratedUtilityRespawnScope();
+        if (_generatedUtilityAwaitingRespawnSync && !acceptsRespawn) return;
+        EnsureAirJumpAuthorityScope();
+        _generatedBuffTicks = ticks; _generatedMiningSpeedMultiplier = mining;
+        _generatedLightStrength = light; _generatedLightColorName = color;
+        _generatedOreSenseRadiusTiles = ore; _generatedMovementSpeed = movement;
+        _generatedJumpBoost = jump; _generatedManaRegen = mana; _generatedLifeRegen = life;
+        _generatedMobilityCooldownTicks = mobility;
+        ClampGeneratedBuffState();
+        foreach (var buff in buffs)
+        {
+            var previous = _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources).FirstOrDefault(active =>
+                (active.Ticks > 0 || active.SourceFinalTick == Main.GameUpdateCount)
+                && active.SourceGeneration != 0
+                && (active.SourceAuthorityConfirmed ? active.SourceGeneration == buff.SourceGeneration
+                    : Player.whoAmI == Main.myPlayer && buff.SourceGeneration < _lastAuthoritativeBuffGeneration
+                        && active.SourceGeneration < _airJumpPredictionRecoveryGeneration
+                        && !_airJumpPredictionHistoryOverflow
+                        && !_retiredAirJumpPredictions.ContainsKey(AirJumpPredictionKey(active)))
+                && active.SourceItemId == buff.SourceItemId && active.SourceDefinitionIdentity == buff.SourceDefinitionIdentity
+                && active.SourceComponent == buff.SourceComponent && active.InitialDurationTicks == buff.InitialDurationTicks
+                && active.SameEffect(buff));
+            buff.SourceAuthorityConfirmed = buff.SourceGeneration < 0;
+            if (previous is not null)
+            {
+                buff.SourceLifetime = previous.SourceLifetime;
+                buff.SourcePredictionGeneration = previous.SourceAuthorityConfirmed
+                    ? previous.SourcePredictionGeneration : previous.SourceGeneration;
+                ConfirmAirJumpSourceGeneration(previous.SourceGeneration, buff.SourceGeneration);
+            }
+        }
+        // Even an earlier empty correction can precede a delayed activation.
+        // No snapshot acknowledges a particular prediction, so retain bounded
+        // ambiguity for this authority scope instead of letting a replacement
+        // prediction borrow the old activation's first unseen generation.
+        foreach (var previous in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
+            if (!buffs.Any(buff => ReferenceEquals(buff.SourceLifetime, previous.SourceLifetime)))
+                RetireAirJumpPrediction(previous);
+        _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
+        _finalTickAirJumpSources.Clear();
+        foreach (var buff in buffs)
+            _lastAuthoritativeBuffGeneration = Math.Min(_lastAuthoritativeBuffGeneration, buff.SourceGeneration);
+        RebuildGeneratedUtilityBuffAggregate();
+        _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
+        if (Player.dead) RetireGeneratedUtilityOnDeath();
+        if (acceptsRespawn)
+        {
+            _generatedUtilityAwaitingRespawnSync = false;
+            _generatedUtilityRespawnRequest = Guid.Empty;
+            _generatedUtilityRespawnRetryTicks = 0;
+        }
+        _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
+        Common.VFX.InfiniItemVfxRuntime.FlushPendingAirJumpEvents(Player);
+    }
+
+    private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
+    {
+        byte version = reader.ReadByte();
+        if (version != 10)
+            throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = ReadGeneratedBuffText(reader, 128);
+        _ = reader.ReadInt32();
+        _ = reader.ReadSingle();
+        _ = reader.ReadSingle();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+        _ = reader.ReadInt32();
+        int count = reader.ReadByte();
+        if (count > 32) throw new System.IO.InvalidDataException("generated utility row limit");
+        for (int i = 0; i < count; i++) DiscardGeneratedUtilityBuffEntry(reader);
+        _ = ReadGeneratedItemExhaustion(reader); // consume, never apply client timers
+    }
+
+    private static void WriteGeneratedUtilityBuffEntry(System.IO.BinaryWriter writer, ActiveGeneratedUtilityBuff buff)
+    {
+        writer.Write(buff.Ticks);
+        writer.Write(buff.InitialDurationTicks);
+        writer.Write(buff.MiningSpeedMultiplier);
+        writer.Write(buff.EmitLightStrength);
+        writer.Write(buff.LightColorName ?? "");
+        writer.Write(buff.OreSenseRadiusTiles);
+        writer.Write(buff.MovementSpeed);
+        writer.Write(buff.JumpBoost);
+        writer.Write(buff.ManaRegen);
+        writer.Write(buff.LifeRegen);
+        writer.Write(buff.LifeRegenCondition);
+        writer.Write(buff.TreasureSenseCondition);
+        writer.Write(buff.Combat is not null);
+        buff.Combat?.Write(writer);
+        writer.Write(buff.PlayerEffect is not null);
+        buff.PlayerEffect?.Write(writer);
+        if (buff.PlayerEffect?.AirJump is not null)
+        {
+            writer.Write(buff.SourceItemId); writer.Write(buff.SourceDefinitionIdentity); writer.Write(buff.SourceGeneration); writer.Write(buff.SourceComponent);
+        }
+    }
+
+    private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
+    {
+        int ticks = reader.ReadInt32();
+        int initialDuration = reader.ReadInt32();
+        if (initialDuration is < 0 or > GeneratedBuffSpec.MaxFiniteDurationTicks
+            || (initialDuration == GeneratedBuffSpec.PermanentDurationTicks
+                ? ticks != int.MaxValue : ticks <= 0 || ticks > initialDuration))
+            throw new System.IO.InvalidDataException("invalid generated buff duration state");
+        float miningSpeedMultiplier = reader.ReadSingle();
+        float lightStrength = reader.ReadSingle();
+        string lightColor = ReadGeneratedBuffText(reader, 128).Trim();
+        var buff = new ActiveGeneratedUtilityBuff
+        {
+            Ticks = ticks,
+            InitialDurationTicks = initialDuration,
+            MiningSpeedMultiplier = Math.Clamp(miningSpeedMultiplier, 0.25f, 4f),
+            EmitLightStrength = Math.Clamp(lightStrength, 0f, 1.5f),
+            LightColorName = lightColor[..Math.Min(lightColor.Length, 32)],
+            OreSenseRadiusTiles = Math.Clamp(reader.ReadInt32(), 0, 60),
+            MovementSpeed = Math.Clamp(reader.ReadSingle(), -0.8f, 2f),
+            JumpBoost = Math.Clamp(reader.ReadSingle(), -8f, 8f),
+            ManaRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
+            LifeRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
+            LifeRegenCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
+            TreasureSenseCondition = PlayerEffectSpec.ValidateCondition(ReadGeneratedBuffText(reader, 16)),
+            Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
+            PlayerEffect = reader.ReadBoolean() ? PlayerEffectSpec.Read(reader) : null,
+        };
+        if (buff.PlayerEffect?.AirJump is not null)
+        {
+            buff.SourceItemId = ReadGeneratedBuffText(reader, 256);
+            buff.SourceDefinitionIdentity = ReadGeneratedBuffText(reader, 64);
+            buff.SourceGeneration = reader.ReadInt64();
+            buff.SourceComponent = ReadGeneratedBuffText(reader, 64);
+            if (string.IsNullOrWhiteSpace(buff.SourceItemId) || buff.SourceDefinitionIdentity.Length != 64
+                || buff.SourceDefinitionIdentity.Any(c => !(c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+                || buff.SourceGeneration >= 0
+                || (buff.SourceComponent != "buff" && !(buff.SourceComponent.StartsWith("group:", StringComparison.Ordinal)
+                    && System.Text.RegularExpressions.Regex.IsMatch(buff.SourceComponent[6..], @"\A[a-z][a-z0-9_]{0,47}\z"))))
+                throw new System.IO.InvalidDataException("invalid jump source state");
+        }
+        return buff;
+    }
+
+    private static void DiscardGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
+        => _ = ReadGeneratedUtilityBuffEntry(reader);
+
+    private void ClampGeneratedBuffState()
+    {
+        _generatedBuffTicks = Math.Max(_generatedBuffTicks, 0);
+        _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier <= 0f ? 1f : _generatedMiningSpeedMultiplier, 0.25f, 4f);
+        _generatedLightStrength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
+        _generatedLightColorName = string.IsNullOrWhiteSpace(_generatedLightColorName) ? "" : _generatedLightColorName.Trim()[..Math.Min(_generatedLightColorName.Trim().Length, 32)];
+        _generatedOreSenseRadiusTiles = Math.Clamp(_generatedOreSenseRadiusTiles, 0, 60);
+        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.8f, 2f);
+        _generatedJumpBoost = Math.Clamp(_generatedJumpBoost, -8f, 8f);
+        _generatedManaRegen = Math.Clamp(_generatedManaRegen, -100, 120);
+        _generatedLifeRegen = Math.Clamp(_generatedLifeRegen, -100, 120);
+        _generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000);
+    }
+
+    private bool GeneratedBuffStateDiffers(InfiniCraftPlayer other)
+    {
+        if (other is null) return true;
+        // Compare starts/ends/definition changes, not the numeric countdown.
+        if (!_generatedItemExhaustion.SequenceEqual(other._generatedItemExhaustion)) return true;
+
+        bool activeNow = _generatedBuffTicks > 0;
+        bool activeOld = other._generatedBuffTicks > 0;
+        bool cooldownNow = _generatedMobilityCooldownTicks > 0;
+        bool cooldownOld = other._generatedMobilityCooldownTicks > 0;
+        // Do not sync every countdown tick. Remote clients can decrement their local
+        // copy after one start/end packet; per-tick SendClientChanges would spam MP.
+        if (activeNow != activeOld || cooldownNow != cooldownOld)
+            return true;
+        if (Math.Abs(_generatedBuffTicks - other._generatedBuffTicks) > 30)
+            return true;
+        if (Math.Abs(_generatedMobilityCooldownTicks - other._generatedMobilityCooldownTicks) > 30)
+            return true;
+        return Math.Abs(_generatedMiningSpeedMultiplier - other._generatedMiningSpeedMultiplier) > 0.001f
+            || Math.Abs(_generatedLightStrength - other._generatedLightStrength) > 0.001f
+            || !string.Equals(_generatedLightColorName, other._generatedLightColorName, StringComparison.Ordinal)
+            || _generatedOreSenseRadiusTiles != other._generatedOreSenseRadiusTiles
+            || Math.Abs(_generatedMovementSpeed - other._generatedMovementSpeed) > 0.001f
+            || Math.Abs(_generatedJumpBoost - other._generatedJumpBoost) > 0.001f
+            || _generatedManaRegen != other._generatedManaRegen
+            || _generatedLifeRegen != other._generatedLifeRegen
+            || _generatedDefense != other._generatedDefense
+            || _generatedAttackSpeed != other._generatedAttackSpeed
+            || _generatedCrit != other._generatedCrit
+            || _generatedDamage.Count != other._generatedDamage.Count
+            || _generatedDamage.Any(pair => !other._generatedDamage.TryGetValue(pair.Key, out float value) || value != pair.Value);
+    }
+
+    private void SendGeneratedBuffState(int toWho = -1, int fromWho = -1)
+    {
+        if (Main.netMode == NetmodeID.SinglePlayer)
+            return;
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+        packet.Write(InfiniNetPacketIds.SyncGeneratedUtilityBuff);
+        WriteGeneratedBuffState(packet);
+        packet.Send(toWho, fromWho);
+    }
+
+    public override void SyncPlayer(int toWho, int fromWho, bool newPlayer)
+    {
+        SendGeneratedBuffState(toWho, fromWho);
+    }
+
+    public override void CopyClientState(ModPlayer targetCopy)
+    {
+        if (targetCopy is InfiniCraftPlayer clone)
+        {
+            clone._generatedBuffTicks = _generatedBuffTicks;
+            clone._generatedMiningSpeedMultiplier = _generatedMiningSpeedMultiplier;
+            clone._generatedLightStrength = _generatedLightStrength;
+            clone._generatedLightColorName = _generatedLightColorName;
+            clone._generatedOreSenseRadiusTiles = _generatedOreSenseRadiusTiles;
+            clone._generatedMovementSpeed = _generatedMovementSpeed;
+            clone._generatedJumpBoost = _generatedJumpBoost;
+            clone._generatedManaRegen = _generatedManaRegen;
+            clone._generatedLifeRegen = _generatedLifeRegen;
+            clone._generatedDefense = _generatedDefense;
+            clone._generatedAttackSpeed = _generatedAttackSpeed;
+            clone._generatedCrit = _generatedCrit;
+            clone._generatedDamage.Clear();
+            foreach (var pair in _generatedDamage) clone._generatedDamage.Add(pair.Key, pair.Value);
+            clone._generatedMobilityCooldownTicks = _generatedMobilityCooldownTicks;
+            clone._generatedBuffSnapshotRevision = _generatedBuffSnapshotRevision;
+            clone._generatedItemExhaustion.Clear();
+            clone._generatedItemExhaustion.AddRange(_generatedItemExhaustion);
+        }
+    }
+
+    public override void SendClientChanges(ModPlayer clientPlayer)
+    {
+        if (clientPlayer is InfiniCraftPlayer oldState
+            && _generatedBuffSnapshotRevision == oldState._generatedBuffSnapshotRevision
+            && GeneratedBuffStateDiffers(oldState))
+            SendGeneratedBuffState();
+    }
+
+    public static void HandleGeneratedUtilityBuffSyncPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        byte playerId = reader.ReadByte();
+        if (playerId >= Main.maxPlayers)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
+        if (Main.netMode == NetmodeID.Server && playerId != whoAmI)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
+        Player player = Main.player[playerId];
+        if (player is null || !player.active)
+        {
+            DiscardGeneratedBuffState(reader);
+            return;
+        }
+        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        if (Main.netMode == NetmodeID.Server)
+        {
+            // Clients may request a resync by sending their predicted snapshot,
+            // but none of its numbers are authoritative. Consume the packet and
+            // rebroadcast the server-owned state built from canonical item data.
+            DiscardGeneratedBuffState(reader);
+            modPlayer.SendGeneratedBuffState(); // owner also needs refusal/prediction correction
+            return;
+        }
+        if (Main.netMode == NetmodeID.MultiplayerClient && whoAmI == 256)
+            modPlayer.ReadGeneratedBuffState(reader);
+        else
+            DiscardGeneratedBuffState(reader);
+    }
+
+    private bool IsServerAuthoritativeCraft => Main.netMode == NetmodeID.Server && !_awaitingServerCommit && !string.IsNullOrWhiteSpace(_serverRequestId);
+
+    private void SendServerAuthoritativeResultIfNeeded(bool success, string itemName, string message)
+    {
+        if (!IsServerAuthoritativeCraft)
+            return;
+        if (!CompleteServerCraftTransaction(_serverRequestId, 0, success, itemName, message))
+            return;
+        SendCraftCommitResult(Player.whoAmI, _serverRequestId, success, itemName ?? "", message ?? "");
+    }
+
+    private bool CompleteServerCraftTransaction(
+        string requestId,
+        int laneIndex,
+        bool success,
+        string itemName,
+        string message)
+    {
+        if (Main.netMode != NetmodeID.Server || !HasCraftRequestId(requestId)
+            || !GeneratedStationEscrowStateSystem.IsBoundOwner(_stationEscrowClientId, this))
+            return false;
+        string outcomeName = success && string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName ?? "";
+        string outcomeMessage = message ?? "";
+        if (!GeneratedStationEscrowStateSystem.CompleteCraft(
+                _stationEscrowClientId,
+                requestId,
+                success,
+                outcomeName,
+                outcomeMessage))
+            return false;
+        if (success)
+        {
+            // The durable owner slots were consumed together with the outcome.
+            // Mirror cleanup cannot undo that commit or trigger an output refund.
+            try { ClearServerStationEscrowLane(laneIndex); }
+            catch (Exception ex) { LogServerCraftTransaction(Player.whoAmI, requestId, "mirror_cleanup_failed", ex.Message); }
+        }
+        LogServerCraftTransaction(
+            Player.whoAmI,
+            requestId,
+            success ? "committed" : "failed",
+            success ? $"item={SafeCraftLogValue(outcomeName, 80)}" : $"reason={SafeCraftLogValue(outcomeMessage, 120)}");
+        return true;
+    }
+
+
+    public void HandleCraftCommitResult(string requestId, bool success, string itemName, string message)
+    {
+        if (TryHandleExtraCraftCommit(requestId, success, itemName, message))
+            return;
+        if (!_awaitingServerCommit || !string.Equals(_serverRequestId, requestId, StringComparison.Ordinal))
+            return;
+
+        SetCraftLaneOutcome(0, success ? CraftLaneOutcomeKind.Succeeded
+            : _remoteCraftCancelRequested[0] ? CraftLaneOutcomeKind.Cancelled : CraftLaneOutcomeKind.Failed,
+            success ? itemName : message);
+        if (success)
+        {
+            ClearRemoteCraftMirror(0);
+            CombatText.NewText(Player.Hitbox, Color.Cyan, $"Discovered: {(string.IsNullOrWhiteSpace(itemName) ? "Generated Item" : itemName)}");
+            ClearCraft();
+            return;
+        }
+
+        // The world-owned failed transaction keeps the exact inputs in the station.
+        // Restore only the client's mirror; never create inventory refund clones.
+        RestoreRemoteCraftMirror(0, _request);
+        CombatText.NewText(Player.Hitbox, Color.OrangeRed, string.IsNullOrWhiteSpace(message)
+            ? "InfiniCraft: сервер отклонил крафт"
+            : $"InfiniCraft: {message}");
+        ClearCraft();
+    }
+
+    private static void RunLocalCraftReveal(Player player, GeneratedItemData data)
+    {
+        if (player is null || data is null) return;
+        string name = string.IsNullOrWhiteSpace(data.Name) ? "Generated Item" : data.Name;
+
+        CombatText.NewText(player.Hitbox, Color.Cyan, $"Discovered: {name}");
+    }
+
+    public static void HandleCraftCommitResultPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient)
+            return;
+
+        string scope = ReadRemoteStationScope(reader);
+        string requestId = reader.ReadString();
+        bool success = reader.ReadBoolean();
+        string itemName = reader.ReadString();
+        string message = reader.ReadString();
+        var modPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)
+            || !string.Equals(modPlayer._stationEscrowOriginScope, scope, StringComparison.Ordinal)
+            || !modPlayer.EnsureRemoteStationAuthority()) return;
+        modPlayer.HandleCraftCommitResult(requestId, success, itemName, message);
+    }
+
+    public static void HandleRequestServerCraftPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        if (whoAmI < 0 || whoAmI >= Main.maxPlayers)
+            return;
+
+        string scope = ReadRemoteStationScope(reader);
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)) return;
+        string clientId = reader.ReadString();
+        string requestId = reader.ReadString();
+        int laneIndex = Math.Clamp((int)reader.ReadByte(), 0, 2);
+        CraftItemRef aRef = ReadCraftItemRef(reader);
+        CraftItemRef bRef = ReadCraftItemRef(reader);
+        LogServerCraftTransaction(whoAmI, requestId, "received", $"lane={laneIndex} aType={aRef.Type} bType={bRef.Type}");
+        if (string.IsNullOrWhiteSpace(requestId))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=empty_request_id");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "пустой requestId");
+            return;
+        }
+
+        Player player = Main.player[whoAmI];
+        if (player is null || !player.active)
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", "reason=inactive_player");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "игрок неактивен");
+            return;
+        }
+
+        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
+        if (!modPlayer.RestoreServerCraftOwner(clientId, scope))
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "server escrow state недоступен");
+            return;
+        }
+        if (GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out GeneratedStationEscrowStateSystem.CraftReplayOutcome replay))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "replayed", $"success={replay.Success}");
+            SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
+            return;
+        }
+        if (GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId))
+        {
+            if (modPlayer.HasActiveServerCraftRequest(requestId))
+                return;
+            const string interrupted = "server craft interrupted; inputs remain in station";
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", interrupted);
+            SendCraftCommitResult(whoAmI, requestId, false, "", interrupted);
+            return;
+        }
+        // Existing journal state is authoritative even if a retry's optional
+        // observation is damaged. Never send a conflicting terminal failure.
+        ClientTooltipObservation? clientTooltipA;
+        ClientTooltipObservation? clientTooltipB;
+        try
+        {
+            clientTooltipA = ClientTooltipWire.Read(reader);
+            clientTooltipB = ClientTooltipWire.Read(reader);
+        }
+        catch (Exception ex) when (ex is System.IO.InvalidDataException or System.IO.EndOfStreamException or System.Text.DecoderFallbackException)
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "invalid client tooltip observation");
+            return;
+        }
+        if (!modPlayer.IsCraftLaneVisible(laneIndex))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"reason=lane_locked lane={laneIndex}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "это multi-dev окно не разблокировано командой /multidevcraft");
+            return;
+        }
+        if (modPlayer.IsCraftLanePending(laneIndex))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"reason=lane_pending lane={laneIndex}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "в этом окне уже есть активный InfiniCraft");
+            return;
+        }
+
+        int firstInputIndex = laneIndex * 2;
+        if (!modPlayer.TrySnapshotServerEscrowInput(firstInputIndex, aRef, out Item itemA, out string errorA))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=a lane={laneIndex} reason={SafeCraftLogValue(errorA, 120)}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не подтвердил первый escrow-ингредиент: " + errorA);
+            return;
+        }
+        if (!modPlayer.TrySnapshotServerEscrowInput(firstInputIndex + 1, bRef, out Item itemB, out string errorB))
+        {
+            LogServerCraftTransaction(whoAmI, requestId, "reserve_rejected", $"ingredient=b lane={laneIndex} reason={SafeCraftLogValue(errorB, 120)}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "сервер не подтвердил второй escrow-ингредиент: " + errorB);
+            return;
+        }
+        if (!GeneratedStationEscrowStateSystem.TryBeginCraft(clientId, requestId, laneIndex))
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "server craft transaction journal недоступен");
+            return;
+        }
+        LogServerCraftTransaction(
+            whoAmI,
+            requestId,
+            "reserved",
+            $"lane={laneIndex} aInput={firstInputIndex} bInput={firstInputIndex + 1} aType={itemA.type} bType={itemB.type}");
+
+        GeneratorClient.PreparedGenerationRequest request;
+        try
+        {
+            request = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.PrepareDeferred(
+                itemA,
+                itemB,
+                player,
+                modPlayer.MultiDevCraftEnabled ? $"llm_{laneIndex + 1}" : "",
+                modPlayer.MultiDevCraftEnabled,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipA : null,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipB : null);
+        }
+        catch (Exception ex)
+        {
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", "prepare failed; inputs remain in station");
+            LogServerCraftTransaction(whoAmI, requestId, "failed", $"reason=prepare_failed detail={SafeCraftLogValue(ex.Message, 120)}");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "хост не подготовил запрос: " + ex.Message);
+            return;
+        }
+        bool began = laneIndex == 0
+            ? modPlayer.BeginServerAuthoritativeCraft(request, $"{request.ParentA} + {request.ParentB}", requestId)
+            : modPlayer.BeginExtraCraftLane(request, $"{request.ParentA} + {request.ParentB}", requestId, laneIndex, serverAuthoritative: true);
+        if (!began)
+        {
+            GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", "begin failed; inputs remain in station");
+            LogServerCraftTransaction(whoAmI, requestId, "failed", "reason=begin_failed");
+            SendCraftCommitResult(whoAmI, requestId, false, "", "хост не начал server-authoritative craft");
+            return;
+        }
+    }
+
+
+    private bool RestoreServerCraftOwner(string clientId, string scope)
+    {
+        if (clientId.Length == 0 || !GeneratedStationEscrowStateSystem.RestoreOwnerState(clientId, this))
+            return false;
+        _stationEscrowClientId = clientId;
+        _stationEscrowOriginScope = scope;
+        _stationEscrowUsesRemoteAuthority = true;
+        return true;
+    }
+
+    public static void HandleCancelServerCraftPacket(System.IO.BinaryReader reader, int whoAmI)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        if (whoAmI < 0 || whoAmI >= Main.maxPlayers)
+            return;
+
+        string scope = ReadRemoteStationScope(reader);
+        if (!GeneratedStationEscrowStateSystem.IsExactAuthorityScope(scope)) return;
+        string clientId = GeneratedStationEscrowStateSystem.NormalizeClientId(reader.ReadString());
+        string requestId = reader.ReadString();
+        _ = reader.ReadString();
+        if (!HasCraftRequestId(requestId))
+            return;
+
+        Player player = Main.player[whoAmI];
+        if (player is null || !player.active)
+            return;
+        var modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+        bool completed = GeneratedStationEscrowStateSystem.TryReplayCraft(clientId, requestId, out var replay);
+        bool pending = GeneratedStationEscrowStateSystem.IsCraftPending(clientId, requestId);
+        int cancelLane = -1;
+        CraftItemRef cancelA = default, cancelB = default;
+        if (!completed && !pending)
+        {
+            // A bare cancellation cannot claim an unknown request. Version 3
+            // senders can also identify the exact station inputs when their first
+            // craft packet was lost (including a damaged saved observation).
+            if (reader.BaseStream.Position == reader.BaseStream.Length) return;
+            cancelLane = reader.ReadByte();
+            cancelA = ReadCraftItemRef(reader);
+            cancelB = ReadCraftItemRef(reader);
+            if (cancelLane is < 0 or > 2 || reader.BaseStream.Position != reader.BaseStream.Length) return;
+        }
+        if (!modPlayer.RestoreServerCraftOwner(clientId, scope)) return;
+        if (completed)
+        {
+            SendCraftCommitResult(whoAmI, requestId, replay.Success, replay.ItemName, replay.Message);
+            return;
+        }
+        if (!pending)
+        {
+            if (!modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2, cancelA, out _, out _)
+                || !modPlayer.TrySnapshotServerEscrowInput(cancelLane * 2 + 1, cancelB, out _, out _)
+                || !GeneratedStationEscrowStateSystem.TryBeginCraftCancellationRecovery(clientId, requestId, cancelLane, modPlayer)) return;
+            // Main-thread journal-only transition: no generation or material
+            // mutation. The bounded durable terminal entry also blocks a late
+            // initial craft packet from starting this cancelled request.
+        }
+        if (!modPlayer.HasActiveServerCraftRequest(requestId))
+        {
+            const string cancelled = "client cancelled/timeout; inputs remain in station";
+            if (GeneratedStationEscrowStateSystem.CompleteCraft(clientId, requestId, false, "", cancelled))
+                SendCraftCommitResult(whoAmI, requestId, false, "", cancelled);
+            return;
+        }
+        if (modPlayer.IsServerAuthoritativeCraft && string.Equals(modPlayer._serverRequestId, requestId, StringComparison.Ordinal))
+            modPlayer.CancelActiveServerAuthoritativeCraft("client cancelled/timeout");
+        else
+            modPlayer.TryCancelExtraServerCraft(requestId, "client cancelled/timeout");
+    }
+
+    private static void WriteRemoteCraftCancelIdentity(System.IO.BinaryWriter writer, int laneIndex,
+        GeneratorClient.PreparedGenerationRequest? request)
+    {
+        if (request?.RefundA is null || request.RefundB is null) return;
+        writer.Write((byte)laneIndex);
+        WriteCraftItemRef(writer, request.RefundA);
+        WriteCraftItemRef(writer, request.RefundB);
+    }
+
+    private void SendRemoteServerCraftCancel(string reason)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority() || !_awaitingServerCommit || !HasCraftRequestId(_serverRequestId))
+            return;
+        try
+        {
+            var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+            packet.Write(InfiniNetPacketIds.CancelServerCraft);
+            WriteRemoteStationScope(packet);
+            packet.Write(_stationEscrowClientId);
+            packet.Write(_serverRequestId);
+            packet.Write(reason ?? "client_cancel");
+            WriteRemoteCraftCancelIdentity(packet, 0, _request);
+            packet.Send();
+        }
+        catch { }
+    }
+
+    private void CancelActiveServerAuthoritativeCraft(string reason)
+    {
+        if (!IsServerAuthoritativeCraft)
+            return;
+        SetCraftLaneOutcome(0, CraftLaneOutcomeKind.Cancelled, reason);
+        SendServerAuthoritativeResultIfNeeded(false, "", string.IsNullOrWhiteSpace(reason) ? "server craft cancelled; inputs remain in station" : reason);
+        ClearCraft();
+    }
+
+    private static string SafeCraftLogValue(string? value, int maxLength)
+    {
+        string safe = (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (safe.Length > maxLength)
+            safe = safe[..maxLength];
+        return safe;
+    }
+
+    private static void LogServerCraftTransaction(int playerId, string requestId, string phase, string details)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        try
+        {
+            string rid = SafeCraftLogValue(requestId, 64);
+            string safePhase = SafeCraftLogValue(phase, 32);
+            string safeDetails = SafeCraftLogValue(details, 240);
+            global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.Logger.Info(
+                $"[InfiniCraftTx] player={playerId} request={rid} phase={safePhase} {safeDetails}");
+        }
+        catch { }
+    }
+
+    private readonly struct CraftItemRef
+    {
+        public CraftItemRef(int type, int prefix, int stack, string generatedId, string displayName)
+        {
+            Type = type;
+            Prefix = prefix;
+            Stack = stack;
+            GeneratedId = generatedId ?? "";
+            DisplayName = displayName ?? "";
+        }
+
+        public int Type { get; }
+        public int Prefix { get; }
+        public int Stack { get; }
+        public string GeneratedId { get; }
+        public string DisplayName { get; }
+    }
+
+    private static string LocalParentName(Item item)
+    {
+        try
+        {
+            if (item?.ModItem is GeneratedItem generated && !string.IsNullOrWhiteSpace(generated.Data?.Name))
+                return generated.Data.Name;
+            return string.IsNullOrWhiteSpace(item?.Name) ? "Unknown" : item.Name;
+        }
+        catch { return "Unknown"; }
+    }
+
+    private static void WriteCraftItemRef(System.IO.BinaryWriter writer, Item item)
+    {
+        string generatedId = "";
+        string displayName = "";
+        try
+        {
+            displayName = LocalParentName(item);
+            if (item?.ModItem is GeneratedItem generated)
+                generatedId = generated.Data?.Id ?? "";
+        }
+        catch { }
+
+        writer.Write(item?.type ?? ItemID.None);
+        writer.Write((int)(item?.prefix ?? InfiniTerrariaSentinels.NoPrefix));
+        writer.Write(NormalizeCraftStack(item?.stack ?? 1));
+        writer.Write(generatedId ?? "");
+        writer.Write(displayName ?? "");
+    }
+
+    private static CraftItemRef ReadCraftItemRef(System.IO.BinaryReader reader)
+    {
+        return new CraftItemRef(
+            reader.ReadInt32(),
+            reader.ReadInt32(),
+            reader.ReadInt32(),
+            reader.ReadString(),
+            reader.ReadString());
+    }
+
+    private bool TryDepositServerMouseItem(int index, CraftItemRef itemRef, out string error)
+    {
+        error = "";
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5 || Player.inventory.Length <= 58)
+        {
+            error = "некорректный server escrow deposit";
+            return false;
+        }
+        ref Item target = ref InputSlot(index);
+        if (target is not null && !target.IsAir)
+        {
+            error = "escrow-слот уже занят";
+            return false;
+        }
+
+        Item source = Player.inventory[58];
+        if (source is null || source.IsAir || source.stack <= 0)
+        {
+            error = "server mouse slot 58 пуст";
+            return false;
+        }
+        if (source.type != itemRef.Type || source.prefix != itemRef.Prefix || !InfiniCore.IsValidIngredient(source))
+        {
+            error = "server mouse item не совпал с deposit intent";
+            return false;
+        }
+        if (!GeneratedIdentityMatches(source, itemRef.GeneratedId, out _))
+        {
+            error = "generated id mouse item не совпал с registry";
+            return false;
+        }
+
+        target = source.Clone();
+        target.stack = 1;
+        source.stack--;
+        if (source.stack <= 0)
+            source.TurnToAir();
+        SyncServerMouseSlot();
+        CaptureCurrentServerStationEscrowState();
+        LogServerCraftTransaction(Player.whoAmI, "station", "escrow_deposited", $"input={index} type={target.type} mouseSlot=58");
+        return true;
+    }
+
+    private bool TryTakeServerEscrowToMouse(int index, out string error)
+    {
+        error = "";
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5 || Player.inventory.Length <= 58)
+        {
+            error = "некорректный server escrow withdraw";
+            return false;
+        }
+        if (!Player.inventory[58].IsAir)
+        {
+            error = "курсор уже занят";
+            return false;
+        }
+        ref Item slot = ref InputSlot(index);
+        if (slot is null || slot.IsAir)
+        {
+            error = "escrow-слот пуст";
+            return false;
+        }
+        Player.inventory[58] = slot.Clone();
+        slot.TurnToAir();
+        SyncServerMouseSlot();
+        CaptureCurrentServerStationEscrowState();
+        return true;
+    }
+
+    private bool TryReturnServerEscrowToInventory(int index, out string error)
+    {
+        error = "";
+        if (Main.netMode != NetmodeID.Server || index is < 0 or > 5)
+        {
+            error = "некорректный server escrow return";
+            return false;
+        }
+        ref Item slot = ref InputSlot(index);
+        if (slot is null || slot.IsAir)
+        {
+            error = "escrow-слот пуст";
+            return false;
+        }
+        slot.TurnToAir();
+        CaptureCurrentServerStationEscrowState();
+        return true;
+    }
+
+    private bool TryReturnAllServerEscrowToInventory(out string error)
+    {
+        error = "";
+        bool returned = false;
+        for (int index = 0; index < 6; index++)
+        {
+            ref Item slot = ref InputSlot(index);
+            if (slot is null || slot.IsAir)
+                continue;
+            slot.TurnToAir();
+            returned = true;
+        }
+        if (!returned)
+            error = "server escrow уже пуст";
+        CaptureCurrentServerStationEscrowState();
+        return returned;
+    }
+
+    private bool TrySnapshotServerEscrowInput(int index, CraftItemRef itemRef, out Item ingredient, out string error)
+    {
+        ingredient = NewAirItem();
+        error = "";
+        if (index is < 0 or > 5)
+        {
+            error = "некорректный escrow index";
+            return false;
+        }
+        ref Item slot = ref InputSlot(index);
+        if (slot is null || slot.IsAir || slot.stack <= 0)
+        {
+            error = $"server escrow input {index} пуст";
+            return false;
+        }
+        if (slot.type != itemRef.Type || slot.prefix != itemRef.Prefix || !InfiniCore.IsValidIngredient(slot))
+        {
+            error = $"server escrow input {index} не совпал с craft intent";
+            return false;
+        }
+        if (!GeneratedIdentityMatches(slot, itemRef.GeneratedId, out _))
+        {
+            error = $"generated id escrow input {index} не совпал";
+            return false;
+        }
+        ingredient = slot.Clone();
+        ingredient.stack = 1;
+        return true;
+    }
+
+    private void ClearServerStationEscrowLane(int laneIndex)
+    {
+        if (laneIndex is < 0 or > 2)
+            return;
+        InputSlot(laneIndex * 2).TurnToAir();
+        InputSlot(laneIndex * 2 + 1).TurnToAir();
+    }
+
+    private void SyncServerMouseSlot()
+    {
+        if (Player.inventory.Length <= 58)
+            return;
+        Player.inventory[58].NetStateChanged();
+        NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, 58);
+    }
+
+    private void CaptureCurrentServerStationEscrowState()
+    {
+        if (Main.netMode == NetmodeID.Server)
+            GeneratedStationEscrowStateSystem.CaptureOwnerState(_stationEscrowClientId, this);
+    }
+
+    private static bool GeneratedIdentityMatches(Item slot, string generatedId, out bool generatedMismatch)
+    {
+        generatedMismatch = false;
+        string expected = (generatedId ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(expected))
+            return slot.ModItem is not GeneratedItem;
+
+        if (slot.ModItem is not GeneratedItem generated)
+        {
+            generatedMismatch = true;
+            return false;
+        }
+        string actual = generated.Data?.Id ?? "";
+        bool ok = string.Equals(actual, expected, StringComparison.Ordinal);
+        generatedMismatch = !ok;
+        return ok;
+    }
+
+    private static void SendStationEscrowResult(int toClient, string operationId, StationEscrowAction action, int index, bool success, string message)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+        packet.Write(InfiniNetPacketIds.StationEscrowResult);
+        packet.Write(RemoteStationProtocolVersion);
+        packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
+        packet.Write(operationId ?? "");
+        packet.Write((byte)action);
+        packet.Write((sbyte)index);
+        packet.Write(success);
+        packet.Write(message ?? "");
+        packet.Send(toClient);
+    }
+
+    private static void SendCraftCommitResult(int toClient, string requestId, bool success, string itemName, string message)
+    {
+        if (Main.netMode != NetmodeID.Server)
+            return;
+        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
+        packet.Write(InfiniNetPacketIds.CraftCommitResult);
+        packet.Write(RemoteStationProtocolVersion);
+        packet.Write(GeneratedStationEscrowStateSystem.AuthorityScope);
+        packet.Write(requestId ?? "");
+        packet.Write(success);
+        packet.Write(itemName ?? "");
+        packet.Write(message ?? "");
+        packet.Send(toClient);
+    }
+
+    private static void StampHostAssetSyncMetadata(GeneratedItemData data)
+    {
+        // Server-authoritative MP craft: the host owns generator and the
+        // source item/projectile dumps. Clients receive the finished generated
+        // item plus final asset filenames/base URL, then hydrate PNG/JSON from
+        // the host over HTTP automatically.
+        if (data is null)
+            return;
+
+        data.RecipeMeta ??= new RecipeMetaSpec();
+        // Transport metadata is not gameplay authorship.  Always restamp it on the
+        // host before MP commit so old localhost/Radmin URLs from earlier sessions do
+        // not strand already-generated sprites on friends.
+        global::InfiniCrafterLocal.InfiniCrafterLocalMod.Generator.StampAssetTransportMetadata(data, refreshBaseUrl: true);
+
+        var files = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
+        if (files.Length > 0)
+            data.RecipeMeta.AssetFiles = files;
+    }
+
+    private static bool SpawnGeneratedItemServerSide(
+        Player player, GeneratedItemData data, out string error, string requestId = "", int laneIndex = 0)
+    {
+        error = "";
+        Item? allocatedOutput = null;
+        bool committed = false;
+        try
+        {
+            if (data is null)
+            {
+                error = "пустой предмет";
+                return false;
+            }
+
+            InfiniCraftPlayer modPlayer = player.GetModPlayer<InfiniCraftPlayer>();
+            if (Main.netMode == NetmodeID.Server
+                && !GeneratedStationEscrowStateSystem.CanCommitCraft(modPlayer._stationEscrowClientId, requestId, laneIndex, modPlayer))
+            {
+                error = "server craft transaction no longer owns this session/lane";
+                return false;
+            }
+            // Native NewItem replaces an existing world drop when the pool is
+            // full. Refuse before allocation so rollback cannot erase that drop.
+            if (!HasReusableWorldItemSlot())
+            {
+                error = "world item pool is full; inputs remain in station";
+                return false;
+            }
+            StampHostAssetSyncMetadata(data);
+            string[] assetFiles = GeneratedAssetSyncService.AssetFilesFromData(data).ToArray();
+            if (assetFiles.Length > 0
+                && (global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync is null
+                    || !global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync.HasCompleteServerAssetRoster(data)))
+            {
+                error = "generated asset roster не помещается или не полностью доступен для MP transport";
+                return false;
+            }
+
+            bool asArmorProxy = global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.CanRepresent(data);
+            int itemType = asArmorProxy
+                ? global::InfiniCrafterLocal.Content.Items.GeneratedArmorItemTypes.ItemTypeFor(data)
+                : ModContent.ItemType<GeneratedItem>();
+            int index = Item.NewItem(player.GetSource_Misc("InfiniCraft"), player.Hitbox, itemType, noBroadcast: true);
+            if (index < 0 || index >= Main.maxItems)
+            {
+                error = "Item.NewItem не вернул предмет";
+                return false;
+            }
+
+            allocatedOutput = Main.item[index];
+            if (allocatedOutput.ModItem is not GeneratedItem generated)
+            {
+                error = "Item.NewItem не вернул GeneratedItem";
+                return false;
+            }
+            generated.SetData(data);
+            int craftYield = Math.Clamp(data.Gameplay?.CraftYield ?? 1, 1, Math.Max(1, data.Gameplay?.MaxStack ?? 1));
+            Main.item[index].stack = craftYield;
+
+            // Commit the canonical definition before vanilla item sync. The registry queues
+            // compressed definition chunks; clients request only hash-verified final PNGs.
+            // There is deliberately no second filename/base-URL broadcast.
+            global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.PublishGeneratedItem(data);
+            // Allocation/configuration can fail without consuming inputs. Complete
+            // the world-owned journal before any item broadcast/pickup handoff.
+            if (Main.netMode == NetmodeID.Server
+                && !modPlayer.CompleteServerCraftTransaction(requestId, laneIndex, true, data.Name, "ok"))
+            {
+                error = "server craft transaction commit refused";
+                return false;
+            }
+            committed = true;
+            if (Main.netMode != NetmodeID.SinglePlayer)
+                NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            // A transport exception after commit must never refund already-spent
+            // inputs. The authoritative world output remains available for sync.
+            return committed;
+        }
+        finally
+        {
+            if (!committed && allocatedOutput is not null)
+                allocatedOutput.TurnToAir();
+        }
+    }
+
+}

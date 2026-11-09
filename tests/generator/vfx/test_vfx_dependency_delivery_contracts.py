@@ -1,0 +1,353 @@
+"""Offline canonical vfx dependency delivery contracts; no live services."""
+from __future__ import annotations
+from infini_local.core import asset_files
+
+import copy
+import json
+import os
+from pathlib import Path
+import pytest
+import infini_local.core.vfx.contract as vfx_contract
+import infini_local.core.vfx.projection as vfx_projection
+import infini_local.core.vfx.validation as vfx_validation
+import infini_local.pipelines.vfx.stage as vfx_stage
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.pipelines.vfx import request as stage
+from infini_local.pipelines.visual import delivery as visual_delivery_gate
+from infini_local.pipelines.images import stage as visual_sprite_generation
+from infini_local.pipelines.visual.stage import _apply_kit
+from infini_local.pipelines.visual.contract import _validate_kit, VISUAL_KIT_SCHEMA
+from infini_local.services import asset_sync_service
+from infini_local.storage import world_storage
+from tests.generator.vfx.test_repair_vfx_contract import _offline_transport
+from tests.generator.vfx_image_fixtures import _data, _request, _slot, _existing_texture_data, offline_backend
+
+BAD_SELECTORS = [
+    ("historyTrail", "runtime_geometry", "entity"),
+    ("historyTrail", "no_asset", "entity"),
+    ("historyTrail", "no_asset", "projectile"),
+    ("historyTrail", "reuse_item_icon", "field"),
+]
+
+def visual_data(mode: str) -> dict:
+    data = _data([])
+    item = {"prompt": "one literal amber inventory fixture", "negativePrompt": "text, watermark",
+            "silhouette": "compact ring", "visualIdentity": "amber ring", "palette": ["amber"],
+            "preferredCanvasSize": 32, "renderSizePx": 40, "forwardAngleDegrees": 45, "inventoryScale": 1.0, "worldScale": 1.0}
+    entity = {"entityId": "orb", "assetMode": mode,
+              "visualProjectRef": "item" if mode == "reuse_item_icon" else "none", "scale": 1.0}
+    if mode == "runtime_geometry":
+        from tests.generator.visual_geometry_fixtures import segment_geometry
+        entity["geometry"] = segment_geometry()
+    if mode == "baked_sprite":
+        entity.update(visualProjectRef="entity", prompt="one exact separate amber orb", silhouette="orb", visualIdentity="amber orb", preferredCanvasSize=64, renderSizePx=24, forwardAngleDegrees=0)
+    kit = {"schema": VISUAL_KIT_SCHEMA, "item": item,
+           "entities": [{"entityId": "item", "assetMode": "baked_sprite", "visualProjectRef": "item",
+                         "scale": 1.0}, entity],
+           "animationPlan": "Keep accepted movement, do not add gameplay."}
+    accepted, errors = _validate_kit(kit, ["item", "orb"], "item")
+    assert accepted is not None, errors
+    data.pop("vfxManifest", None)
+    return _apply_kit(data, accepted)
+
+def authored_vfx(renderer: str, texture: str = "entity") -> dict:
+    if renderer == "historyTrail":
+        from tests.generator.vfx_material_fixtures import _history
+        raw = _history({"runtimeProgram": {"itemEntityId": "orb"}}, texture)
+        raw["slots"][0]["id"] = "selected"
+        return raw
+    slot = _slot("selected", "")
+    if renderer in {"shape", "nativeDust", "nativeLight"}:
+        from tests.generator.vfx_material_fixtures import _shape, _native
+        data = {"runtimeProgram": {"itemEntityId": "item"}}
+        raw = _shape(data) if renderer == "shape" else _native(data, renderer)
+        raw["slots"][0].update(id="selected", entityId="orb", event="periodic", repeatEvery=4)
+        return raw
+    if renderer in {"spriteElement", "texturedPath"}:
+        slot = _slot("selected", "", renderer=renderer)
+        slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
+    elif renderer == "soundCue":
+        slot = {"id": "selected", "entityId": "orb", "event": "periodic", "rendererKind": "soundCue",
+                "anchor": "self", "repeatEvery": 4, "startTick": 0, "soundId": "Item1",
+                "sound": {"volume": 0.4, "pitch": 0, "pitchVariance": 0}}
+    else:
+        raise ValueError(renderer)
+    return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
+             "slots": [slot]}
+
+
+@pytest.mark.parametrize("mode", ["reuse_item_icon", "runtime_geometry", "no_asset"])
+def test_entity_png_off_keeps_authored_non_png_modes_deliverable(offline_backend, monkeypatch, mode):
+    from infini_local.core.images import config
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "off")
+    data = visual_data(mode)
+    # VFX PNGs are independent of entity-body PNGs and remain requested.
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, {
+        "schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
+        "assets": [_request()], "slots": [_slot("selected", "grain")],
+    }, "entity-png-off")
+    final = visual_sprite_generation.maybe_generate_visual_assets(data)
+    report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+    assert report["ok"], report
+    assert len(offline_backend[0]) == 2  # root item and the authored VFX ingredient
+    orb = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == "orb")
+    assert orb["visual"]["assetMode"] == mode
+    assert final["vfxManifest"]["assets"][0]["spriteStatus"] in {"generated", "generated_warn_invalid"}
+
+
+def test_entity_png_off_still_plans_equipment_overlay():
+    plan = [{"role": "equip_overlay", "prompt": "authored badge", "assetId": "badge", "canvas": 32}]
+    jobs = list(visual_sprite_generation._independent_image_jobs({}, plan, "off"))
+    assert [row[0] for row in jobs] == ["item", "equip_overlay"]
+    assert jobs[1][1] == ("equip_overlay", "authored badge", "", "badge", 32)
+
+def roundtrip(data, tmp_path):
+    assert validate_runtime_wire(data)["ok"]
+    assert world_storage.is_deliverable_recipe_payload(data)
+    world_storage.write_world_recipe_cache(tmp_path, "dependencies", "probe", "offline-world", data)
+    cached = world_storage.read_world_recipe_cache(tmp_path, "dependencies", "v5", "probe", "offline-world")
+    assert cached is not None and cached["vfxManifest"]["slots"] == data["vfxManifest"]["slots"]
+    evidence = os.environ.get("INFINI_VFX_DEPENDENCY_EVIDENCE_DIR")
+    if evidence:
+        target = Path(evidence)
+        target.mkdir(parents=True, exist_ok=True)
+        case = tmp_path.parent.name
+        (target / (case + ".json")).write_text(json.dumps({
+            "case": case, "data": world_storage.sanitize_recipe_for_delivery(cached),
+            "dependencies": vfx_validation.vfx_png_dependencies(data), "cacheReadAccepted": True,
+        }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return cached
+
+def test_item_body_entity_texture_requires_its_actual_projected_png(offline_backend, monkeypatch, tmp_path):
+    data = visual_data("no_asset")
+    raw = authored_vfx("spriteElement", "entity")
+    raw["slots"][0]["entityId"] = "item"
+    sent = _offline_transport(monkeypatch, "item_body_png", [raw])
+    final = vfx_stage.attach_vfx_manifest(data, "item_body_dependency", llm_director=stage.call_llm_vfx_director)
+    final = visual_sprite_generation.maybe_generate_visual_assets(final)
+    assert len(sent) == 1
+    assert visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)["ok"]
+    roundtrip(final, tmp_path / "body")
+    body = next(row for row in final["runtimeProgram"]["entities"] if row["kind"] == "item_body")
+    body["visual"]["spritePath"] = ""  # The real C# baked entity lookup no longer resolves.
+    before = copy.deepcopy(final)
+    report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+    assert not report["ok"]
+    assert any(row["code"] == "required_vfx_texture_not_ready" for row in report["problems"])
+    assert not world_storage.is_deliverable_recipe_payload(final) and final == before
+    with pytest.raises(ValueError, match="refusing to cache"):
+        world_storage.write_world_recipe_cache(tmp_path / "refused", "dependencies", "probe", "offline-world", final)
+    target = world_storage.world_recipe_file(tmp_path / "body", "offline-world", "probe")
+    saved = json.loads(target.read_text(encoding="utf-8"))
+    next(row for row in saved["runtimeProgram"]["entities"] if row["kind"] == "item_body")["visual"]["spritePath"] = ""
+    target.write_text(json.dumps(saved), encoding="utf-8")  # Explicit corrupt persisted fixture, not a repair.
+    stored = target.read_bytes()
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        world_storage.read_world_recipe_cache(tmp_path / "body", "dependencies", "v5", "probe", "offline-world")
+    assert target.read_bytes() == stored and not (target.parent.parent / "invalid").exists()
+
+@pytest.mark.parametrize("selector", [None, ["entity"], "Entity"])
+def test_persisted_png_selector_rejects_untyped_or_normalized_tokens(selector):
+    data = visual_data("reuse_item_icon")
+    raw = authored_vfx("historyTrail")
+    raw["slots"][0]["trail"]["texture"]["source"] = selector
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "invalid_saved_selector")
+    before = copy.deepcopy(data)
+    report = vfx_validation.validate_vfx_manifest_wire(data)
+    assert not report["ok"]
+    assert {error["path"] for error in report["errors"]} == {"$.vfxManifest.slots[0].trail.texture.source"}
+    assert data == before
+
+@pytest.mark.parametrize("renderer,mode,selector,kind,role,jobs", [
+    ("historyTrail", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
+    ("historyTrail", "reuse_item_icon", "entity", "free_projectile", "item", 1),
+    ("historyTrail", "baked_sprite", "entity", "field", "entity:orb", 2),
+    ("spriteElement", "reuse_item_icon", "entity", "free_projectile", "item", 1),
+    ("texturedPath", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
+    ("shape", "runtime_geometry", "entity", "free_projectile", "", 1),
+    ("nativeDust", "no_asset", "impact", "free_projectile", "", 1),
+    ("nativeLight", "no_asset", "none", "free_projectile", "", 1),
+    ("soundCue", "runtime_geometry", "impact", "free_projectile", "", 1),
+])
+def test_valid_png_or_untextured_renderer_retains_existing_producers(
+    offline_backend, monkeypatch, tmp_path, renderer, mode, selector, kind, role, jobs,
+):
+    calls, _ = offline_backend
+    data, raw = visual_data(mode), authored_vfx(renderer, selector)
+    if kind == "field":  # Explicit independent authored fixture, never a repair.
+        entity = data["runtimeProgram"]["entities"][1]
+        entity.update(kind=kind, visualRole="field")
+        entity["visual"]["role"] = "field"
+    before = copy.deepcopy(data)
+    projected = vfx_validation.vfx_png_dependencies(data, raw, require_used=True)
+    assert projected["errors"] == [] and data == before
+    assert [row["role"] for row in projected["dependencies"]] == ([role] if role else [])
+    sent = _offline_transport(monkeypatch, "positive_" + renderer + "_" + selector, [raw])
+    final = vfx_stage.attach_vfx_manifest(data, "valid_dependencies", llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 1 and final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
+    assert final["debug"]["vfxDirectorRaw"] == raw and final["runtimeProgram"] == before["runtimeProgram"]
+    final = visual_sprite_generation.maybe_generate_visual_assets(final)
+    report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+    assert report["ok"], report["problems"]
+    assert len(calls) == jobs
+    if role:
+        assert next(row for row in report["slots"] if row["role"] == role)["required"]
+    else:
+        assert not any(row["role"].startswith(("impact:", "vfx:")) for row in report["slots"])
+    roundtrip(final, tmp_path / "valid")
+    tampered = copy.deepcopy(final)
+    tampered["debug"]["visualAssetPlan"] = json.dumps([{"path": "invented.png", "status": "generated"}])
+    tampered.setdefault("recipeMeta", {})["assetFiles"] = ["invented.png"]
+    assert asset_sync_service.runtime_asset_files(tampered) == asset_sync_service.runtime_asset_files(final)
+    assert visual_delivery_gate.visual_delivery_report(tampered, check_backend_config=False)["ok"]
+    if role:
+        # A present PNG is not a ready execution result; optional inventory art
+        # policy cannot waive an independently selected VFX dependency.
+        monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
+        selected = final["visual"] if role == "item" else final["runtimeProgram"]["entities"][1]["visual"]
+        selected["spriteStatus"] = "pending"
+        pending = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+        assert any(row["code"] == "required_vfx_texture_not_ready" for row in pending["problems"]), "selected producer readiness was bypassed"
+        assert not world_storage.is_deliverable_recipe_payload(final)
+
+def test_shared_png_producer_stays_one_owned_request_through_delivery(offline_backend, monkeypatch, tmp_path):
+    producer = "asset"
+    calls, _ = offline_backend
+    data = visual_data("no_asset")
+    raw = authored_vfx("spriteElement", producer)
+    second = authored_vfx("texturedPath", producer)["slots"][0]
+    second["id"] = "other_material_consumer"
+    raw["slots"].append(second)
+    raw["assets"] = [_request("shared", layout="strip")]
+    for slot in raw["slots"]:
+        slot["element" if slot["rendererKind"] == "spriteElement" else "path"]["texture"]["assetId"] = "shared"
+    before = copy.deepcopy(data["runtimeProgram"])
+    sent = _offline_transport(monkeypatch, "shared_asset", [raw])
+    final = vfx_stage.attach_vfx_manifest(data, "shared_dependency", llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 1
+    final = visual_sprite_generation.maybe_generate_visual_assets(final)
+    report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+    assert report["ok"], report["problems"]
+    assert len(calls) == 2  # Item plus one ingredient, not one per consumer.
+    assert len(asset_sync_service.runtime_asset_files(final)) == 2
+    assert len([row for row in report["slots"] if row["role"].startswith(("impact:", "vfx:"))]) == 1
+    after = copy.deepcopy(final["runtimeProgram"])
+    for program in (before, after):
+        for entity in program["entities"]:
+            entity.pop("visual", None)
+    assert after == before
+    roundtrip(final, tmp_path / "shared")
+
+def test_storage_admission_uses_canonical_vfx_references():
+    from infini_local.storage import world_storage
+    data = _data()
+    data["vfxManifest"]["slots"][0]["element"]["texture"]["assetId"] = "dangling"
+    assert world_storage.is_deliverable_recipe_payload(data) is False
+
+def test_storage_cache_roundtrip_preserves_assets_refs_pixels_and_runtime(offline_backend, tmp_path):
+    from infini_local.storage import world_storage
+    data = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(), _request("band", layout="strip")]))
+    before = copy.deepcopy(data)
+    world_storage.write_world_recipe_cache(tmp_path / "world", "test", "recipe", "world", data)
+    assert data == before
+    cached = world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world")
+    assert cached is not None
+    assert cached["vfxManifest"]["assets"] == before["vfxManifest"]["assets"]
+    assert cached["vfxManifest"]["slots"] == before["vfxManifest"]["slots"]
+    assert cached["runtimeProgram"] == before["runtimeProgram"]
+    path = world_storage.world_recipe_file(tmp_path / "world", "world", "recipe")
+    stored = path.read_bytes()
+    lost = Path(data["vfxManifest"]["assets"][0]["spritePath"])
+    pixels = lost.read_bytes()
+    neighbors = {Path(value): Path(value).read_bytes() for value in asset_sync_service.runtime_asset_paths(data) if value and Path(value) != lost}
+    lost.unlink()
+    assert world_storage.is_deliverable_recipe_payload(data) is False
+    with pytest.raises(world_storage.RecipeAssetsUnavailable):
+        world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world")
+    assert path.read_bytes() == stored
+    assert not (path.parent.parent / "invalid").exists()
+    assert all(neighbor.read_bytes() == raw for neighbor, raw in neighbors.items())
+    lost.write_bytes(pixels)
+    recovered = world_storage.read_world_recipe_cache(tmp_path / "world", "test", "v5", "recipe", "world")
+    assert recovered is not None and recovered["runtimeProgram"] == before["runtimeProgram"]
+    assert recovered["vfxManifest"] == before["vfxManifest"]
+    assert path.read_bytes() == stored and all(neighbor.read_bytes() == raw for neighbor, raw in neighbors.items())
+
+def test_storage_requires_ready_nested_existing_texture_even_without_new_requests():
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+    from infini_local.storage import world_storage
+    data = _data([])
+    slot = _slot("reuse", "")
+    slot["element"]["texture"] = {"source": "item", "assetId": "", "uv": {"quarterTurns": 0, "mirrorU": False, "mirrorV": False}}
+    data["vfxManifest"]["slots"] = [slot]
+    assert validate_vfx_manifest_wire(data)["ok"]
+    assert world_storage.is_deliverable_recipe_payload(data) is False
+
+@pytest.mark.parametrize("source", ["item", "entity"])
+@pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath"])
+@pytest.mark.parametrize("damage", ["missing", "pending"])
+def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, monkeypatch, source, renderer, damage):
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+    from infini_local.storage import world_storage
+    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "full")
+    monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", False)
+    data = _existing_texture_data(source, renderer)
+    out = visual_sprite_generation.maybe_generate_visual_assets(data)
+    assert validate_vfx_manifest_wire(out)["ok"]
+    assert visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)["ok"]
+    orb_visual = next(row for row in out["runtimeProgram"]["entities"] if row["id"] == "orb")["visual"]
+    producer = out["visual"] if source == "item" else orb_visual
+    prefix = "sprite"
+    if damage == "missing":
+        Path(producer[prefix + "Path"]).unlink()
+    else:
+        producer[prefix + "Status"] = "pending"
+    assert validate_vfx_manifest_wire(out)["ok"]  # shape is intentionally not an image gate
+    report = visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)
+    assert not report["ok"], report
+    assert any(problem["code"] == "required_vfx_texture_not_ready" for problem in report["problems"])
+    assert world_storage.is_deliverable_recipe_payload(out) is False
+    assert "assets" not in out["vfxManifest"]
+
+@pytest.mark.parametrize("status", ["pending", "failed", "fallback", "fallback_after_failed_generation", "prompt_only"])
+def test_ready_pixels_do_not_allow_pending_or_fallback_ingredient_admission(offline_backend, tmp_path, status):
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+    from infini_local.pipelines.combine_pipeline import _cached_payload_report
+    from infini_local.storage import world_storage
+    out = visual_sprite_generation.maybe_generate_visual_assets(_data())
+    asset = out["vfxManifest"]["assets"][0]
+    asset["spriteStatus"] = status
+    assert asset_files.is_complete_png_file(asset["spritePath"])
+    assert validate_vfx_manifest_wire(out)["ok"]  # wire helper remains the authority
+    assert not visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)["ok"]
+    assert not world_storage.is_deliverable_recipe_payload(out)
+    assert not _cached_payload_report(out)["ok"]
+    root = tmp_path / "world"
+    with pytest.raises(ValueError, match="non-deliverable"):
+        world_storage.write_world_recipe_cache(root, "test", "recipe", "world", out)
+    path = world_storage.world_recipe_file(root, "world", "recipe")
+    assert not path.exists()
+    world_storage.atomic_write_json(path, out)  # explicit old/incomplete cache fixture
+    assert world_storage.read_world_recipe_cache(root, "test", "v5", "recipe", "world") is None
+    assert not path.exists()
+
+def test_network_stripped_caption_fixture_retains_ready_pngs_refs_and_metadata(offline_backend):
+    """Python admission of an ABI transport fixture, not a C# ToNetworkJson claim."""
+    from infini_local.core.vfx.validation import validate_vfx_manifest_wire
+    from infini_local.pipelines.combine_pipeline import _cached_payload_report
+    from infini_local.storage import world_storage
+    full = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(), _request("band", layout="strip")]))
+    stripped = copy.deepcopy(full)
+    for asset in stripped["vfxManifest"]["assets"]:
+        asset["prompt"] = asset["negativePrompt"] = ""
+        asset["spritePath"] = Path(asset["spritePath"]).name
+    assert validate_vfx_manifest_wire(stripped)["ok"]
+    assert visual_delivery_gate.visual_delivery_report(stripped, check_backend_config=False)["ok"]
+    assert world_storage.is_deliverable_recipe_payload(stripped)
+    assert _cached_payload_report(stripped)["ok"]
+    clean = world_storage.sanitize_recipe_for_delivery(stripped)
+    assert clean["vfxManifest"]["assets"] == stripped["vfxManifest"]["assets"]
+    assert clean["vfxManifest"]["slots"] == full["vfxManifest"]["slots"]
+    assert asset_sync_service.runtime_asset_files(clean) == asset_sync_service.runtime_asset_files(full)
+    assert full["vfxManifest"]["assets"][0]["prompt"] == _request()["prompt"]

@@ -17,9 +17,9 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
     parser.add_argument("--reuse-images-from", type=Path, help="Reserved recovery option; rejected until exact request-fingerprint reuse is restored.")
     parser.add_argument("--vfx-only-from", type=Path, help="Reserved recovery option; rejected until frozen-stage replay is restored.")
     parser.add_argument("--project", type=Path, help="Authoritative InfiniCrafterLocal worktree.")
-    parser.add_argument("--preset", help="Packaged historical case set; inspect with python -m toolbox panels.")
+    parser.add_argument("--preset", help="Supported case set; inspect with python -m toolbox panels.")
     parser.add_argument("--output", type=Path, help="Private trace directory; required for --run, untouched by preflight.")
-    parser.add_argument("--cases", help="Distinct comma-separated case IDs; default is the named Live10/Live20 panel.")
+    parser.add_argument("--cases", help="Distinct comma-separated case IDs; default is the named Live10/Live20/Live40 panel.")
     parser.add_argument(
         "--cases-file",
         type=Path,
@@ -27,7 +27,7 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--runtime-dump", type=Path,
-        help="Parent item JSONL; defaults to the bundled exact Terraria fixture in toolbox/fixtures.",
+        help="Parent item JSONL; required for revised Live10 and Live40; classic Live20 has its historical fixture.",
     )
     parser.add_argument("--expected-case-count", type=int, help="Require the selected case count before network.")
     parser.add_argument("--transport-retries", type=int, default=0, help="Explicit retries per case for confirmed network failures only.")
@@ -68,7 +68,7 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
     parser.add_argument("--parallel-crafts", type=int, default=3, help="Concurrent craft workers within 1..8; default 3.")
     parser.add_argument("--preflight-only", action="store_true", help="Read-only config/case/source admission (the default); no runtime imports or network.")
     if internal:
-        parser.add_argument("--panel", choices=("live10", "live20"), default="live20")
+        parser.add_argument("--panel", choices=("live10", "live20", "live40"), default="live20")
     parser.add_argument("--config", type=Path, help="Private env file; never committed. Environment takes precedence.")
     parser.add_argument("--run", action="store_true", help="Explicitly authorize text inference; default is read-only preflight.")
     return parser

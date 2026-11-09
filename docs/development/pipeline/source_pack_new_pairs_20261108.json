@@ -1,0 +1,2167 @@
+{
+  "schema": "ifc_distinct_new_pair_sequence_summary_v1",
+  "baselineCommit": "0f766496538ec11f0788445e700bc3c91bf2bdc8",
+  "candidateCommit": "41f6a52f18fad6d6bcbee95bf22e4ba3e18b186b",
+  "candidateProjectionFingerprint": "3aa167116ea4c806327725d6686d42bd041806fb09328032b757c4c1c6a7ac35",
+  "replicates": 3,
+  "independentProcesses": 6,
+  "uniquePairsPerProcess": 8,
+  "processOrder": [
+    "baseline-1",
+    "candidate-1",
+    "candidate-2",
+    "baseline-2",
+    "baseline-3",
+    "candidate-3"
+  ],
+  "environmentComparisons": [
+    {
+      "replicate": 1,
+      "equal": true,
+      "baselineHarnessMvid": "1bdfa445-79d6-4f64-95da-1b29523ae014",
+      "candidateHarnessMvid": "28d98a7a-7072-48b1-92cb-3916cbebab59",
+      "excludedMetadataOnly": [
+        "harnessMvid"
+      ]
+    },
+    {
+      "replicate": 2,
+      "equal": true,
+      "baselineHarnessMvid": "1bdfa445-79d6-4f64-95da-1b29523ae014",
+      "candidateHarnessMvid": "28d98a7a-7072-48b1-92cb-3916cbebab59",
+      "excludedMetadataOnly": [
+        "harnessMvid"
+      ]
+    },
+    {
+      "replicate": 3,
+      "equal": true,
+      "baselineHarnessMvid": "1bdfa445-79d6-4f64-95da-1b29523ae014",
+      "candidateHarnessMvid": "28d98a7a-7072-48b1-92cb-3916cbebab59",
+      "excludedMetadataOnly": [
+        "harnessMvid"
+      ]
+    }
+  ],
+  "allCrossVariantPayloadBytesEqual": true,
+  "crossVariantPayloadComparisons": [
+    {
+      "replicate": 1,
+      "case": "wood-stone",
+      "baselineSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "candidateSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "baselineBytes": 36557,
+      "candidateBytes": 36557,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "terra-mining",
+      "baselineSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "candidateSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "baselineBytes": 766291,
+      "candidateBytes": 766291,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "nebula-prism",
+      "baselineSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "candidateSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "baselineBytes": 3740963,
+      "candidateBytes": 3740963,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "eventide-arrow",
+      "baselineSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "candidateSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "baselineBytes": 2859542,
+      "candidateBytes": 2859542,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "terra-healing",
+      "baselineSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "candidateSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "baselineBytes": 730944,
+      "candidateBytes": 730944,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "nebula-musket",
+      "baselineSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "candidateSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "baselineBytes": 2335919,
+      "candidateBytes": 2335919,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "terra-prism",
+      "baselineSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "candidateSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "baselineBytes": 3031042,
+      "candidateBytes": 3031042,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 1,
+      "case": "eventide-mining",
+      "baselineSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "candidateSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "baselineBytes": 2005700,
+      "candidateBytes": 2005700,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "wood-stone",
+      "baselineSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "candidateSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "baselineBytes": 36557,
+      "candidateBytes": 36557,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "terra-mining",
+      "baselineSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "candidateSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "baselineBytes": 766291,
+      "candidateBytes": 766291,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "nebula-prism",
+      "baselineSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "candidateSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "baselineBytes": 3740963,
+      "candidateBytes": 3740963,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "eventide-arrow",
+      "baselineSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "candidateSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "baselineBytes": 2859542,
+      "candidateBytes": 2859542,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "terra-healing",
+      "baselineSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "candidateSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "baselineBytes": 730944,
+      "candidateBytes": 730944,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "nebula-musket",
+      "baselineSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "candidateSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "baselineBytes": 2335919,
+      "candidateBytes": 2335919,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "terra-prism",
+      "baselineSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "candidateSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "baselineBytes": 3031042,
+      "candidateBytes": 3031042,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 2,
+      "case": "eventide-mining",
+      "baselineSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "candidateSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "baselineBytes": 2005700,
+      "candidateBytes": 2005700,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "wood-stone",
+      "baselineSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "candidateSha256": "8a3104598c1ccde1e9f70f881ed99d02fc4fc980ed7232c97f2c189ef274bd4f",
+      "baselineBytes": 36557,
+      "candidateBytes": 36557,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "terra-mining",
+      "baselineSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "candidateSha256": "137753f7cb60fb2ff958a1a7b509f2c67259b2ee4fea37461f0b8db0e7978eed",
+      "baselineBytes": 766291,
+      "candidateBytes": 766291,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "nebula-prism",
+      "baselineSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "candidateSha256": "1cb5dc8aaa92cbd7b82029e449aae9b59b1e9979adfdd82d780abb2e8d200942",
+      "baselineBytes": 3740963,
+      "candidateBytes": 3740963,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "eventide-arrow",
+      "baselineSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "candidateSha256": "753d47f17b890724996d88c677bb401f9fa41a89affb370bbbdac5b8353be223",
+      "baselineBytes": 2859542,
+      "candidateBytes": 2859542,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "terra-healing",
+      "baselineSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "candidateSha256": "0edd51949aeb9a267c6394cc5632cafcf3c1a6a5d3a659023c5d6fb3fb9c91b2",
+      "baselineBytes": 730944,
+      "candidateBytes": 730944,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "nebula-musket",
+      "baselineSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "candidateSha256": "1c54e4fb94b27a62fb5aa8683efd8d73533526ddcfde35833830cf9188434bd5",
+      "baselineBytes": 2335919,
+      "candidateBytes": 2335919,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "terra-prism",
+      "baselineSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "candidateSha256": "e98a5962cbbc2c49b54c084ec9bcc26815e87c2b196e3125d6add0c385541fc8",
+      "baselineBytes": 3031042,
+      "candidateBytes": 3031042,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    },
+    {
+      "replicate": 3,
+      "case": "eventide-mining",
+      "baselineSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "candidateSha256": "5a05846d809e722a383e4f5b54029dd23f7b2b2cc41f5e5c8c19c3e45898158e",
+      "baselineBytes": 2005700,
+      "candidateBytes": 2005700,
+      "actualBytesEqual": true,
+      "firstDifferenceByte": null
+    }
+  ],
+  "withinVariantReplicatePayloadComparisons": [
+    {
+      "variant": "baseline",
+      "case": "wood-stone",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "terra-mining",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "nebula-prism",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "eventide-arrow",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "terra-healing",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "nebula-musket",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "terra-prism",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "baseline",
+      "case": "eventide-mining",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "wood-stone",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "terra-mining",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "nebula-prism",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "eventide-arrow",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "terra-healing",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "nebula-musket",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "terra-prism",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    },
+    {
+      "variant": "candidate",
+      "case": "eventide-mining",
+      "actualBytesIdenticalAcrossThreeReplicates": true
+    }
+  ],
+  "perPair": [
+    {
+      "case": "wood-stone",
+      "requestIndex": 1,
+      "phase": "cold-first-request",
+      "parentTypes": [
+        9,
+        3
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 9,
+          "netID": 9,
+          "damage": -1,
+          "shoot": 0,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": 30,
+          "stack": 1
+        },
+        {
+          "type": 3,
+          "netID": 3,
+          "damage": -1,
+          "shoot": 0,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": 1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            1301.2129,
+            1076.8535,
+            982.887
+          ],
+          "candidate": [
+            866.7357,
+            986.0856,
+            920.8363
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            545.1534,
+            508.1565,
+            510.7537
+          ],
+          "candidate": [
+            476.7446,
+            579.4205,
+            514.7545
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            748.7875,
+            565.4382,
+            468.1114
+          ],
+          "candidate": [
+            386.9648,
+            403.0679,
+            403.3016
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            148312792,
+            148420176,
+            148124016
+          ],
+          "candidate": [
+            140073320,
+            140074392,
+            140075776
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              2,
+              1,
+              1
+            ],
+            [
+              2,
+              1,
+              1
+            ],
+            [
+              1,
+              1,
+              1
+            ]
+          ],
+          "candidate": [
+            [
+              1,
+              1,
+              1
+            ],
+            [
+              1,
+              1,
+              1
+            ],
+            [
+              1,
+              1,
+              1
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 1076.8535,
+        "candidate": 920.8363
+      },
+      "medianAllocatedMiB": {
+        "baseline": 141.44210052490234,
+        "candidate": 133.5853500366211
+      },
+      "speedupMedianRatio": 1.1694298975833162,
+      "allocationReductionPercent": 5.554746754413465
+    },
+    {
+      "case": "terra-mining",
+      "requestIndex": 2,
+      "phase": "both-new-parents",
+      "parentTypes": [
+        757,
+        2322
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 757,
+          "netID": 757,
+          "damage": 85,
+          "shoot": 985,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 2322,
+          "netID": 2322,
+          "damage": -1,
+          "shoot": 0,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 104,
+          "buffTime": 36000,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            1803.4577,
+            1697.4202,
+            1674.7105
+          ],
+          "candidate": [
+            818.2061,
+            848.7705,
+            801.1729
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            117.8882,
+            92.1198,
+            102.5249
+          ],
+          "candidate": [
+            167.7475,
+            193.7498,
+            169.8178
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            1621.7428,
+            1544.1544,
+            1506.2148
+          ],
+          "candidate": [
+            584.4474,
+            583.2113,
+            569.9704
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            135077464,
+            135070696,
+            135078312
+          ],
+          "candidate": [
+            114620808,
+            114630840,
+            114620920
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              2,
+              2,
+              1
+            ],
+            [
+              2,
+              2,
+              1
+            ],
+            [
+              2,
+              2,
+              1
+            ]
+          ],
+          "candidate": [
+            [
+              2,
+              1,
+              1
+            ],
+            [
+              2,
+              1,
+              1
+            ],
+            [
+              2,
+              1,
+              1
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 1697.4202,
+        "candidate": 818.2061
+      },
+      "medianAllocatedMiB": {
+        "baseline": 128.81990814208984,
+        "candidate": 109.31102752685547
+      },
+      "speedupMedianRatio": 2.074563120465614,
+      "allocationReductionPercent": 15.144305640798827
+    },
+    {
+      "case": "nebula-prism",
+      "requestIndex": 3,
+      "phase": "both-new-parents",
+      "parentTypes": [
+        3542,
+        3541
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 3542,
+          "netID": 3542,
+          "damage": 130,
+          "shoot": 634,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 3541,
+          "netID": 3541,
+          "damage": 100,
+          "shoot": 633,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            2602.7102,
+            2700.5459,
+            2961.4731
+          ],
+          "candidate": [
+            2522.4283,
+            2469.4889,
+            2630.8233
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            14.9102,
+            11.7476,
+            13.0193
+          ],
+          "candidate": [
+            13.1215,
+            12.1226,
+            14.5904
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            2469.6096,
+            2577.8108,
+            2791.4248
+          ],
+          "candidate": [
+            2418.4108,
+            2376.626,
+            2518.5464
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            411662312,
+            411667280,
+            411663744
+          ],
+          "candidate": [
+            409653032,
+            409650384,
+            409652808
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              4,
+              4,
+              1
+            ],
+            [
+              4,
+              4,
+              1
+            ],
+            [
+              4,
+              4,
+              1
+            ]
+          ],
+          "candidate": [
+            [
+              6,
+              6,
+              2
+            ],
+            [
+              6,
+              6,
+              2
+            ],
+            [
+              6,
+              6,
+              2
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 2700.5459,
+        "candidate": 2522.4283
+      },
+      "medianAllocatedMiB": {
+        "baseline": 392.5931396484375,
+        "candidate": 390.6753616333008
+      },
+      "speedupMedianRatio": 1.0706135433066621,
+      "allocationReductionPercent": 0.4884899458136416
+    },
+    {
+      "case": "eventide-arrow",
+      "requestIndex": 4,
+      "phase": "both-new-parents",
+      "parentTypes": [
+        4953,
+        40
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 4953,
+          "netID": 4953,
+          "damage": 50,
+          "shoot": 1,
+          "useAmmo": 40,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 40,
+          "netID": 40,
+          "damage": 5,
+          "shoot": 1,
+          "useAmmo": 0,
+          "ammo": 40,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            1557.9918,
+            1182.8155,
+            1251.5348
+          ],
+          "candidate": [
+            1425.746,
+            1341.2113,
+            1232.3453
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            142.5853,
+            158.2191,
+            200.8438
+          ],
+          "candidate": [
+            140.0598,
+            157.1655,
+            145.0708
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            1344.8831,
+            970.1934,
+            986.4977
+          ],
+          "candidate": [
+            1216.755,
+            1107.1395,
+            1024.5914
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            253576008,
+            253575576,
+            253577808
+          ],
+          "candidate": [
+            251730760,
+            251730272,
+            251729800
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              3,
+              2,
+              1
+            ],
+            [
+              3,
+              2,
+              1
+            ],
+            [
+              3,
+              2,
+              1
+            ]
+          ],
+          "candidate": [
+            [
+              2,
+              2,
+              0
+            ],
+            [
+              2,
+              2,
+              0
+            ],
+            [
+              2,
+              2,
+              0
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 1251.5348,
+        "candidate": 1341.2113
+      },
+      "medianAllocatedMiB": {
+        "baseline": 241.82892608642578,
+        "candidate": 240.06869506835938
+      },
+      "speedupMedianRatio": 0.9331376793500025,
+      "allocationReductionPercent": 0.7278827419666567
+    },
+    {
+      "case": "terra-healing",
+      "requestIndex": 5,
+      "phase": "one-familiar-parent",
+      "parentTypes": [
+        757,
+        188
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 757,
+          "netID": 757,
+          "damage": 85,
+          "shoot": 985,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 188,
+          "netID": 188,
+          "damage": -1,
+          "shoot": 0,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 100,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            115.9002,
+            73.0784,
+            68.1507
+          ],
+          "candidate": [
+            76.4916,
+            91.7151,
+            78.0226
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            16.0584,
+            7.8459,
+            7.5051
+          ],
+          "candidate": [
+            11.1118,
+            9.5533,
+            12.1244
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            82.1332,
+            48.7872,
+            48.3633
+          ],
+          "candidate": [
+            48.3611,
+            64.4286,
+            48.733
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            11084960,
+            11084704,
+            11084696
+          ],
+          "candidate": [
+            11084056,
+            11084120,
+            11084064
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "candidate": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              1,
+              1,
+              1
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 73.0784,
+        "candidate": 78.0226
+      },
+      "medianAllocatedMiB": {
+        "baseline": 10.571197509765625,
+        "candidate": 10.570587158203125
+      },
+      "speedupMedianRatio": 0.9366311812218512,
+      "allocationReductionPercent": 0.005773722058788344
+    },
+    {
+      "case": "nebula-musket",
+      "requestIndex": 6,
+      "phase": "one-familiar-parent",
+      "parentTypes": [
+        3542,
+        97
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 3542,
+          "netID": 3542,
+          "damage": 130,
+          "shoot": 634,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 97,
+          "netID": 97,
+          "damage": 7,
+          "shoot": 14,
+          "useAmmo": 0,
+          "ammo": 97,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            783.8728,
+            505.5256,
+            430.7872
+          ],
+          "candidate": [
+            438.3681,
+            471.5281,
+            420.3081
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            11.2067,
+            10.5157,
+            8.2015
+          ],
+          "candidate": [
+            10.081,
+            14.2411,
+            8.5777
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            734.4298,
+            445.9437,
+            401.9209
+          ],
+          "candidate": [
+            386.2735,
+            408.2568,
+            372.921
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            96722712,
+            96721000,
+            96720416
+          ],
+          "candidate": [
+            96487336,
+            96483816,
+            96486672
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ]
+          ],
+          "candidate": [
+            [
+              2,
+              2,
+              1
+            ],
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              2,
+              2,
+              1
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 505.5256,
+        "candidate": 438.3681
+      },
+      "medianAllocatedMiB": {
+        "baseline": 92.2403335571289,
+        "candidate": 92.01686096191406
+      },
+      "speedupMedianRatio": 1.1531988755568665,
+      "allocationReductionPercent": 0.2422721022321883
+    },
+    {
+      "case": "terra-prism",
+      "requestIndex": 7,
+      "phase": "both-familiar-parents-new-pair",
+      "parentTypes": [
+        757,
+        3541
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 757,
+          "netID": 757,
+          "damage": 85,
+          "shoot": 985,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 3541,
+          "netID": 3541,
+          "damage": 100,
+          "shoot": 633,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            421.8092,
+            412.2084,
+            401.1262
+          ],
+          "candidate": [
+            316.1139,
+            382.4121,
+            468.1594
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            6.8926,
+            7.5172,
+            5.7501
+          ],
+          "candidate": [
+            9.5669,
+            15.1424,
+            23.6626
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            378.678,
+            386.534,
+            376.7227
+          ],
+          "candidate": [
+            276.8989,
+            292.2031,
+            403.9299
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            43674144,
+            43684672,
+            43677784
+          ],
+          "candidate": [
+            43673240,
+            43673328,
+            43673656
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ]
+          ],
+          "candidate": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 412.2084,
+        "candidate": 382.4121
+      },
+      "medianAllocatedMiB": {
+        "baseline": 41.654380798339844,
+        "candidate": 41.65013122558594
+      },
+      "speedupMedianRatio": 1.0779167290993146,
+      "allocationReductionPercent": 0.010201982774582508
+    },
+    {
+      "case": "eventide-mining",
+      "requestIndex": 8,
+      "phase": "both-familiar-parents-new-pair",
+      "parentTypes": [
+        4953,
+        2322
+      ],
+      "nativeItemDefaults": [
+        {
+          "type": 4953,
+          "netID": 4953,
+          "damage": 50,
+          "shoot": 1,
+          "useAmmo": 40,
+          "ammo": 0,
+          "buffType": 0,
+          "buffTime": 0,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        },
+        {
+          "type": 2322,
+          "netID": 2322,
+          "damage": -1,
+          "shoot": 0,
+          "useAmmo": 0,
+          "ammo": 0,
+          "buffType": 104,
+          "buffTime": 36000,
+          "healLife": 0,
+          "createTile": -1,
+          "stack": 1
+        }
+      ],
+      "metrics": {
+        "wallMs": {
+          "baseline": [
+            171.8331,
+            151.1951,
+            133.6357
+          ],
+          "candidate": [
+            198.0727,
+            240.4549,
+            230.0639
+          ]
+        },
+        "captureMs": {
+          "baseline": [
+            58.9969,
+            27.4972,
+            25.346
+          ],
+          "candidate": [
+            28.9309,
+            45.431,
+            40.8098
+          ]
+        },
+        "resolveMs": {
+          "baseline": [
+            97.0346,
+            112.8998,
+            97.1755
+          ],
+          "candidate": [
+            155.982,
+            156.6177,
+            172.0747
+          ]
+        },
+        "totalAllocatedBytes": {
+          "baseline": [
+            37930336,
+            37926864,
+            37926784
+          ],
+          "candidate": [
+            37925768,
+            37925848,
+            37925768
+          ]
+        },
+        "gcCollections": {
+          "baseline": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              0,
+              0,
+              0
+            ]
+          ],
+          "candidate": [
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ],
+            [
+              1,
+              1,
+              0
+            ]
+          ]
+        }
+      },
+      "medianWallMs": {
+        "baseline": 151.1951,
+        "candidate": 230.0639
+      },
+      "medianAllocatedMiB": {
+        "baseline": 36.16987609863281,
+        "candidate": 36.16883087158203
+      },
+      "speedupMedianRatio": 0.6571874161917624,
+      "allocationReductionPercent": 0.0028897722732845743
+    }
+  ],
+  "groups": {
+    "all-eight": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          8758.7879,
+          7799.6426,
+          7904.3052
+        ],
+        "medianSumWallMs": 7904.3052,
+        "sumAllocatedMiBByReplicate": [
+          1085.320213317871,
+          1085.4253463745117,
+          1085.141716003418
+        ],
+        "medianSumAllocatedMiB": 1085.320213317871,
+        "gcCollectionsByReplicate": [
+          [
+            13,
+            11,
+            4
+          ],
+          [
+            13,
+            11,
+            4
+          ],
+          [
+            12,
+            11,
+            4
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          6662.1624,
+          6831.666499999999,
+          6781.7318000000005
+        ],
+        "medianSumWallMs": 6781.7318000000005,
+        "sumAllocatedMiBByReplicate": [
+          1054.0469360351562,
+          1054.051399230957,
+          1054.0480270385742
+        ],
+        "medianSumAllocatedMiB": 1054.0480270385742,
+        "gcCollectionsByReplicate": [
+          [
+            14,
+            13,
+            5
+          ],
+          [
+            14,
+            13,
+            5
+          ],
+          [
+            14,
+            13,
+            5
+          ]
+        ]
+      },
+      "medianSumSpeedup": 1.1655290172342114,
+      "medianSumAllocationReductionPercent": 2.881378776102994
+    },
+    "cold-first": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          1301.2129,
+          1076.8535,
+          982.887
+        ],
+        "medianSumWallMs": 1076.8535,
+        "sumAllocatedMiBByReplicate": [
+          141.44210052490234,
+          141.5445098876953,
+          141.26206970214844
+        ],
+        "medianSumAllocatedMiB": 141.44210052490234,
+        "gcCollectionsByReplicate": [
+          [
+            2,
+            1,
+            1
+          ],
+          [
+            2,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          866.7357,
+          986.0856,
+          920.8363
+        ],
+        "medianSumWallMs": 920.8363,
+        "sumAllocatedMiBByReplicate": [
+          133.5843276977539,
+          133.5853500366211,
+          133.586669921875
+        ],
+        "medianSumAllocatedMiB": 133.5853500366211,
+        "gcCollectionsByReplicate": [
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ],
+          [
+            1,
+            1,
+            1
+          ]
+        ]
+      },
+      "medianSumSpeedup": 1.1694298975833162,
+      "medianSumAllocationReductionPercent": 5.554746754413465
+    },
+    "both-new-after-first": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          5964.1597,
+          5580.7816,
+          5887.7184
+        ],
+        "medianSumWallMs": 5887.7184,
+        "sumAllocatedMiBByReplicate": [
+          763.240608215332,
+          763.2384796142578,
+          763.244499206543
+        ],
+        "medianSumAllocatedMiB": 763.240608215332,
+        "gcCollectionsByReplicate": [
+          [
+            9,
+            8,
+            3
+          ],
+          [
+            9,
+            8,
+            3
+          ],
+          [
+            9,
+            8,
+            3
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          4766.3804,
+          4659.4707,
+          4664.3415
+        ],
+        "medianSumWallMs": 4664.3415,
+        "sumAllocatedMiBByReplicate": [
+          740.0556564331055,
+          740.0622329711914,
+          740.0546340942383
+        ],
+        "medianSumAllocatedMiB": 740.0556564331055,
+        "gcCollectionsByReplicate": [
+          [
+            10,
+            9,
+            3
+          ],
+          [
+            10,
+            9,
+            3
+          ],
+          [
+            10,
+            9,
+            3
+          ]
+        ]
+      },
+      "medianSumSpeedup": 1.2622828752997608,
+      "medianSumAllocationReductionPercent": 3.0376989291017176
+    },
+    "one-familiar-parent": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          899.773,
+          578.604,
+          498.9379
+        ],
+        "medianSumWallMs": 578.604,
+        "sumAllocatedMiBByReplicate": [
+          102.81340789794922,
+          102.81153106689453,
+          102.81096649169922
+        ],
+        "medianSumAllocatedMiB": 102.81153106689453,
+        "gcCollectionsByReplicate": [
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          514.8597,
+          563.2432,
+          498.33070000000004
+        ],
+        "medianSumWallMs": 514.8597,
+        "sumAllocatedMiBByReplicate": [
+          102.58807373046875,
+          102.58477783203125,
+          102.58744812011719
+        ],
+        "medianSumAllocatedMiB": 102.58744812011719,
+        "gcCollectionsByReplicate": [
+          [
+            2,
+            2,
+            1
+          ],
+          [
+            2,
+            2,
+            1
+          ],
+          [
+            2,
+            2,
+            1
+          ]
+        ]
+      },
+      "medianSumSpeedup": 1.1238090687618396,
+      "medianSumAllocationReductionPercent": 0.2179550722102741
+    },
+    "both-familiar-new-pair": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          593.6423,
+          563.4035,
+          534.7619
+        ],
+        "medianSumWallMs": 563.4035,
+        "sumAllocatedMiBByReplicate": [
+          77.8240966796875,
+          77.83082580566406,
+          77.82418060302734
+        ],
+        "medianSumAllocatedMiB": 77.82418060302734,
+        "gcCollectionsByReplicate": [
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          514.1866,
+          622.867,
+          698.2233
+        ],
+        "medianSumWallMs": 622.867,
+        "sumAllocatedMiBByReplicate": [
+          77.81887817382812,
+          77.81903839111328,
+          77.81927490234375
+        ],
+        "medianSumAllocatedMiB": 77.81903839111328,
+        "gcCollectionsByReplicate": [
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ],
+          [
+            1,
+            1,
+            0
+          ]
+        ]
+      },
+      "medianSumSpeedup": 0.904532588819122,
+      "medianSumAllocationReductionPercent": 0.006607473248310125
+    },
+    "seven-after-first": {
+      "baseline": {
+        "sumWallMsByReplicate": [
+          7457.575,
+          6722.7891,
+          6921.4182
+        ],
+        "medianSumWallMs": 6921.4182,
+        "sumAllocatedMiBByReplicate": [
+          943.8781127929688,
+          943.8808364868164,
+          943.8796463012695
+        ],
+        "medianSumAllocatedMiB": 943.8796463012695,
+        "gcCollectionsByReplicate": [
+          [
+            11,
+            10,
+            3
+          ],
+          [
+            11,
+            10,
+            3
+          ],
+          [
+            11,
+            10,
+            3
+          ]
+        ]
+      },
+      "candidate": {
+        "sumWallMsByReplicate": [
+          5795.4267,
+          5845.5809,
+          5860.8955
+        ],
+        "medianSumWallMs": 5845.5809,
+        "sumAllocatedMiBByReplicate": [
+          920.4626083374023,
+          920.4660491943359,
+          920.4613571166992
+        ],
+        "medianSumAllocatedMiB": 920.4626083374023,
+        "gcCollectionsByReplicate": [
+          [
+            13,
+            12,
+            4
+          ],
+          [
+            13,
+            12,
+            4
+          ],
+          [
+            13,
+            12,
+            4
+          ]
+        ]
+      },
+      "medianSumSpeedup": 1.184042838240422,
+      "medianSumAllocationReductionPercent": 2.480934730993545
+    }
+  },
+  "processes": [
+    {
+      "startedUtc": "2026-11-08T01:45:05.401693+00:00",
+      "elapsedProcessSeconds": 9.571664334998786,
+      "exitCode": 0,
+      "maxRssKiB": 595452,
+      "userSeconds": 9.882417,
+      "systemSeconds": 0.71973,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/baseline/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/1/baseline"
+      ],
+      "cwd": "<measurement-root>/baseline",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "6843df750c4934918b5db8f3c90088044ea3a6b78fa1e0a246b4b8c6575ed0f8",
+      "replicate": 1,
+      "variant": "baseline"
+    },
+    {
+      "startedUtc": "2026-11-08T01:45:16.997234+00:00",
+      "elapsedProcessSeconds": 7.416251190999901,
+      "exitCode": 0,
+      "maxRssKiB": 519032,
+      "userSeconds": 7.676133,
+      "systemSeconds": 0.598992,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/candidate/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/1/candidate"
+      ],
+      "cwd": "<measurement-root>/source",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "1e0762ca60b8f4327d2d37026f32a3e0b94420d30428a6f85dfbb3f7626fee16",
+      "replicate": 1,
+      "variant": "candidate"
+    },
+    {
+      "startedUtc": "2026-11-08T01:45:36.130911+00:00",
+      "elapsedProcessSeconds": 8.51191775299958,
+      "exitCode": 0,
+      "maxRssKiB": 579336,
+      "userSeconds": 8.688457,
+      "systemSeconds": 0.692821,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/baseline/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/2/baseline"
+      ],
+      "cwd": "<measurement-root>/baseline",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "6843df750c4934918b5db8f3c90088044ea3a6b78fa1e0a246b4b8c6575ed0f8",
+      "replicate": 2,
+      "variant": "baseline"
+    },
+    {
+      "startedUtc": "2026-11-08T01:45:26.438122+00:00",
+      "elapsedProcessSeconds": 7.668025847000536,
+      "exitCode": 0,
+      "maxRssKiB": 506076,
+      "userSeconds": 7.7912230000000005,
+      "systemSeconds": 0.576303,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/candidate/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/2/candidate"
+      ],
+      "cwd": "<measurement-root>/source",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "1e0762ca60b8f4327d2d37026f32a3e0b94420d30428a6f85dfbb3f7626fee16",
+      "replicate": 2,
+      "variant": "candidate"
+    },
+    {
+      "startedUtc": "2026-11-08T01:45:46.669070+00:00",
+      "elapsedProcessSeconds": 8.74563439099802,
+      "exitCode": 0,
+      "maxRssKiB": 579056,
+      "userSeconds": 8.815309,
+      "systemSeconds": 0.8048409999999999,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/baseline/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/3/baseline"
+      ],
+      "cwd": "<measurement-root>/baseline",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "6843df750c4934918b5db8f3c90088044ea3a6b78fa1e0a246b4b8c6575ed0f8",
+      "replicate": 3,
+      "variant": "baseline"
+    },
+    {
+      "startedUtc": "2026-11-08T01:45:57.437649+00:00",
+      "elapsedProcessSeconds": 7.564419230999192,
+      "exitCode": 0,
+      "maxRssKiB": 518880,
+      "userSeconds": 7.994277,
+      "systemSeconds": 0.635886,
+      "command": [
+        "<toolchain>/dotnet/dotnet",
+        "exec",
+        "--runtimeconfig",
+        "<toolchain>/tml-v2026.09.3.1/tModLoader.runtimeconfig.json",
+        "--roll-forward",
+        "Disable",
+        "<measurement-root>/new-pair-sequence/candidate/out/EngineRuntimeChecks.dll",
+        "--profile-new-pairs",
+        "<measurement-root>/new-pair-sequence/runs/3/candidate"
+      ],
+      "cwd": "<measurement-root>/source",
+      "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+      "harnessSha256": "1e0762ca60b8f4327d2d37026f32a3e0b94420d30428a6f85dfbb3f7626fee16",
+      "replicate": 3,
+      "variant": "candidate"
+    }
+  ],
+  "binaryInputs": {
+    "dlls": {
+      "baseline": {
+        "Basic.Reference.Assemblies.Net80.dll": "cce68524dbe4113224e86a2d6d4c75bba68fdc5398f178e6e814773341fd0187",
+        "CsvHelper.dll": "3d1a08960b8d55c74b088a64d47966fcf77a54a65bc2171f0275ee27bb330f6d",
+        "DotNetZip.dll": "eb9b84a3df6ae51759544ba04224a4f91454b8a81d54b37c846a4216bc72c15e",
+        "EngineRuntimeChecks.dll": "6843df750c4934918b5db8f3c90088044ea3a6b78fa1e0a246b4b8c6575ed0f8",
+        "FNA.dll": "f2eb9e915a8f8a4d4e8bcc4a8a00ace75f9c5f6895c3c46c0deff2174ec433fa",
+        "Hjson.dll": "d13a55406fdfbdf0f5185614ebfcf03b90f3ffca59ce49e0673dbe979015d083",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "ICSharpCode.Decompiler.dll": "d174072a16aa758a39d160f70ce924103898fae2b8506b48f70d6909e25a1fd0",
+        "JetBrains.Annotations.dll": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6",
+        "Luminance.dll": "a0d91baa68bc7ae50404c5a0ab550d5e267a6e9b0a685643d6e7233e7c74a73e",
+        "MP3Sharp.dll": "35172af5900041198f46571d1863e59bdd006c11c888e1fe9313c461e3655808",
+        "Microsoft.Build.Framework.dll": "9873b3623f56d31fe9d7047dab38a0690256404bab441ce0cfe70643be01f5de",
+        "Microsoft.Build.Locator.dll": "43005b7e4b274968c856bb2926b083484565dff7f7abb573a3eab853ec4c0546",
+        "Microsoft.Build.Tasks.Core.dll": "a6ed853de7e4f71c15fb4d556e6afac9b8ab086164d004c117c6e595c90e4cdc",
+        "Microsoft.Build.Utilities.Core.dll": "999e859a188beb9fc91a012a642ff8f637a34f462fbca2fb5652595739c4384c",
+        "Microsoft.Build.dll": "ffc96799384053c1db85ee7698a8783ffe423f75a22fde2e0d96ee762973615d",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "c63f6d8fdb79e443c37cce6a2248e04bfe2c82d4bda24b6c01ff1420e6a728b3",
+        "Microsoft.CodeAnalysis.CSharp.dll": "cfb5f2785c30485eda803d58fb8330d737cb07d469cd3d7bc1113d58e8d8e4bb",
+        "Microsoft.CodeAnalysis.ExternalAccess.RazorCompiler.dll": "76b81d7bb1ec7bdd42fd9a36a20b492394fdf0316797d42c97a7e69b583659d3",
+        "Microsoft.CodeAnalysis.FlowAnalysis.Utilities.dll": "652195a9b1824e5249fce7c0a2bc7e2740dfd91fc21fb155f0d9fd04f5fdbe7a",
+        "Microsoft.CodeAnalysis.Workspaces.MSBuild.dll": "62b59686df3b652223dfb4ce125afda35843b72ab97fadd4090716dfc657dee9",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "32402baa9383afd30e660af0bd3d23bdb7e596207afeac8c6b3ed6f6a5ca6f1d",
+        "Microsoft.CodeAnalysis.dll": "0a7fb1d94e0e7f46798b138caa67e5d5fb8fb98fd31b5294c917def057ab3d80",
+        "Microsoft.Extensions.DependencyInjection.Abstractions.dll": "a0106a638facae621f870eda720cb6c980c1d5d49c2f4351134e3fe043b9291b",
+        "Microsoft.Extensions.DependencyInjection.dll": "8d6e7b64cce554f0a0fbdb2ba80745895fa0b4e6cc378b9fedfe8ce86f0d8ae4",
+        "Microsoft.Extensions.Logging.Abstractions.dll": "29e6bfaf5ce079ad4d70dc547d966038992a7428df6e726084eb9010ec837715",
+        "Microsoft.Extensions.Logging.dll": "4330a5efe9d110afb7f8e567d5b43eee976e0f7f6802d13a211b65d747529179",
+        "Microsoft.Extensions.Options.dll": "5f9b0e589f1ce9ca656588cd92cc0bd53803fdfad258fb2916aaa14aedce682c",
+        "Microsoft.Extensions.Primitives.dll": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7",
+        "Microsoft.NET.StringTools.dll": "e9f3bb01c775d96594bcdddd3342dce8acb81882e03bfd37bf51bba890df84c2",
+        "Microsoft.VisualStudio.Setup.Configuration.Interop.dll": "a3a5aec9e3985d3beabe782f94ee0a25e9a3d7a696c9104b8b53daa8bb023d8e",
+        "Mono.Cecil.Mdb.dll": "28cb367972bdc1cd43e4006306af2fd96d37f4ed4b239ee90e1dc7237a93af7f",
+        "Mono.Cecil.Pdb.dll": "a332332633fbcb20e8d50e49b4db7bd1557721417122cf0c5f4c42f2332391d0",
+        "Mono.Cecil.Rocks.dll": "bf992f3dce364ebcc3200fa7832ef07e20b4e2dbc3a8a6213ce44e3d239db984",
+        "Mono.Cecil.dll": "831dca77470d85cb6ffbea3072daa7a3df5b7c9fcfd9c3f43674a9be99d4bfcf",
+        "MonoMod.Backports.dll": "ac3f32bfd44aab83abf71abdff6dde548d57b7c0f8a1fe6d8964e348b4eeafb1",
+        "MonoMod.Core.dll": "32d22e9aa161059518ddb5bd4c1403630a0a9cd882ed44ec2512e6576c8d33e8",
+        "MonoMod.ILHelpers.dll": "fdd0e3538340fd78b8f521e62b8cac1ebb7683ac1f27f6aaedfc1044b14bf4bb",
+        "MonoMod.Iced.dll": "7e5f24ff55c03771ca20d2d4a0cb0ca8fce0880380b40eb8edc14937f129efdf",
+        "MonoMod.RuntimeDetour.dll": "b6b2f83c9555727a5985b5b9b97d464aea68cc9c71fb0f869e0482f2e3fdce8a",
+        "MonoMod.Utils.dll": "cdd4a988be5adf4603099458069158eb7d08c93880ff2e1a471908f73aecc2bc",
+        "NVorbis.dll": "60ebe9b4034fa8e0528d835f04b876578802fba53151a9b8fec4b753681138df",
+        "Newtonsoft.Json.dll": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+        "ParticleLibrary.dll": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
+        "RailSDK.Net.dll": "fd820f99c0a559666bf0e7cf613742d268dbc679ae927538ea74f1028d12b87f",
+        "ReLogic.dll": "4da0da8b6c96634df26889aa3e815c6b7ab02af285a538821c797d2438a05aad",
+        "Steamworks.NET.dll": "99cd184f5eaf149947ab1fcad0d88782c35019172fbc35b1b39b62cf278d7fa5",
+        "SteelSeriesEngineWrapper.dll": "4ce15bef7981b85915d6366468524998047d8a2175495854a9bf8845a113db8a",
+        "Stubble.Core.dll": "7834f45dcf51dfd35a039de2008a87f16d2cbf7ad57bf129d5527e15bdad247e",
+        "System.CodeDom.dll": "4d33e2986a84d4460853e2b98d3a1ba9f8aa2950f7fa12ff6ad2e15a4bccfd18",
+        "System.Composition.AttributedModel.dll": "0f403e98d8bad390b970704a93aa532042409f499032823cac47e3004bad9c8a",
+        "System.Composition.Convention.dll": "88e716224482a702e3d44f02e6311b9d91fce9af506abf0482e8c5f82379034f",
+        "System.Composition.Hosting.dll": "8d9a239c7b03ce4a047ed0abd9e835db0feeaaa16c157e7d308603d03efb7ebc",
+        "System.Composition.Runtime.dll": "324acdfc86c5adaa12e9c4f40deacf1e9f45ac2e84e542a02d130e7380f79d6e",
+        "System.Composition.TypedParts.dll": "3100191a1448b9a613e04a63b65899cf74371fc2f5c03315aa40ab53468c7a24",
+        "System.Configuration.ConfigurationManager.dll": "89d52b4a10b13bf98698847a4daf5be995226550b18f85808dbf4e80ba714676",
+        "System.Diagnostics.EventLog.dll": "61c0b16a1d6091b4a34a2ebde9ba5968b2227d44a9a412a965f4f1f364a4ea65",
+        "System.IO.Pipelines.dll": "86d0f5bfaaf1b2ab19331b543a736d87b5b58e72158f4ded282122b2e6665f83",
+        "System.Reflection.MetadataLoadContext.dll": "5a06b29ff594231b4a1500ba426020426e2bc571769b89767a46c383b8b3d1f5",
+        "System.Resources.Extensions.dll": "ea33b0dde479df26ea8c0e06c67f8c3487a5024731de89f418bb66f74e6483d3",
+        "System.Security.Cryptography.Pkcs.dll": "c72cbab271cbd1bf888486176ac4494186da1b0f0b3629abe5664da930d2a98c",
+        "System.Security.Cryptography.ProtectedData.dll": "5e04d6cff3b6fe9706908970cd594861f0c08b3824f7827b2331b5f4fcee1bd1",
+        "System.Security.Cryptography.Xml.dll": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+        "System.Security.Permissions.dll": "ec27c1eea2ddd18929b07fc6094dd374ce38bc25d110a21dcc77b6373346f4ea",
+        "System.Text.Json.dll": "3c63e708c75c253df68359850a631ae443d8bd5924df5d02d08bc9e751c4fdcb",
+        "System.Windows.Extensions.dll": "878f568d394cbba6e52404891a24e462c2e5bcfe9f33e0f3c1f30de8ca6d8348",
+        "TerrariaHooks.dll": "723ecf395796e730bcaef5261b3d37bbb83f4066b3e5920bdb87e08191b5f4c1",
+        "UtfUnknown.dll": "503e00a8b6ed5e0fc8288c70d73c78a629c5c4401cdfcbeac04983bdbb3be05d",
+        "log4net.dll": "74806995c34a8666fc6b3a474f0622ca7e90d336a9c21f88ea4458478ff24277",
+        "tModLoader.dll": "bf2ca4d53512d064fae664170a0d21ecc5e2ed51b5e917d871ec78cc449263e9",
+        "tModPorter.dll": "b5b06f62bfcfe3a650e077c2750e07688ba0f14969f529b522884f9a27122a0d"
+      },
+      "candidate": {
+        "Basic.Reference.Assemblies.Net80.dll": "cce68524dbe4113224e86a2d6d4c75bba68fdc5398f178e6e814773341fd0187",
+        "CsvHelper.dll": "3d1a08960b8d55c74b088a64d47966fcf77a54a65bc2171f0275ee27bb330f6d",
+        "DotNetZip.dll": "eb9b84a3df6ae51759544ba04224a4f91454b8a81d54b37c846a4216bc72c15e",
+        "EngineRuntimeChecks.dll": "1e0762ca60b8f4327d2d37026f32a3e0b94420d30428a6f85dfbb3f7626fee16",
+        "FNA.dll": "f2eb9e915a8f8a4d4e8bcc4a8a00ace75f9c5f6895c3c46c0deff2174ec433fa",
+        "Hjson.dll": "d13a55406fdfbdf0f5185614ebfcf03b90f3ffca59ce49e0673dbe979015d083",
+        "Humanizer.dll": "d6853075547d7e303efd60354d911a2ff18edba582cda2fa59d91a2e5dcf9e98",
+        "ICSharpCode.Decompiler.dll": "d174072a16aa758a39d160f70ce924103898fae2b8506b48f70d6909e25a1fd0",
+        "JetBrains.Annotations.dll": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6",
+        "Luminance.dll": "a0d91baa68bc7ae50404c5a0ab550d5e267a6e9b0a685643d6e7233e7c74a73e",
+        "MP3Sharp.dll": "35172af5900041198f46571d1863e59bdd006c11c888e1fe9313c461e3655808",
+        "Microsoft.Build.Framework.dll": "9873b3623f56d31fe9d7047dab38a0690256404bab441ce0cfe70643be01f5de",
+        "Microsoft.Build.Locator.dll": "43005b7e4b274968c856bb2926b083484565dff7f7abb573a3eab853ec4c0546",
+        "Microsoft.Build.Tasks.Core.dll": "a6ed853de7e4f71c15fb4d556e6afac9b8ab086164d004c117c6e595c90e4cdc",
+        "Microsoft.Build.Utilities.Core.dll": "999e859a188beb9fc91a012a642ff8f637a34f462fbca2fb5652595739c4384c",
+        "Microsoft.Build.dll": "ffc96799384053c1db85ee7698a8783ffe423f75a22fde2e0d96ee762973615d",
+        "Microsoft.CodeAnalysis.CSharp.Workspaces.dll": "c63f6d8fdb79e443c37cce6a2248e04bfe2c82d4bda24b6c01ff1420e6a728b3",
+        "Microsoft.CodeAnalysis.CSharp.dll": "cfb5f2785c30485eda803d58fb8330d737cb07d469cd3d7bc1113d58e8d8e4bb",
+        "Microsoft.CodeAnalysis.ExternalAccess.RazorCompiler.dll": "76b81d7bb1ec7bdd42fd9a36a20b492394fdf0316797d42c97a7e69b583659d3",
+        "Microsoft.CodeAnalysis.FlowAnalysis.Utilities.dll": "652195a9b1824e5249fce7c0a2bc7e2740dfd91fc21fb155f0d9fd04f5fdbe7a",
+        "Microsoft.CodeAnalysis.Workspaces.MSBuild.dll": "62b59686df3b652223dfb4ce125afda35843b72ab97fadd4090716dfc657dee9",
+        "Microsoft.CodeAnalysis.Workspaces.dll": "32402baa9383afd30e660af0bd3d23bdb7e596207afeac8c6b3ed6f6a5ca6f1d",
+        "Microsoft.CodeAnalysis.dll": "0a7fb1d94e0e7f46798b138caa67e5d5fb8fb98fd31b5294c917def057ab3d80",
+        "Microsoft.Extensions.DependencyInjection.Abstractions.dll": "a0106a638facae621f870eda720cb6c980c1d5d49c2f4351134e3fe043b9291b",
+        "Microsoft.Extensions.DependencyInjection.dll": "8d6e7b64cce554f0a0fbdb2ba80745895fa0b4e6cc378b9fedfe8ce86f0d8ae4",
+        "Microsoft.Extensions.Logging.Abstractions.dll": "29e6bfaf5ce079ad4d70dc547d966038992a7428df6e726084eb9010ec837715",
+        "Microsoft.Extensions.Logging.dll": "4330a5efe9d110afb7f8e567d5b43eee976e0f7f6802d13a211b65d747529179",
+        "Microsoft.Extensions.Options.dll": "5f9b0e589f1ce9ca656588cd92cc0bd53803fdfad258fb2916aaa14aedce682c",
+        "Microsoft.Extensions.Primitives.dll": "446ff16e903e7479558816e213a3adee9a1c1adad65a56d853801b10933e29d7",
+        "Microsoft.NET.StringTools.dll": "e9f3bb01c775d96594bcdddd3342dce8acb81882e03bfd37bf51bba890df84c2",
+        "Microsoft.VisualStudio.Setup.Configuration.Interop.dll": "a3a5aec9e3985d3beabe782f94ee0a25e9a3d7a696c9104b8b53daa8bb023d8e",
+        "Mono.Cecil.Mdb.dll": "28cb367972bdc1cd43e4006306af2fd96d37f4ed4b239ee90e1dc7237a93af7f",
+        "Mono.Cecil.Pdb.dll": "a332332633fbcb20e8d50e49b4db7bd1557721417122cf0c5f4c42f2332391d0",
+        "Mono.Cecil.Rocks.dll": "bf992f3dce364ebcc3200fa7832ef07e20b4e2dbc3a8a6213ce44e3d239db984",
+        "Mono.Cecil.dll": "831dca77470d85cb6ffbea3072daa7a3df5b7c9fcfd9c3f43674a9be99d4bfcf",
+        "MonoMod.Backports.dll": "ac3f32bfd44aab83abf71abdff6dde548d57b7c0f8a1fe6d8964e348b4eeafb1",
+        "MonoMod.Core.dll": "32d22e9aa161059518ddb5bd4c1403630a0a9cd882ed44ec2512e6576c8d33e8",
+        "MonoMod.ILHelpers.dll": "fdd0e3538340fd78b8f521e62b8cac1ebb7683ac1f27f6aaedfc1044b14bf4bb",
+        "MonoMod.Iced.dll": "7e5f24ff55c03771ca20d2d4a0cb0ca8fce0880380b40eb8edc14937f129efdf",
+        "MonoMod.RuntimeDetour.dll": "b6b2f83c9555727a5985b5b9b97d464aea68cc9c71fb0f869e0482f2e3fdce8a",
+        "MonoMod.Utils.dll": "cdd4a988be5adf4603099458069158eb7d08c93880ff2e1a471908f73aecc2bc",
+        "NVorbis.dll": "60ebe9b4034fa8e0528d835f04b876578802fba53151a9b8fec4b753681138df",
+        "Newtonsoft.Json.dll": "22c649f75fce5be7c7ccda8880473b634ef69ecf33f5d1ab8ad892caf47d5a07",
+        "ParticleLibrary.dll": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
+        "RailSDK.Net.dll": "fd820f99c0a559666bf0e7cf613742d268dbc679ae927538ea74f1028d12b87f",
+        "ReLogic.dll": "4da0da8b6c96634df26889aa3e815c6b7ab02af285a538821c797d2438a05aad",
+        "Steamworks.NET.dll": "99cd184f5eaf149947ab1fcad0d88782c35019172fbc35b1b39b62cf278d7fa5",
+        "SteelSeriesEngineWrapper.dll": "4ce15bef7981b85915d6366468524998047d8a2175495854a9bf8845a113db8a",
+        "Stubble.Core.dll": "7834f45dcf51dfd35a039de2008a87f16d2cbf7ad57bf129d5527e15bdad247e",
+        "System.CodeDom.dll": "4d33e2986a84d4460853e2b98d3a1ba9f8aa2950f7fa12ff6ad2e15a4bccfd18",
+        "System.Composition.AttributedModel.dll": "0f403e98d8bad390b970704a93aa532042409f499032823cac47e3004bad9c8a",
+        "System.Composition.Convention.dll": "88e716224482a702e3d44f02e6311b9d91fce9af506abf0482e8c5f82379034f",
+        "System.Composition.Hosting.dll": "8d9a239c7b03ce4a047ed0abd9e835db0feeaaa16c157e7d308603d03efb7ebc",
+        "System.Composition.Runtime.dll": "324acdfc86c5adaa12e9c4f40deacf1e9f45ac2e84e542a02d130e7380f79d6e",
+        "System.Composition.TypedParts.dll": "3100191a1448b9a613e04a63b65899cf74371fc2f5c03315aa40ab53468c7a24",
+        "System.Configuration.ConfigurationManager.dll": "89d52b4a10b13bf98698847a4daf5be995226550b18f85808dbf4e80ba714676",
+        "System.Diagnostics.EventLog.dll": "61c0b16a1d6091b4a34a2ebde9ba5968b2227d44a9a412a965f4f1f364a4ea65",
+        "System.IO.Pipelines.dll": "86d0f5bfaaf1b2ab19331b543a736d87b5b58e72158f4ded282122b2e6665f83",
+        "System.Reflection.MetadataLoadContext.dll": "5a06b29ff594231b4a1500ba426020426e2bc571769b89767a46c383b8b3d1f5",
+        "System.Resources.Extensions.dll": "ea33b0dde479df26ea8c0e06c67f8c3487a5024731de89f418bb66f74e6483d3",
+        "System.Security.Cryptography.Pkcs.dll": "c72cbab271cbd1bf888486176ac4494186da1b0f0b3629abe5664da930d2a98c",
+        "System.Security.Cryptography.ProtectedData.dll": "5e04d6cff3b6fe9706908970cd594861f0c08b3824f7827b2331b5f4fcee1bd1",
+        "System.Security.Cryptography.Xml.dll": "deb76d308c6e93e76b92de651a749d29e63b756ed34d514060b7a7b63c20389f",
+        "System.Security.Permissions.dll": "ec27c1eea2ddd18929b07fc6094dd374ce38bc25d110a21dcc77b6373346f4ea",
+        "System.Text.Json.dll": "3c63e708c75c253df68359850a631ae443d8bd5924df5d02d08bc9e751c4fdcb",
+        "System.Windows.Extensions.dll": "878f568d394cbba6e52404891a24e462c2e5bcfe9f33e0f3c1f30de8ca6d8348",
+        "TerrariaHooks.dll": "723ecf395796e730bcaef5261b3d37bbb83f4066b3e5920bdb87e08191b5f4c1",
+        "UtfUnknown.dll": "503e00a8b6ed5e0fc8288c70d73c78a629c5c4401cdfcbeac04983bdbb3be05d",
+        "log4net.dll": "74806995c34a8666fc6b3a474f0622ca7e90d336a9c21f88ea4458478ff24277",
+        "tModLoader.dll": "bf2ca4d53512d064fae664170a0d21ecc5e2ed51b5e917d871ec78cc449263e9",
+        "tModPorter.dll": "b5b06f62bfcfe3a650e077c2750e07688ba0f14969f529b522884f9a27122a0d"
+      }
+    },
+    "dependenciesEqualExceptHarness": true,
+    "runtimeConfigSha256": "41aedcf32c0ca3b4765bb8c16df56b03e1bb494049e1851b0a4775b8724ce18d",
+    "extraHarnessSourceSha256": "7ee40636ea1b5192579777fd50c0c476290ac20b06ff18023bd4dad026c7ffe2",
+    "buildScriptSha256": "23c1df297a5058274aaced56c871ff6387ea42d51847de06488ac0c316a9f7a3"
+  },
+  "sourceInputsUnchanged": true,
+  "validation": {
+    "status": "passed",
+    "requestsValidated": 48,
+    "crossVariantPayloadComparisons": 24,
+    "allBytesEqual": true,
+    "withinVariantStableAcrossAllReplicates": true,
+    "nativeInputDefaultsStableAcrossAllRuns": true,
+    "productionSourcesUnchanged": true,
+    "sourceInputFilesPerVariant": {
+      "baseline": 471,
+      "candidate": 471
+    },
+    "packs": {
+      "baseline": {
+        "status": "current",
+        "projectionSha256": "30cf1a286c05377be5864ce0f9ade3d15a69c6ef35a2d2ef41ebbfb8588eae63",
+        "sourceFiles": 30,
+        "packSha256": "cd3748e38f9d4373c43800a2516abf4a04866d37b8d9c448b48db8c0bac6f3bc",
+        "entries": 13372
+      },
+      "candidate": {
+        "status": "current",
+        "projectionSha256": "3aa167116ea4c806327725d6686d42bd041806fb09328032b757c4c1c6a7ac35",
+        "sourceFiles": 30,
+        "packSha256": "968c6edca4ce573ba710aac546f5af90ca74bb6a15c2762d21595f43416ad5b1",
+        "entries": 14526
+      }
+    },
+    "harnessAndDependencyHashesUnchanged": true,
+    "notes": "Validation performed only after all fresh measured processes exited; no prewarm."
+  }
+}

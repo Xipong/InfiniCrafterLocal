@@ -4,12 +4,18 @@
 .nuget/
 .tml-build-cache/
 agent_reports/
+artifacts/
 build_logs/
 
 **/bin/
 **/obj/
 **/__pycache__/
 **/.pytest_cache/
+**/.ruff_cache/
+**/.hypothesis/
+**/.venv/
+**/.venv-dev/
+**/venv/
 
 *.dll
 *.pdb
@@ -21,11 +27,11 @@ build_logs/
 *.bak_*
 *:Zone.Identifier
 
-LocalGenerator/cache/
-LocalGenerator/images/
-LocalGenerator/output/
-LocalGenerator/outputs/
-LocalGenerator/generated_assets/
-LocalGenerator/debug_output/
-LocalGenerator/prompt_traces/
-LocalGenerator/data/Runtime_dumps/
+generator/cache/
+generator/images/
+generator/output/
+generator/outputs/
+generator/generated_assets/
+generator/debug_output/
+generator/prompt_traces/
+generator/data/Runtime_dumps/

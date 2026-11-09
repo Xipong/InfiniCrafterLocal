@@ -2,9 +2,9 @@
 
 ## Текущий selector domain
 
-Доступны **84 exact `SoundID`**. Canonical domain берётся у owner ниже; [независимый inventory fixture](../../../LocalGenerator/tests/fixtures/vfx_sound_inventory.json) сохраняет reference mapping, не альтернативный runtime selector.
+Доступны **84 exact `SoundID`**. Canonical domain берётся у owner ниже; [независимый inventory fixture](../../../tests/generator/fixtures/vfx_sound_inventory.json) сохраняет reference mapping, не альтернативный runtime selector.
 
-Канонический runtime-facing owner — [`core/vfx/contract.py`](../../../LocalGenerator/infini_local/core/vfx/contract.py): `_SOUND_IDS` определяет один finite selector domain, `_sound_schema()` — три playback controls. Director, Repair и persisted wire берут определения отсюда. Gameplay Author не получает звуковых capabilities. Выбор не зависит от названия, класса урона, parent prose, размера visual budget или категории оружия.
+Канонический runtime-facing owner — [`core/vfx/contract.py`](../../../generator/infini_local/core/vfx/contract.py): `_SOUND_IDS` определяет один finite selector domain, `_sound_schema()` — три playback controls. Director, Repair и persisted wire берут определения отсюда. Gameplay Author не получает звуковых capabilities. Выбор не зависит от названия, класса урона, parent prose, размера visual budget или категории оружия.
 
 Прежние acoustic IDs вроде `bow_release` используются только как историческое свидетельство. Они не входят в новый enum и не запускают routing. Модель передаёт конкретный `SoundID`, например `Item5`, `Item58`, `Item71`, `Item152` или `Item169`.
 
@@ -39,7 +39,7 @@
 
 ## Native projection
 
-[`VfxSoundSpec`](../../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxSoundSpec.cs) — строгий DTO с тремя обязательными числовыми полями. [`VfxSlotSpec.ResolveSoundStyle`](../../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) выбирает общий путь для item, projectile и detached events.
+[`VfxSoundSpec`](../../../mod/InfiniCrafterLocal/Common/Models/Presentation/VfxSoundSpec.cs) — строгий DTO с тремя обязательными числовыми полями. [`VfxSlotSpec.ResolveSoundStyle`](../../../mod/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) выбирает общий путь для item, projectile и detached events.
 
 Преобразование относится к **Alias Lowering**: конкретный зарегистрированный `soundId` однозначно выбирает native sample; три literal playback fields проецируются без изменения значений. Код не выбирает sample, тон или громкость за модель. Публичный `SoundStyle` constructor получает exact native path/variants/type; затем сохраняются `Identifier`, `MaxInstances`, `SoundLimitBehavior`, `RerollAttempts`, `LimitsArePerVariant`, `PlayOnlyIfFocused`, `PauseBehavior`, `IsLooped` и variant weights. Три authored controls заменяют только соответствующие playback scalars.
 
@@ -74,8 +74,8 @@ Compiler сохраняет `soundId` и controls без числовой normal
 
 ## Проверки и пределы доказательства
 
-Python tests сверяют все 84 selectors с независимым inventory и schema vocabulary; representative numeric/named samples проверяются на item/projectile bindings через настоящий offline Director transport. Дополнительно проверяются full/partial/invalid controls, old-absence refusal, нули, границы, JSON-object/JSON-schema Repair, frozen neighbors, delivery/cache admission и mutation compiler receipts. Независимый historical inventory не строится из production `_SOUND_IDS`. C# source scanner сверяет exact native mapping с canonical owner, DTO surface, общую playback projection, нулевую громкость и сохранение native policies; отдельные mutants ломают каждый из этих путей.
+Python tests сверяют все 84 selectors с независимым inventory и schema vocabulary; representative numeric/named samples проверяются на item/projectile bindings через настоящий offline Director transport. Дополнительно проверяются full/partial/invalid controls, old-absence refusal, нули, границы, JSON-object/JSON-schema Repair, frozen neighbors, delivery/cache admission и mutation compiler receipts. Независимый historical inventory не строится из production `_SOUND_IDS`. C# sample resolution и playback controls проверяются native consumer checks, не source-scanner соответствием.
 
-[`EngineRuntimeChecks.SoundSelection.cs`](../../../tools/native/EngineRuntimeChecks.SoundSelection.cs) проверяет явные selections/controls по всем samples и item/projectile periodic/event и detached routes. Отказ старой absence через native readers и playback resolver покрывает [`EngineRuntimeChecks.NativeDtoRetirement.cs`](../../../tools/native/EngineRuntimeChecks.NativeDtoRetirement.cs). SoundSelection наблюдает настоящий `SoundEngine.PlaySound` boundary, JSON roundtrips, interval rejection, явную тишину, native policy copy и `GetRandomPitch`; instrument flag наблюдается только в тесте. Тесты не открывают audio device и не доказывают художественное качество или audibility в игре.
+[`EngineRuntimeChecks.SoundSelection.cs`](../../../tests/native/presentation/EngineRuntimeChecks.SoundSelection.cs) проверяет явные selections/controls по всем samples и item/projectile periodic/event и detached routes. Отказ старой absence через native readers и playback resolver покрывает [`EngineRuntimeChecks.NativeDtoRetirement.cs`](../../../tests/native/gameplay/EngineRuntimeChecks.NativeDtoRetirement.cs). SoundSelection наблюдает настоящий `SoundEngine.PlaySound` boundary, JSON roundtrips, interval rejection, явную тишину, native policy copy и `GetRandomPitch`; instrument flag наблюдается только в тесте. Тесты не открывают audio device и не доказывают художественное качество или audibility в игре.
 
 Нативный runner исполняется отдельно от Python tests и требует matching tModLoader/dependency assemblies. Команды SDK build/headless EngineRuntimeChecks и границы среды — [TESTING](../../development/TESTING_RU.md). Исполненный headless sound seam не является SP/MP game/audio smoke или художественной приёмкой.

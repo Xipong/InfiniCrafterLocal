@@ -2,11 +2,11 @@
   "schema": "infini.toolbox-panel.v1",
   "id": "live10-midgame",
   "command": "live10",
-  "title": "Исторический Live10 midgame / преимущественно early Hardmode",
-  "historical": true,
-  "runtimeDump": "../parents/live10-midgame.jsonl",
-  "provenance": "Original live10-luna6-high-midgame-20261011-0335 cases and caseIndex order; exact frozen parent rows from the historical runtime dump.",
-  "notes": "Исходные 10 пар, порядок и ориентация A/B. Не subset Live20; не переносятся старые model/provider settings или ответы.",
+  "title": "Live10 midgame + Nebula Blaze / Last Prism",
+  "historical": false,
+  "runtimeDump": null,
+  "provenance": "Revised 2026-11-06 from the historical midgame roster: nine original routes, meteor_star_cannon replaced by nebula_prism.",
+  "notes": "Current runtime dump required. Star Cannon + Meteor Staff duplicated rain coverage and costly ammo/mana use; Nebula Blaze + Last Prism adds conditional and channelled-beam coverage. Not the unchanged historical cohort.",
   "sources": {
     "roster": {
       "path": "artifacts/live10-luna6-high-midgame-20261011-0335/cases.json",
@@ -64,9 +64,10 @@
       "itemB": "SoulofLight"
     },
     {
-      "case": "meteor_star_cannon",
-      "itemA": "StarCannon",
-      "itemB": "MeteorStaff"
+      "case": "nebula_prism",
+      "itemA": "NebulaBlaze",
+      "itemB": "LastPrism"
     }
-  ]
+  ],
+  "requiresRuntimeDump": true
 }

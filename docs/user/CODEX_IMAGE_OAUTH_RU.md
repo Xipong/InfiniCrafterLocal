@@ -64,10 +64,10 @@
 
 ## Команды для ручного запуска
 
-**Необязательно.** После подготовки окружения открой Windows-терминал в корне распакованного проекта. Перейди в `LocalGenerator`, чтобы Python нашёл модуль приложения:
+**Необязательно.** После подготовки окружения открой Windows-терминал в корне распакованного проекта. Перейди в `generator`, чтобы Python нашёл модуль приложения:
 
 ```console
-cd LocalGenerator
+cd generator
 .venv\Scripts\python.exe -m infini_local.services.codex_auth status
 .venv\Scripts\python.exe -m infini_local.services.codex_auth login
 .venv\Scripts\python.exe -m infini_local.services.codex_auth logout

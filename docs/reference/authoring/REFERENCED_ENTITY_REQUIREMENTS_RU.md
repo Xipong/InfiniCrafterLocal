@@ -14,7 +14,7 @@ Registry остаётся owner значения и диапазонов. `equal
 поэтому `false` и `0.0` не заменяют integer `0`.
 
 Оба вида reference requirements исключены из dependency closure **текущей**
-source entity. Требуемый `configure_spawn` принадлежит referenced child, поэтому
+source entity. Требуемый `spawn` принадлежит referenced child, поэтому
 исправление одного range leaf у source не даёт права добавлять ей spawn/movement.
 Только reference blocker открывает отдельный complete-child create slice.
 

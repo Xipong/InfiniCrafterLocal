@@ -2,7 +2,7 @@
 # https://github.com/tModLoader/tModLoader/blob/stable/patches/tModLoader/Terraria/release_extras/tMLMod.targets
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$project = Join-Path $root 'ModSources/InfiniCrafterLocal'
+$project = Join-Path $root 'mod/InfiniCrafterLocal'
 $output = Join-Path $root 'artifacts/package'
 New-Item -ItemType Directory -Force $output | Out-Null
 # Assemble the private interpreter, pinned wheels and Studio/generator resources.
@@ -39,6 +39,28 @@ $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($asset[0].digest -and $asset[0].digest -ne "sha256:$zipHash") { throw 'Official tML asset digest mismatch.' }
 $runtime = Join-Path $work 'runtime'
 Expand-Archive $zip $runtime
+$runtimeExecution = & (Join-Path $PSScriptRoot 'prepare_tml_runtime.ps1') -TmlRuntime $runtime -Destination (Join-Path $work 'exact-runtime')
+# Build source projections on the release target with the same actual native
+# dependency bytes. A pack produced on another OS/runtime is never presumed to
+# match this deployment; the runtime also verifies every dependency before use.
+$nativeReferences = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
+    $candidate = Join-Path $_ ($tml[0].Value.path + '/lib/net8.0')
+    if (Test-Path (Join-Path $candidate 'tModLoader.dll')) { $candidate }
+})
+if ($nativeReferences.Count -ne 1) { throw 'Could not uniquely locate tModLoader references for source pack generation.' }
+if ((Get-FileHash (Join-Path $nativeReferences[0] 'tModLoader.dll') -Algorithm SHA256).Hash -ne
+    (Get-FileHash (Join-Path $runtime 'tModLoader.dll') -Algorithm SHA256).Hash) {
+    throw 'Source pack build references differ from the official release runtime.'
+}
+$sourcePack = Join-Path $project 'Data/native-source-pack.zip'
+$sourcePackBootstrap = Join-Path $work 'native-source-pack-harness'
+& python (Join-Path $root 'tools/generate/build_native_source_pack.py') --build --tml-references $nativeReferences[0] --external-deps $env:INFINI_TML_DEPS_SRC --harness-output $sourcePackBootstrap --output $sourcePack --runtime-dotnet $runtimeExecution.RuntimeDotnet --runtimeconfig $runtimeExecution.RuntimeConfig --target-rid win-x64 2>&1 | Tee-Object (Join-Path $output 'native-source-pack-build.log')
+if ($LASTEXITCODE -ne 0) { throw 'Complete native source pack generation failed.' }
+& python (Join-Path $root 'tools/generate/build_native_source_pack.py') --check --output $sourcePack --tml-references $nativeReferences[0]
+if ($LASTEXITCODE -ne 0) { throw 'Native source pack input or payload verification failed.' }
+# Keep the full identity/gap build receipt as release evidence, outside the mod.
+Move-Item ($sourcePack + '.report.json') (Join-Path $output 'native-source-pack-build.json') -Force
+Copy-Item (Join-Path $sourcePackBootstrap 'native-target-staging.json') (Join-Path $output 'native-target-staging.json') -Force
 # Release optimization, same resolved references as the compilation/native gate.
 & dotnet build (Join-Path $project 'InfiniCrafterLocal.csproj') -c Release --no-restore -warnaserror /p:TmlBuildMod=false
 if ($LASTEXITCODE -ne 0) { throw 'Release assembly build failed.' }
@@ -47,7 +69,7 @@ if (!(Test-Path $dll)) { throw 'Release DLL missing.' }
 $save = Join-Path $work 'save'
 Push-Location $runtime
 try {
-    & dotnet tModLoader.dll -server -build $project -eac $dll -tmlsavedirectory $save 2>&1 | Tee-Object (Join-Path $output 'packaging.log')
+    & $runtimeExecution.RuntimeDotnet exec --runtimeconfig $runtimeExecution.RuntimeConfig --roll-forward Disable tModLoader.dll -server -build $project -eac $dll -tmlsavedirectory $save 2>&1 | Tee-Object (Join-Path $output 'packaging.log')
     if ($LASTEXITCODE -ne 0) { throw "Official tML packager failed ($LASTEXITCODE)." }
 }
 finally { Pop-Location }
@@ -67,6 +89,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Package verification failed.' }
     particleLibrarySha256 = (Get-FileHash (Join-Path $env:INFINI_TML_DEPS_SRC 'ParticleLibrary/ParticleLibrary.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     luminanceSha256 = (Get-FileHash (Join-Path $env:INFINI_TML_DEPS_SRC 'Luminance/bin/Debug/net8.0/Luminance.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
     packageSha256 = (Get-FileHash $tmod -Algorithm SHA256).Hash.ToLowerInvariant()
+    nativeSourcePackSha256 = (Get-FileHash $sourcePack -Algorithm SHA256).Hash.ToLowerInvariant()
+    nativeSourcePackBuild = (Get-Content (Join-Path $output 'native-source-pack-build.json') -Raw | ConvertFrom-Json | Select-Object schema, status, projectionSha256, nativeAssemblySha256, decompilerAssemblySha256, collectorAssemblySha256, runtimeVersion, collectorLaunch, projectileCount, itemCount, capturedIdentities, packSha256, packBytes)
     studioManifest = (Get-Content (Join-Path $project 'Studio/manifest.json') -Raw | ConvertFrom-Json)
     studioRuntimeSmoke = 'passed: embedded interpreter imports, HTTP frontend and managed shutdown'
     runtimeSmoke = 'notRun: packaging does not launch the game'

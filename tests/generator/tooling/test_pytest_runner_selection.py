@@ -1,0 +1,979 @@
+"""Offline selection contracts for the two supported pytest roots."""
+from __future__ import annotations
+from suite_paths import REPO_ROOT
+
+from pathlib import Path
+import json
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+ROOT = REPO_ROOT
+sys.path.insert(0, str(ROOT))
+from tools import agentctl  # noqa: E402
+from tools.testing import run_changed_pytests as changed  # noqa: E402
+from tools.testing import run_focused_pytests as focused  # noqa: E402
+from tools.testing import run_pytest_shards as shards  # noqa: E402
+
+
+def _git_status(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [line[3:] for line in status.splitlines() if line])
+
+
+def test_production_change_selects_existing_owner_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    _git_status(monkeypatch, " M generator/infini_local/core/runtime_authoring/program_schema.py\n")
+    plan = changed.build_plan()
+    assert "tests/generator/authoring/test_registry_vertical_contract.py" in plan["selected"]
+    assert "tests/generator/studio/test_web_studio.py" not in plan["selected"]
+    assert plan["mode"] == "owner_areas"
+    assert plan["fullSelectionTriggers"] == []
+    assert plan["releaseReady"] is False
+
+
+def test_no_changed_paths_is_not_a_test_pass(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    _git_status(monkeypatch, "")
+    assert changed.main([]) == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "not_selected"
+    assert report["ok"] is False
+    assert report["selected"] == []
+
+
+@pytest.mark.parametrize("path", [
+    "pyproject.toml", "generator/infini_local/new_owner.py", "toolbox/fixtures/items.jsonl",
+    "tests/generator/conftest.py", "tests/generator/**/test_deleted.py",
+])
+def test_shared_config_or_deleted_test_selects_both_roots(
+    monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    status = " D " if path.endswith("test_deleted.py") else " M "
+    _git_status(monkeypatch, status + path + "\n")
+    assert changed.build_plan()["selected"] == ["tests/generator", "tests/toolbox"]
+
+
+def test_changed_runner_does_not_select_external_symlink(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "repo"
+    test_root = root / "tests/toolbox"
+    test_root.mkdir(parents=True)
+    outside = tmp_path / "test_external.py"
+    outside.write_text("def test_external(): pass\n", encoding="utf-8")
+    (test_root / "test_external.py").symlink_to(outside)
+    monkeypatch.setattr(changed, "ROOT", root)
+    monkeypatch.setattr(agentctl, "ROOT", root)
+    _git_status(monkeypatch, "?? tests/toolbox/test_external.py\n")
+    plan = changed.build_plan()
+    assert plan["changedModules"] == []
+    assert plan["selected"] == ["tests/generator", "tests/toolbox"]
+
+
+def test_changed_toolbox_module_is_selected_without_broad_collection(monkeypatch: pytest.MonkeyPatch) -> None:
+    _git_status(monkeypatch, " M tests/toolbox/test_live20_support_v5.py\n")
+    plan = changed.build_plan()
+    assert plan["mode"] == "changed_modules"
+    assert plan["selected"] == ["tests/toolbox/test_live20_support_v5.py"]
+    assert plan["uncoveredChangePaths"] == []
+
+
+@pytest.mark.parametrize("doc", ["docs/overview.md", "README.md", "AGENTS.md", "START_HERE.html"])
+def test_selected_subset_with_uncovered_docs_is_not_a_complete_pass(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], doc: str
+) -> None:
+    status = f" M tests/toolbox/test_live20_support_v5.py\n M {doc}\n"
+    def fake_run(cmd, **kw):
+        if cmd[:2] == ["git", "status"]:
+            return SimpleNamespace(returncode=0, stdout=status, stderr="")
+        return SimpleNamespace(returncode=0, stdout="1 passed", stderr="")
+    _git_status(monkeypatch, status)
+    monkeypatch.setattr(changed.subprocess, "run", fake_run)
+    assert changed.main([]) == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "partial"
+    assert report["uncoveredChangePaths"] == [doc]
+    assert report["selected"] == ["tests/toolbox/test_live20_support_v5.py"]
+
+
+def test_focused_accepts_toolbox_test_but_rejects_outside_and_non_tests() -> None:
+    assert focused._safe_test_path("tests/toolbox/test_live20_support_v5.py") == ROOT / "tests/toolbox/test_live20_support_v5.py"
+    for raw in ("toolbox/live-generation", "tests/toolbox/../live-generation", "tools/testing/run_pytest_shards.py"):
+        with pytest.raises(ValueError):
+            focused._safe_test_path(raw)
+
+
+def test_focused_forces_offline_config_even_if_parent_enables_live(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("INFINI_TEST_USE_PROJECT_CONFIG", "1")
+    monkeypatch.setattr(focused.sys, "argv", ["run_focused_pytests.py", "tests/toolbox/test_live20_support_v5.py"])
+    def fake_run(command, **kwargs):
+        assert kwargs["env"]["INFINI_TEST_USE_PROJECT_CONFIG"] == "0"
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(focused.subprocess, "run", fake_run)
+    assert focused.main() == 0
+
+
+def test_shard_inventory_includes_toolbox_offline_tests() -> None:
+    files = {path.relative_to(ROOT).as_posix() for path in shards._test_files()}
+    assert "tests/generator/tooling/test_pytest_runner_selection.py" in files
+    assert "tests/toolbox/test_live20_support_v5.py" in files
+
+
+def test_shard_inventory_rejects_symlink_outside_supported_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = tmp_path / "tests/toolbox"
+    root.mkdir(parents=True)
+    outside = tmp_path / "test_external.py"
+    outside.write_text("def test_external(): pass\n", encoding="utf-8")
+    (root / "test_external.py").symlink_to(outside)
+    monkeypatch.setattr(shards, "TEST_ROOTS", (root,))
+    assert shards._test_files() == []
+
+
+@pytest.mark.parametrize("local_count", [1, 4], ids=["single-batch", "bounded-batches"])
+def test_shard_sandbox_executes_both_roots_with_repo_relative_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, local_count: int
+) -> None:
+    repo = tmp_path / "repo"
+    local = repo / "tests/generator/tooling/test_local_selection.py"
+    toolbox = repo / "tests/toolbox/test_toolbox_selection.py"
+    for metadata in (repo / ".gitnexus/index.db", repo / ".gitnexusrc"):
+        metadata.parent.mkdir(parents=True, exist_ok=True)
+        metadata.write_text("workspace index is not a test dependency", encoding="utf-8")
+    locals_ = [local, *[local.with_name(f"test_local_selection_{i}.py") for i in range(1, local_count)]]
+    files = [*locals_, toolbox]
+    for test_file in files:
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text("import os\nfrom pathlib import Path\nfrom infini_local import OFFLINE_MARKER\n\ndef test_offline():\n    assert OFFLINE_MARKER == 2\n    assert os.environ['INFINI_TEST_USE_PROJECT_CONFIG'] == '0'\n    assert (Path.cwd() / 'generator/infini_local').is_dir()\n    assert not (Path.cwd() / '.gitnexus').exists()\n    assert not (Path.cwd() / '.gitnexusrc').exists()\n", encoding="utf-8")
+    (repo / "toolbox").mkdir()
+    (repo / "toolbox/__init__.py").write_text("OFFLINE_MARKER = 1\n", encoding="utf-8")
+    (repo / "generator/infini_local").mkdir(parents=True)
+    (repo / "generator/infini_local/__init__.py").write_text("OFFLINE_MARKER = 2\n", encoding="utf-8")
+    toolbox.write_text("from toolbox import OFFLINE_MARKER\n\ndef test_offline():\n    assert OFFLINE_MARKER == 1\n", encoding="utf-8")
+    monkeypatch.setenv("INFINI_TEST_USE_PROJECT_CONFIG", "1")
+    monkeypatch.setattr(shards, "ROOT", repo)
+    monkeypatch.setattr(shards, "TEST_ROOTS", (repo / "tests/generator", repo / "tests/toolbox"))
+    assert shards._test_files() == files
+    monkeypatch.setattr(shards, "missing_full_test_dependencies", lambda: [])
+    report = shards.run(shard_count=1, timeout_seconds=30)
+    assert report["status"] == "passed", json.dumps(report, ensure_ascii=False)
+    assert report["passed"] == len(files)
+    assert report["shards"][0]["files"] == [path.relative_to(repo).as_posix() for path in files]
+    expected = [path.relative_to(repo).as_posix() for path in files]
+    commands = report["shards"][0]["commandResults"]
+    assert [command["files"] for command in commands] == [expected[start:start + 4] for start in range(0, len(expected), 4)]
+    assert all(command["mode"] == "batched" and not command["timedOut"] for command in commands)
+
+
+def test_default_pytest_discovery_includes_both_supported_roots(pytestconfig: pytest.Config) -> None:
+    assert pytestconfig.getini("testpaths") == ["tests/generator", "tests/toolbox"]
+
+
+def test_changed_runner_forces_offline_config(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setenv("INFINI_TEST_USE_PROJECT_CONFIG", "1")
+    def fake_run(cmd, **kwargs):
+        if cmd[:2] == ["git", "status"]:
+            return SimpleNamespace(returncode=0, stdout=" M tests/toolbox/test_live20_support_v5.py\n", stderr="")
+        assert kwargs["env"]["INFINI_TEST_USE_PROJECT_CONFIG"] == "0"
+        return SimpleNamespace(returncode=0, stdout="1 passed")
+    _git_status(monkeypatch, " M tests/toolbox/test_live20_support_v5.py\n")
+    monkeypatch.setattr(changed.subprocess, "run", fake_run)
+    assert changed.main([]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "passed"
+
+
+def test_shards_without_files_are_not_reported_as_passed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shards, "missing_full_test_dependencies", lambda: [])
+    monkeypatch.setattr(shards, "_test_files", lambda: [])
+    report = shards.run(shard_count=1)
+    assert report["status"] == "not_selected"
+    assert report["ok"] is False
+
+
+
+
+def test_hosted_suite_executes_supported_roots_once() -> None:
+    from tools import validate_release as validation
+
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
+    groups = [name for group in ("python", "static", "build") for name in validation.checks_for_group(group, manifest)]
+    assert len(groups) == len(set(groups))
+    assert groups == validation.checks_for_group("full", manifest)
+    assert groups.count("pytest") == groups.count("tml_build") == 1
+
+
+def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py"])
+    monkeypatch.setattr(shards, "run", lambda *args: {
+        "ok": False, "passed": 0, "durationSeconds": 1,
+        "shards": [{"status": "failed", "output": "partial progress without pytest summary",
+                    "commandResults": [{"status": "failed", "exitCode": 124, "timedOut": True,
+                                        "durationSeconds": 1, "mode": "batched", "files": ["tests/test_slow.py"]}]}],
+    })
+    assert shards.main() == 1
+    output = capsys.readouterr().out
+    assert "exitCode=124" in output and "timedOut=True" in output
+    assert "tests/test_slow.py" in output and "partial progress without pytest summary" in output
+
+
+@pytest.mark.parametrize("slow", [False, True], ids=["completed", "finite-timeout"])
+def test_native_pytest_command_timeout_has_a_distinct_receipt(tmp_path: Path, slow: bool) -> None:
+    import os
+
+    local = tmp_path / "repo"
+    local.mkdir(parents=True)
+    test = local / "test_command_timeout.py"
+    test.write_text("import time\ndef test_command():\n    time.sleep(5)\n" if slow else "def test_command():\n    assert True\n", encoding="utf-8")
+    env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+    receipt = shards._run_pytest_command(temp_root=local, relatives=[test.name], env=env,
+                                          timeout_seconds=1 if slow else 30, log_path=tmp_path / "command.log", mode="batched")
+    assert receipt["timedOut"] is slow
+    assert receipt["exitCode"] == (124 if slow else 0)
+    assert receipt["status"] == ("failed" if slow else "passed")
+    assert receipt["passed"] == (None if slow else 1)
+
+
+def _workflow_section(name: str, *, indent: int = 0) -> list[str]:
+    """Read a workflow block at its declared indent, without optional YAML deps."""
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    lines = workflow.split(" " * indent + name + ":\n", 1)[1].splitlines()
+    block: list[str] = []
+    for line in lines:
+        if line and not line.lstrip().startswith("#") and not line.startswith(" " * (indent + 1)):
+            break
+        if line.strip() and not line.lstrip().startswith("#"):
+            block.append(line)
+    return block
+
+
+def test_hosted_events_keep_every_pr_main_push_and_manual_run_without_branch_duplicates() -> None:
+    # No path/type/base-branch filters: contract/docs/tooling changes and fork or
+    # draft PRs still receive the full suite. Standalone branches use manual CI.
+    assert _workflow_section("on") == [
+        "  push:", "    branches: [main]", "  pull_request:", "  workflow_dispatch:",
+    ]
+
+
+@pytest.mark.parametrize("previous,current,same_group,cancel_current", [
+    (("pull_request", 41, 100), ("pull_request", 41, 101), True, True),
+    (("pull_request", 41, 100), ("pull_request", 42, 101), False, True),
+    (("push", None, 100), ("push", None, 101), False, False),
+    (("workflow_dispatch", None, 100), ("workflow_dispatch", None, 101), False, False),
+    (("pull_request", 41, 100), ("workflow_dispatch", None, 41), False, False),
+    (("push", None, 41), ("pull_request", 41, 101), False, True),
+], ids=["superseded-same-pr", "independent-prs", "every-main-commit", "independent-manual-runs", "manual-cannot-cancel-pr", "pr-cannot-cancel-main"])
+def test_hosted_concurrency_only_replaces_the_same_pull_request(previous, current, same_group, cancel_current) -> None:
+    # Pin the small supported Actions expression, then substitute its contexts.
+    # This tests our grouping policy; it is not an Actions scheduler emulator.
+    group, cancellation = (line.split(": ", 1)[1] for line in _workflow_section("concurrency"))
+    assert group == "${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}"
+    assert cancellation == "${{ github.event_name == 'pull_request' }}"
+
+    def key(context, workflow="InfiniCrafterLocal CI"):
+        event, number, run_id = context
+        return (group.replace("${{ github.workflow }}", workflow)
+                .replace("${{ github.event_name }}", event)
+                .replace("${{ github.event.pull_request.number || github.run_id }}", str(number or run_id)))
+
+    assert (key(previous) == key(current)) is same_group
+    assert (current[0] == "pull_request") is cancel_current
+    assert key(previous) != key(previous, workflow="Another workflow")
+
+
+def _assert_hosted_python_cache(block: str) -> None:
+    # These two scalar keys need not be adjacent or have a particular indentation.
+    # The existing workflow-block reader owns job boundaries; this is not a YAML parser.
+    lines = [line.strip() for line in block.splitlines() if not line.lstrip().startswith("#")]
+    fields = [line.partition(":") for line in lines]
+    for key, expected in (("cache", "pip"), ("cache-dependency-path", "generator/requirements-dev.lock")):
+        values = [value.strip().strip("\"'") for name, separator, value in fields if separator and name == key]
+        assert values == [expected]
+    executable = "\n".join(lines)
+    assert "python -m pip install -r generator/requirements-dev.lock" in executable
+    assert "cache-hit" not in executable
+
+
+def test_hosted_python_cache_uses_the_lockfile_without_skipping_installation() -> None:
+    for job in ("python-tests", "strict-hygiene"):
+        _assert_hosted_python_cache("\n".join(_workflow_section(job, indent=2)))
+
+
+def test_hosted_cache_policy_ignores_scalar_layout_but_not_missing_or_conditional_install():
+    block = """    cache-dependency-path: 'generator/requirements-dev.lock'
+    # Cache keys may be reordered around other setup-python options.
+    python-version: '3.12'
+    cache: "pip"
+  run: python -m pip install -r generator/requirements-dev.lock
+"""
+    _assert_hosted_python_cache(block)
+    for broken in (
+        block.replace('cache: "pip"', '# cache: "pip"'),
+        block.replace('requirements-dev.lock', 'requirements.txt'),
+        block.replace('python -m pip install -r', 'echo install -r'),
+        block + "  if: steps.python.outputs.cache-hit != 'true'\n",
+    ):
+        with pytest.raises(AssertionError):
+            _assert_hosted_python_cache(broken)
+
+
+def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: None)
+    for name in ('tml_build', 'native_checks'):
+        row = validation.run_check(name, ['dotnet', 'build'], env={})
+        assert row['status'] == 'unavailable'
+        assert row['exitCode'] is None
+    assert validation.run_check('tml_runtime_selftest', [], env={})['status'] == 'notRun'
+
+
+def test_validation_native_checks_build_once_then_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
+                     'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/dotnet' if name == 'dotnet' else None)
+    calls = []
+
+    def execute(command, root, env):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout='ok')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('native_checks', ['dotnet', 'build'], root=tmp_path,
+                               env={'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')})
+    assert row['status'] == 'passed'
+    assert len(calls) == 2
+    assert calls[0][1:3] == ['build', 'tests/native/EngineRuntimeChecks.csproj']
+    assert calls[1][1] == 'tests/native/bin/Debug/net8.0/EngineRuntimeChecks.dll'
+
+
+def test_validation_native_failure_does_not_execute_stale_dll(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
+                     'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/dotnet' if name == 'dotnet' else None)
+    calls = []
+
+    def execute(command, root, env):
+        calls.append(command)
+        return SimpleNamespace(returncode=1, stdout='build failed')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('native_checks', [], root=tmp_path,
+                               env={'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')})
+    assert row['status'] == 'failed'
+    assert len(calls) == 1
+
+
+def test_refresh_groups_delegate_to_existing_producers() -> None:
+    manifest = json.loads((ROOT / '.agent/manifest.json').read_text(encoding='utf-8'))
+    groups = manifest['refreshGroups']
+    assert set(groups) == {'runtime', 'config', 'docs'}
+    for commands in groups.values():
+        for command in commands:
+            assert command[0] == 'python'
+            assert (ROOT / command[1]).is_file()
+            assert '--check' not in command
+
+
+@pytest.mark.parametrize("path,expected,absent", [
+    ("generator/infini_local/core/runtime_authoring/capability_registry.py", "schema_check", "mutation_gate"),
+    ("generator/infini_local/desktop/settings_page_configure.py", "config_registry", "schema_check"),
+    ("mod/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs", "native_checks", "pytest"),
+    ("mod/InfiniCrafterLocal/Content/Projectiles/Motion/GeneratedProjectile.Executors.cs", "native_checks", "pytest"),
+])
+def test_owner_iteration_selects_relevant_gates_without_final_campaign(path, expected, absent) -> None:
+    plan = agentctl.verification_plan([path])
+    assert plan["mode"] == "iteration"
+    assert expected in plan["checks"] and absent not in plan["checks"]
+    assert not plan["releaseScope"]
+    if path.startswith("mod/"):
+        assert plan["requiresBuild"]
+    if "/desktop/" in path:
+        assert "tests/generator/studio/test_web_studio.py" in plan["tests"]
+
+
+def test_unmapped_change_and_final_mode_require_complete_plan() -> None:
+    manifest = json.loads(agentctl.MANIFEST_PATH.read_text())
+    path = "generator/infini_local/unmapped_new_feature.py"
+    unknown = agentctl.verification_plan([path])
+    assert unknown["unmappedPaths"] == [path]
+    assert unknown["mode"] == "final_fallback"
+    assert unknown["checks"] == manifest["fullChecks"]
+    final = agentctl.verification_plan(["tests/generator/studio/test_web_studio.py"], final=True)
+    assert final["checks"] == manifest["fullChecks"] and not final["tests"]
+    assert final["releaseScope"]
+
+
+def test_branch_selection_includes_commits_worktree_and_both_rename_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, check=True, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30).stdout.strip()
+    git("init", "-b", "main")
+    git("config", "user.name", "Offline test")
+    git("config", "user.email", "offline@example.invalid")
+    (tmp_path / "old name.py").write_text("baseline\n")
+    git("add", ".")
+    git("commit", "-m", "baseline")
+    base = git("rev-parse", "HEAD")
+    git("checkout", "-b", "task")
+    git("mv", "old name.py", "new name.py")
+    git("commit", "-m", "move")
+    (tmp_path / "new name.py").write_text("working tree\n")
+    (tmp_path / "untracked.py").write_text("new\n")
+    monkeypatch.setattr(agentctl, "ROOT", tmp_path)
+    assert agentctl.changed_files(base) == ["new name.py", "old name.py", "untracked.py"]
+    assert agentctl.changed_files() == ["new name.py", "untracked.py"]
+    with pytest.raises(ValueError, match="invalid --base"):
+        agentctl.changed_files("not-a-revision")
+
+
+def test_clean_task_context_selects_entrypoints_before_tool_metadata(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    args = SimpleNamespace(base=None, path=None, area=["runtime"], task="new capability", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    paths = [row["path"] for row in report["documents"]]
+    assert "generator/infini_local/AGENTS.md" in paths
+    assert "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md" in paths
+    assert not any(path.startswith(".agent/") for path in paths)
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 14000
+    args.path = ["../outside.py"]
+    with pytest.raises(ValueError, match="inside checkout"):
+        agentctl.command_context(args)
+
+
+@pytest.mark.parametrize("path", [
+    "mod/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs",
+    "mod/InfiniCrafterLocal/Common/VFX/InfiniVfxRuntime.cs",
+])
+def test_requested_path_context_previews_checks_without_claiming_a_changed_diff(
+    path: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("a requested source lookup must not scan the branch diff"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("context must not execute checks"))
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["scope"] == "paths"
+    assert report["paths"] == [path]
+    expected = agentctl.verification_plan([path])
+    expected["paths"] = expected.pop("changedFiles")
+    assert report["suggestedVerification"] == expected
+    assert report["validationRun"] is False and report["releaseReady"] is False
+    assert "native_checks" in report["suggestedVerification"]["checks"]
+    assert report["suggestedVerification"]["requiresBuild"] is True
+
+
+def test_explicit_path_context_keeps_source_ahead_of_generic_native_catalogs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    path = "mod/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    documents = report["documents"]
+    assert documents[0]["path"] == path
+    assert documents[0]["available"] is True
+    assert "mod/InfiniCrafterLocal/AGENTS.md" in {row["path"] for row in documents}
+    rules, _, _ = agentctl.impacted([path])
+    generic_context = {context for rule in rules for context in rule.get("context", [])}
+    assert not generic_context.intersection(row["path"] for row in documents)
+    assert sum(len(row.get("content", "")) for row in documents) <= args.budget
+
+
+@pytest.mark.parametrize("status,exit_code", [("passed", 0), ("notRun", 2), ("unavailable", 2), ("failed", 1)])
+def test_iteration_never_claims_release_or_missing_execution_passed(
+    status: str, exit_code: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["tests/generator/studio/test_web_studio.py"])
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(agentctl, "_run_check", lambda name, command: {"name": name, "status": status})
+    args = SimpleNamespace(base=None, changed=True, require_build=False, plan=False, out=None)
+    assert agentctl.command_verify(args) == exit_code
+    report = json.loads(capsys.readouterr().out)
+    assert report["releaseReady"] is False
+    assert report["ok"] is (status == "passed")
+
+
+def test_native_iteration_runs_one_native_owner_without_duplicate_tml_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["mod/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs"])
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    calls = []
+    def run(name, command):
+        calls.append(name)
+        return {"name": name, "status": "passed"}
+    monkeypatch.setattr(agentctl, "_run_check", run)
+    assert agentctl.command_verify(SimpleNamespace(base=None, changed=True, require_build=False, plan=False, out=None)) == 0
+    capsys.readouterr()
+    assert calls == ["csharp_contracts", "native_checks"]
+
+
+@pytest.mark.parametrize("paths,areas", [
+    (["generator/infini_local/core/runtime_authoring/validator.py"], []),
+    ([], ["transport"]),
+    (["./tools/agentctl.py", "tools/agentctl.py"], ["native", "native"]),
+])
+def test_verify_explicit_scope_executes_owner_checks_without_discovering_changes(
+    paths, areas, tmp_path, monkeypatch, capsys,
+):
+    import jsonschema
+
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("explicit verification must not scan the diff"))
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    calls = []
+
+    def run(name, command):
+        calls.append((name, command))
+        return {"name": name, "status": "passed"}
+
+    monkeypatch.setattr(agentctl, "_run_check", run)
+    arguments = ["agentctl", "verify"]
+    for path in paths:
+        arguments.extend(["--path", path])
+    for area in areas:
+        arguments.extend(["--area", area])
+    monkeypatch.setattr(agentctl.sys, "argv", arguments)
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    expected_paths = sorted({path.removeprefix("./") for path in paths})
+    expected = agentctl.verification_plan(expected_paths, areas=areas)
+    assert report["paths"] == expected_paths
+    assert report["scope"] == ("paths" if paths else "areas")
+    assert report["areas"] == sorted(set(areas))
+    assert "changedFiles" not in report
+    assert report["mode"] == "iteration" and not report["releaseReady"]
+    assert report["status"] == "passed" and report["ok"]
+    assert [name for name, _ in calls] == expected["checks"] + (["focused_pytest"] if expected["tests"] else [])
+    if expected["tests"]:
+        assert calls[-1][1] == ["python", "tools/testing/run_focused_pytests.py", *expected["tests"]]
+    jsonschema.validate(report, json.loads((ROOT / ".agent/run_result.schema.json").read_text()))
+
+
+def test_explicit_unmapped_file_keeps_full_fallback_visible_in_plan(monkeypatch, capsys):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("do not discover changes"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("--plan must not execute checks"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "verify", "--path", "pyproject.toml", "--plan"])
+    assert agentctl.main() == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["mode"] == "final_fallback"
+    assert plan["unmappedPaths"] == plan["paths"] == ["pyproject.toml"]
+    assert plan["checks"] == json.loads(agentctl.MANIFEST_PATH.read_text())["fullChecks"]
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--path", "missing-source.py"],
+    ["--path", "tools"],
+    ["--path", "../outside.py"],
+    ["--area", "unknown-owner"],
+    ["--area", "runtime", "--changed"],
+    ["--path", "tools/agentctl.py", "--base", "HEAD"],
+])
+def test_verify_refuses_invalid_or_ambiguous_explicit_scope(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("invalid explicit scope must not scan changes"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("invalid scope must not execute checks"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "verify", *arguments])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
+
+
+@pytest.mark.parametrize('group', ['runtime', 'config', 'docs'])
+def test_refresh_rebuilds_handbook_once(group: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    calls = []
+
+    def run_check(name, command):
+        calls.append(command)
+        return {'name': name, 'status': 'passed'}
+
+    monkeypatch.setattr(validation, 'run_check', run_check)
+    validation.refresh(group)
+    assert calls[-1] == ['python', 'tools/build_documentation.py']
+    assert calls.count(calls[-1]) == 1
+
+
+def test_refresh_stops_before_handbook_on_producer_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    calls = []
+
+    def run_check(name, command):
+        calls.append(command)
+        return {'name': name, 'status': 'failed'}
+
+    monkeypatch.setattr(validation, 'run_check', run_check)
+    rows = validation.refresh('runtime')
+    assert len(calls) == len(rows) == 1
+    assert calls[0][1] != 'tools/build_documentation.py'
+
+
+def test_validation_forces_offline_config_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    def execute(command, root, env):
+        assert env['INFINI_SKIP_CONFIG_FILE'] == '1'
+        assert env['INFINI_TEST_USE_PROJECT_CONFIG'] == '0'
+        assert env['PYTHONPATH'] == str(ROOT / 'generator')
+        return SimpleNamespace(returncode=0, stdout='ok')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('probe', ['python', '-c', 'pass'], env={
+        'INFINI_SKIP_CONFIG_FILE': '0', 'INFINI_TEST_USE_PROJECT_CONFIG': '1', 'PYTHONPATH': '/wrong'})
+    assert row['status'] == 'passed'
+
+
+def test_diff_reports_git_scope_without_running_validation(monkeypatch, capsys):
+    import subprocess
+
+    calls = []
+    def git(*args):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="changed source", stderr="")
+    monkeypatch.setattr(agentctl, "run_git", git)
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["example.py"])
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("diff must not execute validation"))
+    assert agentctl.command_diff(SimpleNamespace(base="origin/main")) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["changedFiles"] == ["example.py"] and report["comparisonBase"] == "origin/main"
+    assert report["validationRun"] is False
+    assert ("diff", "--stat", "origin/main...HEAD") in calls
+
+
+def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys):
+    from tools.generate import generate_low_level_runtime_docs as docs
+
+    calls = []
+    report = {"ok": True, "issues": []}
+    def audit():
+        calls.append("audit")
+        return report
+    def render(value):
+        assert value is report
+        return "one projection"
+    monkeypatch.setattr(docs, "ROOT", tmp_path)
+    monkeypatch.setattr(docs, "capability_library_audit", audit)
+    monkeypatch.setattr(docs, "inventory_markdown", render)
+    monkeypatch.setattr(docs, "audit_markdown", render)
+    monkeypatch.setattr(docs, "lowering_markdown", lambda: "lowering")
+    monkeypatch.setattr(docs.sys, "argv", ["generate_low_level_runtime_docs.py"])
+    assert docs.main() == 0
+    assert calls == ["audit"]
+    capsys.readouterr()
+    report["ok"] = False
+    assert docs.main() == 1  # a current projection cannot conceal a failed audit
+
+
+def test_context_known_path_needs_no_filler_task_label(monkeypatch, capsys):
+    path = "mod/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--budget", "5000"])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["documents"][0]["path"] == path
+    assert report["task"] == ""
+    assert report["validationRun"] is False
+
+
+def test_context_reads_requested_line_instead_of_repeating_large_file_prefix(monkeypatch, capsys):
+    path = "tools/agentctl.py"
+    lines = (agentctl.ROOT / path).read_text().splitlines()
+    start = next(index for index, line in enumerate(lines, 1) if line.startswith("def command_context("))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--line", str(start), "--budget", "1800"])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("no repository scan needed"))
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    document = report["documents"][0]
+    assert document["content"].startswith("def command_context(")
+    assert document["startLine"] == start
+    assert document["endLine"] >= start
+    assert document["totalLines"] == len(lines)
+    assert document["truncated"] is True
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 1800
+
+
+@pytest.mark.parametrize("paths", [None, ["tools/agentctl.py"]])
+def test_context_selected_native_area_keeps_native_checks_when_entrypoints_are_docs(monkeypatch, capsys, paths):
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("explicit scope must not scan changes"))
+    args = SimpleNamespace(base=None, path=paths, area=["native"], task="", budget=100, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    plan = report["suggestedVerification"]
+    assert "native_checks" in plan["checks"] and "csharp_contracts" in plan["checks"]
+    assert plan["requiresBuild"] is True
+    if paths:
+        assert "tests/generator/tooling/test_pytest_runner_selection.py" in plan["tests"]
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 100
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--line", "10"],
+    ["--path", "tools/agentctl.py", "--line", "0"],
+    ["--path", "tools/agentctl.py", "--line", "1000000"],
+    ["--path", "tools/agentctl.py", "--path", "AGENTS.md", "--line", "10"],
+    ["--path", "missing-source.py"],
+    ["--path", "tools/agentctl.py", "--budget", "0"],
+])
+def test_context_refuses_invalid_source_location(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", *arguments])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
+
+
+def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tools import validate_release as validation
+
+    monkeypatch.setattr(validation.os, 'name', 'posix')
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/wslpath')
+    monkeypatch.setattr(validation.subprocess, 'run', lambda command, **kwargs: SimpleNamespace(returncode=0, stdout='C:\\repo\\tools\\check.csproj\n'))
+    assert validation._host_path('dotnet', 'tools/check.csproj', ROOT) == 'tools/check.csproj'
+    assert validation._host_path('dotnet.exe', 'tools/check.csproj', ROOT) == 'C:\\repo\\tools\\check.csproj'
+
+
+def test_agentctl_imported_check_dispatch_uses_the_public_release_owner(monkeypatch):
+    from tools import validate_release
+
+    observed = {}
+    def run_check(name, command, *, root, env):
+        observed.update(name=name, command=command, root=root, offline=env["INFINI_TEST_USE_PROJECT_CONFIG"])
+        return {"status": "passed"}
+    monkeypatch.setattr(validate_release, "run_check", run_check)
+    assert agentctl._run_check("probe", ["python", "--version"]) == {"status": "passed"}
+    assert observed == {"name": "probe", "command": ["python", "--version"], "root": ROOT, "offline": "0"}
+
+
+@pytest.mark.parametrize("path,check,test", [
+    ("pipelines/author/prompt.py", "schema_check", "authoring/test_registry_vertical_contract.py"),
+    ("pipelines/author/request.py", "schema_check", "authoring/test_repair_frozen_contract.py"),
+    ("core/llm_stage_messages.py", "project_hygiene", "authoring/test_low_level_three_stage_pipeline.py"),
+    ("core/llm_stage_messages.py", "project_hygiene", "vfx/test_visual_vfx_prompt_prefix.py"),
+    ("pipelines/transport/diagnostics.py", "project_hygiene", "providers/test_provider_transport_contract.py"),
+    ("pipelines/transport/http.py", "project_hygiene", "providers/test_llm_auth_diagnostics_contract.py"),
+    ("pipelines/transport/rejections.py", "project_hygiene", "runtime/test_transport_retry_redaction.py"),
+])
+def test_moved_generation_owners_retain_required_checks_and_tests(monkeypatch, path, check, test):
+    _git_status(monkeypatch, " M generator/infini_local/" + path + "\n")
+    files = agentctl.changed_files()
+    plan = agentctl.verification_plan(files)
+    assert plan["mode"] == "iteration" and not plan["releaseScope"]
+    assert check in plan["checks"]
+    selected = changed.build_plan()
+    assert "tests/generator/" + test in selected["selected"]
+    assert selected["fullSelectionTriggers"] == []
+
+
+@pytest.fixture
+def shard_receipts(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    files = [root / "tests/generator/runtime" / f"test_case_{i}.py" for i in range(4)] + [
+        root / "tests/toolbox" / f"test_case_{i}.py" for i in range(4)]
+    monkeypatch.setattr(shards, "ROOT", root)
+    monkeypatch.setattr(shards, "_test_files", lambda: files)
+    directory = tmp_path / "reports"
+    revision = "a" * 40
+    for index, selected in enumerate(shards._partition(files, 4), 1):
+        command_files = [path.relative_to(root).as_posix() for path in selected]
+        row = {"shard": index, "files": [path.relative_to(root).as_posix() for path in selected],
+               "fileCount": len(selected), "executedFileCount": len(selected), "status": "passed",
+               "exitCode": 0, "passed": 3, "durationSeconds": index,
+               "commandResults": [{"files": command_files, "fileCount": len(selected), "status": "passed",
+                                   "exitCode": 0, "timedOut": False, "passed": 3, "mode": "batched"}]}
+        report = {"schema": "infini.pytest-shards.v3", "sourceRevision": revision,
+                  "requestedShardCount": 4, "selectedShardIndex": index, "testFileCount": len(files),
+                  "isolatedPolicy": sorted(shards.ISOLATED_TEST_FILES),
+                  "ok": True, "status": "passed", "passed": 3, "shards": [row]}
+        path = directory / str(index) / "pytest_shards.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(report))
+    return directory, revision
+
+
+def test_ci_partition_aggregation_preserves_complete_selection_and_counts(shard_receipts):
+    directory, revision = shard_receipts
+    report = shards.merge_reports(directory, 4, revision)
+    assert report["ok"] and report["passed"] == 12 and report["testFileCount"] == 8
+    assert [row["shard"] for row in report["shards"]] == [1, 2, 3, 4]
+    assert len({name for row in report["shards"] for name in row["files"]}) == 8
+    assert report["durationSeconds"] == 4
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate", "mixed_revision", "failed",
+    "missing_file", "executed_count", "command_failed", "timed_out", "duplicate_execution", "wrong_total", "wrong_isolation", "top_level_list", "row_null", "commands_mapping", "command_null"])
+def test_ci_partition_aggregation_refuses_incomplete_or_mixed_evidence(shard_receipts, mutation):
+    directory, revision = shard_receipts
+    path = directory / "1/pytest_shards.json"
+    report = json.loads(path.read_text())
+    row = report["shards"][0]
+    if mutation == "missing": path.unlink()
+    elif mutation == "extra":
+        extra = directory / "5/pytest_shards.json"; extra.parent.mkdir(); extra.write_text(path.read_text())
+    elif mutation == "duplicate": report["selectedShardIndex"] = 2
+    elif mutation == "mixed_revision": report["sourceRevision"] = "b" * 40
+    elif mutation == "failed": report["ok"] = False
+    elif mutation == "missing_file": row["files"].pop()
+    elif mutation == "executed_count": row["executedFileCount"] = 1
+    elif mutation == "command_failed": row["commandResults"][0]["exitCode"] = 1
+    elif mutation == "timed_out": row["commandResults"][0]["timedOut"] = True
+    elif mutation == "duplicate_execution": row["commandResults"].append(row["commandResults"][0].copy())
+    elif mutation == "wrong_total": report["passed"] = 900
+    elif mutation == "wrong_isolation": report["isolatedPolicy"] = []
+    elif mutation == "top_level_list": report = []
+    elif mutation == "row_null": report["shards"] = [None]
+    elif mutation == "commands_mapping": row["commandResults"] = {}
+    elif mutation == "command_null": row["commandResults"] = [None]
+    if mutation not in {"missing", "extra"}: path.write_text(json.dumps(report))
+    with pytest.raises(ValueError): shards.merge_reports(directory, 4, revision)
+
+
+def test_ci_partition_cli_refuses_missing_source_identity_without_running_tests(shard_receipts, monkeypatch, capsys):
+    directory, _ = shard_receipts
+    monkeypatch.delenv("GITHUB_SHA", raising=False)
+    monkeypatch.setattr(shards.sys, "argv", ["run_pytest_shards.py", "--shards", "4", "--merge-reports", str(directory)])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Aggregation must not rerun test workloads"))
+    assert shards.main() == 1
+    assert "source revision" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("aggregate", [False, True])
+def test_validation_keeps_all_python_gates_with_explicit_partition_admission(tmp_path, monkeypatch, aggregate):
+    from tools import validate_release as validation
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text())
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps(manifest))
+    monkeypatch.setattr(validation, "ROOT", tmp_path)
+    argv = ["validate_release.py", "--group", "python", "--report", str(tmp_path / "report.json")]
+    if aggregate: argv += ["--pytest-reports", str(tmp_path / "receipts")]
+    monkeypatch.setattr(validation.sys, "argv", argv)
+    calls = []
+    def execute(name, command, **kwargs):
+        calls.append((name, command))
+        return {"name": name, "status": "passed", "exitCode": 0, "durationSeconds": 0, "output": ""}
+    monkeypatch.setattr(validation, "run_check", execute)
+    assert validation.main() == 0
+    assert [name for name, _ in calls] == manifest["validationGroups"]["python"]
+    for name, command in calls:
+        expected = manifest["checks"][name]
+        if name == "pytest" and aggregate:
+            assert command == expected + ["--merge-reports", str((tmp_path / "receipts").resolve())]
+        else: assert command == expected
+
+
+@pytest.mark.parametrize("count", [1, 6])
+def test_ci_matrix_and_local_default_share_canonical_count(tmp_path, monkeypatch, capsys, count):
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps({"checks": {"pytest": ["python", "runner", "--shards", str(count)]}}))
+    monkeypatch.setattr(shards, "ROOT", tmp_path)
+    monkeypatch.setattr(shards.sys, "argv", ["runner", "--matrix"])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Matrix planning must not execute tests"))
+    assert shards.main() == 0
+    assert json.loads(capsys.readouterr().out) == {"shard": list(range(1, count + 1))}
+    calls = []
+    monkeypatch.setattr(shards.sys, "argv", ["runner"])
+    monkeypatch.setattr(shards, "run", lambda *args: calls.append(args) or {"ok": True, "shards": []})
+    assert shards.main() == 0
+    assert calls == [(count, None, 60)]
+
+
+@pytest.mark.parametrize("arguments", [[], ["--shards"], ["--shards", "0"], ["--shards", "257"], ["--shards", "bad"], ["--shards", "2", "--shards", "3"]])
+def test_ci_matrix_refuses_invalid_canonical_count(tmp_path, monkeypatch, arguments):
+    (tmp_path / ".agent").mkdir()
+    (tmp_path / ".agent/manifest.json").write_text(json.dumps({"checks": {"pytest": arguments}}))
+    monkeypatch.setattr(shards, "ROOT", tmp_path)
+    with pytest.raises(ValueError):
+        shards.configured_shard_count()
+
+
+@pytest.mark.parametrize("count", [0, -1, 257])
+def test_explicit_matrix_count_refuses_empty_or_unbounded_work(monkeypatch, capsys, count):
+    monkeypatch.setattr(shards.sys, "argv", ["runner", "--matrix", "--shards", str(count)])
+    monkeypatch.setattr(shards, "run", lambda *args: pytest.fail("Invalid matrix must not run tests"))
+    with pytest.raises(SystemExit) as exc:
+        shards.main()
+    assert exc.value.code == 2
+    assert not capsys.readouterr().out
+
+
+@pytest.mark.parametrize("area", ["runtime", "native", "storage", "transport", "studio"])
+def test_area_context_reaches_source_with_default_budget(monkeypatch, capsys, area):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("area lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--area", area])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["documents"][0]["path"].endswith((".py", ".cs"))
+    assert report["documents"][0]["content"]
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 5000
+    assert report["validationRun"] is False
+
+
+@pytest.mark.parametrize("path, anchor", [
+    ("generator/infini_local/pipelines/author/stage.py", "def compile_and_validate_authored_runtime("),
+    ("mod/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs", "public static void ExecuteAction("),
+])
+def test_context_finds_literal_source_anchor_without_line_lookup(monkeypatch, capsys, path, anchor):
+    lines = (ROOT / path).read_text(encoding="utf-8").splitlines()
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("source lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--find", anchor, "--budget", "1200"])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    document = report["documents"][0]
+    assert document["content"].lstrip().startswith(anchor)
+    assert document["startLine"] == next(i for i, line in enumerate(lines, 1) if anchor in line)
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 1200
+    assert report["suggestedVerification"]["mode"] == "iteration"
+
+
+@pytest.mark.parametrize("anchor, error", [("absent", "not found"), ("same", "lines 1, 3")])
+def test_context_does_not_guess_a_missing_or_ambiguous_anchor(monkeypatch, tmp_path, capsys, anchor, error):
+    (tmp_path / "owner.py").write_text("same(\nunique[\nsame(\n", encoding="utf-8-sig")
+    monkeypatch.setattr(agentctl, "ROOT", tmp_path)
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", "owner.py", "--find", anchor])
+    assert agentctl.main() == 2
+    output = capsys.readouterr()
+    assert not output.out
+    assert error in json.loads(output.err)["error"]
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--find", "def main("],
+    ["--path", "tools/agentctl.py", "--find", ""],
+    ["--path", "tools/agentctl.py", "--find", "def main(\n"],
+    ["--path", "tools/agentctl.py", "--find", "def main(", "--line", "10"],
+    ["--path", "tools/agentctl.py", "--path", "AGENTS.md", "--find", "def main("],
+])
+def test_context_rejects_invalid_anchor_scope_without_discovering_changes(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("invalid lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", *arguments])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
+
+
+@pytest.mark.parametrize("owner", ["codex_auth.py", "codex_text_backend.py", "codex_image_backend.py"])
+def test_codex_transport_owner_selects_native_backend_regressions(owner):
+    plan = agentctl.verification_plan([f"generator/infini_local/services/{owner}"])
+    assert plan["mode"] == "iteration"
+    assert "tests/generator/providers/test_codex_subscription_contract.py" in plan["tests"]
+    assert "tests/generator/providers/test_codex_transport_trace.py" in plan["tests"]
+    assert "tests/generator/images/test_image_transport_join.py" in plan["tests"]
+    assert not plan["requiresBuild"]
+    assert "native_checks" not in plan["checks"]
+
+
+def test_navigation_metadata_resolves_existing_owners_and_test_families():
+    rules = json.loads(agentctl.RULES_PATH.read_text(encoding="utf-8"))["rules"]
+    for rule in rules:
+        for path in [*rule.get("entrypoints", []), *rule.get("context", [])]:
+            assert (ROOT / path).is_file(), (rule["id"], path)
+        agentctl.verification_plan([], areas=[rule["area"]])
