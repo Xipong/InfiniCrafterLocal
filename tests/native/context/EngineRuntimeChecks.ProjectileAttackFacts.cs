@@ -323,6 +323,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ProjectileAttackIdentitySelectionKeepsUnknownConditions()
     {
+        ProjectileIdentityNumericEffectsPreserveBarriers();
         ProjectileAttackArrayAliasKeepsUnknownIdentity();
         ProjectileAttackDisconnectedBindingRefusesLocally();
         ProjectileAttackDisjointWindowsPreserveLaterRoot();
@@ -341,7 +342,6 @@ internal static partial class EngineRuntimeChecks
             (nameof(AttackIdentityEscape), "identity_address_exposed"),
             (nameof(AttackIdentityCallEscape), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityMixedWriteHelper), "actor_passing_call_uncertified"),
-            (nameof(AttackIdentityOpacitySetter), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityConditionalEscape), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityLocalAddressEscape), "actor_passing_call_uncertified"),
             (nameof(AttackIdentityContinuingHook), "actor_passing_call_uncertified"),

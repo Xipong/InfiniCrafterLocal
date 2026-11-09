@@ -269,7 +269,7 @@ public sealed partial class GeneratorClient
                     try { program = observation.Finish(); }
                     catch (Exception error) when (error is not OutOfMemoryException)
                     {
-                        program = MethodSourceIdentity(method);
+                        program = MethodSourceIdentity(method, includeMetadataToken: true);
                         program["coverage"] = "unknown";
                         program["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
                         cacheable = IsDeterministicRawObservationRefusal(error);
@@ -316,7 +316,7 @@ public sealed partial class GeneratorClient
                 ObservePhase("refused");
                 // A refused IL graph does not invalidate the verified method
                 // identity needed by the independent, read-only C# source path.
-                var unavailable = MethodSourceIdentity(method);
+                var unavailable = MethodSourceIdentity(method, includeMetadataToken: true);
                 unavailable["coverage"] = "unknown";
                 unavailable["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
                 return unavailable;
@@ -692,7 +692,7 @@ public sealed partial class GeneratorClient
                 var method = (MethodInfo)call.Operand!;
                 int parameter = Array.FindIndex(method.GetParameters(), p => string.Equals(p.Name, "Type", StringComparison.OrdinalIgnoreCase));
                 int slot = parameter + (method.IsStatic ? 0 : 1);
-                var row = MethodSourceIdentity(body.Method);
+                var row = MethodSourceIdentity(body.Method, includeMetadataToken: true);
                 row["at"] = call.At;
                 row["requiredPredicates"] = program["observations"]!.AsArray().First(v => v!["at"]!.GetValue<int>() == call.At)!["requiredPredicates"]!.DeepClone();
                 var candidates = parameter < 0 || slot >= call.Inputs.Count ? null
@@ -724,7 +724,7 @@ public sealed partial class GeneratorClient
 
         internal JsonObject Finish()
         {
-            JsonObject result = MethodSourceIdentity(body.Method);
+            JsonObject result = MethodSourceIdentity(body.Method, includeMetadataToken: true);
             var observations = new JsonArray();
             foreach (var value in roots)
             {

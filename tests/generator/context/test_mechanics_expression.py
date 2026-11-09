@@ -188,3 +188,60 @@ def test_unit_evidence_keeps_immortality_routing_cadence_and_numeric_relation():
     assert result["unitEvidence"] == {k: v for k, v in value["unitEvidence"].items() if k != "healthStoreIlOffset"}
     assert {k: result[k] for k in ("durationTicksMin", "probabilityNumerator", "probabilityDenominator")} == {
         "durationTicksMin": 180, "probabilityNumerator": 1, "probabilityDenominator": 3}
+
+
+def test_alias_coverage_compacts_only_receipts_and_keeps_scoped_uncertainty():
+    scope = "sourceDefinition describes direct stores only; aliases may change the value at this read"
+    unknown = {"kind": "unknown", "reason": "address_exposed_local", "local": 3,
+               "sourceIlOffset": 23, "sourceAddressIlOffsets": [1, 7], "scope": scope,
+               "sourceDefinition": {"kind": "local_definition", "local": 3, "scope": "value_at_store",
+                                    "sourceStoreIlOffset": 19, "value": const(61)}}
+    diagnostic = {key: copy.deepcopy(value) for key, value in unknown.items()
+                  if key not in {"kind", "sourceDefinition"}}
+    source = coverage()
+    source["condition"]["unresolved"] = [{"path": "guard.left", **diagnostic}]
+    source["fields"]["velocity"]["unresolved"] += [
+        {"path": "inputs.velocity." + ("value." * n), **diagnostic} for n in range(1, 16)]
+    site = {"spawnInputCoverage": source, "spawnInputs": {"velocity": unknown, "damage": const(61)},
+            "whenSourceCondition": unknown}
+    observation = {"method": "Fixture.Shoot", "spawnSites": [site, site]}
+    before = copy.deepcopy(observation)
+    result = MechanicsRenderer().render(observation)
+    assert len(result["spawnSites"]) == 2
+    for emitted in result["spawnSites"]:
+        summary = emitted["spawnInputCoverage"]
+        assert summary["fields"]["velocity"] == {
+            "status": "partial_source_expression",
+            "reasons": ["helper_output_not_evaluated", "address_exposed_local"],
+            "reasonScopes": [{"reason": "address_exposed_local", "scope": scope}],
+        }
+        assert summary["condition"] == {
+            "status": "partial_source_expression", "reasons": ["address_exposed_local"],
+            "reasonScopes": [{"reason": "address_exposed_local", "scope": scope}],
+        }
+        assert emitted["spawnInputs"] == {"velocity": unknown, "damage": "61"}
+        assert emitted["whenSourceCondition"] == unknown
+        assert "not final values or guaranteed execution" in summary["scope"]
+    assert observation == before
+
+
+@pytest.mark.parametrize("defect", ["scope", "reason", "local", "addresses", "empty_addresses", "future_field"])
+def test_unrecognized_alias_diagnostic_keeps_entire_coverage_literal(defect):
+    diagnostic = {"path": "inputs.velocity", "reason": "address_exposed_local", "local": 3,
+                  "sourceIlOffset": 23, "sourceAddressIlOffsets": [1, 7],
+                  "scope": "sourceDefinition describes direct stores only; aliases may change the value at this read"}
+    if defect == "scope":
+        diagnostic["scope"] = "aliases cannot change this value"
+    elif defect == "reason":
+        diagnostic["reason"] = "future_unknown"
+    elif defect == "local":
+        diagnostic.pop("local")
+    elif defect == "addresses":
+        diagnostic["sourceAddressIlOffsets"] = [True]
+    elif defect == "empty_addresses":
+        diagnostic["sourceAddressIlOffsets"] = []
+    else:
+        diagnostic["futureEffect"] = {"damage": 8}
+    source = coverage()
+    source["fields"]["velocity"]["unresolved"].append(diagnostic)
+    assert MechanicsRenderer().render(source) == source

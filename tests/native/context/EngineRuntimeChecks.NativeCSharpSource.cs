@@ -43,6 +43,29 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private sealed class TokenFixture
+    {
+        public static int Same(int value) => 1;
+        public static int Same(string value) => 1;
+    }
+
+    private static void NativeCSharpTokenSeparatesOverloads()
+    {
+        var a = typeof(TokenFixture).GetMethod("Same", new[] { typeof(int) })!;
+        var b = typeof(TokenFixture).GetMethod("Same", new[] { typeof(string) })!;
+        var identity = CSharpOwner.GetMethod("MethodSourceIdentity", CSharpFlags)!;
+        var match = CSharpOwner.GetMethod("CSharpProgramMatches", CSharpFlags)!;
+        var row = (JsonObject)identity.Invoke(null, new object[] { a, true })!;
+        Equal(a.MetadataToken, row["metadataToken"]!.GetValue<int>(), "producer captures actual MethodDef");
+        Equal(true, (bool)match.Invoke(null, new object[] { row, a })!, "same definition admitted");
+        Equal(false, (bool)match.Invoke(null, new object[] { row, b })!, "same-IL overload rejected");
+        var otherModule = (JsonObject)row.DeepClone();
+        otherModule["sourceModuleVersionId"] = Guid.NewGuid().ToString();
+        Equal(false, (bool)match.Invoke(null, new object[] { otherModule, a })!, "same name/token from another module rejected");
+        row.Remove("metadataToken");
+        Equal(false, (bool)match.Invoke(null, new object[] { row, a })!, "missing token is not guessed");
+    }
+
     private const BindingFlags CSharpFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     private static readonly Type CSharpOwner = typeof(GeneratorClient);
 

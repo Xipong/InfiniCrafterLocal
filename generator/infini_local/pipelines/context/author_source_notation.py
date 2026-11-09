@@ -167,7 +167,12 @@ _SOURCE_TEXT_READING = (
     "that reconstructed code. Each record keeps its own identity, guards, coverage and provenance; "
     "shared text does not make records or their execution equivalent."
 )
-_SOURCE_TEXT_KEYS = {"sourceTextParts", "nativeSourceText", "sourceTextNotation", "sourceText"}
+_SOURCE_TEXT_VALUE_READING = (
+    " A nativeSourceFacts entry {sourceTextValueParts:[...]} uses the same concatenation to represent "
+    "a string, not an object. Every sourceSameAs reference to that entry still resolves to the exact "
+    "original string, including references outside code; existing indices are unchanged."
+)
+_SOURCE_TEXT_KEYS = {"sourceTextParts", "sourceTextValueParts", "nativeSourceText", "sourceTextNotation", "sourceText"}
 _SOURCE_CODE_COVERAGE = {
     "approximate_identity_ast_regions", "approximate_identity_ast_method",
     "conditional_ast_regions", "identity_specialized_method", "whole_method",
@@ -175,6 +180,19 @@ _SOURCE_CODE_COVERAGE = {
 
 
 def compact_author_source_text(context: dict[str, Any]) -> dict[str, Any]:
+    """Keep the smaller complete presentation, including its reading guide.
+
+    Adding a pooled body to an inline comparison group can shorten that group's
+    common blocks. Retain the existing inline-only result when that happens.
+    """
+    inline = _compact_author_source_text(context, include_pooled=False)
+    if not isinstance(context.get("nativeSourceFacts"), list):
+        return inline
+    pooled = _compact_author_source_text(context, include_pooled=True)
+    return pooled if _size(pooled) < _size(inline) else inline
+
+
+def _compact_author_source_text(context: dict[str, Any], *, include_pooled: bool) -> dict[str, Any]:
     """Share exact line-aligned source blocks, never infer equivalent records.
 
     This declared read-only normalization uses at most three sequential pieces:
@@ -196,17 +214,36 @@ def compact_author_source_text(context: dict[str, Any]) -> dict[str, Any]:
     if any(_SOURCE_TEXT_KEYS.intersection(row) for row in records(context)):
         return copy.deepcopy(context)
     result = copy.deepcopy(context)
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    facts = result.get("nativeSourceFacts", [])
+    if not include_pooled or not isinstance(facts, list):
+        facts = []
+
+    def code_value(value: Any) -> tuple[str, int | None] | None:
+        """Follow only exact existing references, retaining the terminal string's slot."""
+        index = None
+        seen: set[int] = set()
+        while isinstance(value, dict) and set(value) == {"sourceSameAs"}:
+            index = value["sourceSameAs"]
+            if type(index) is not int or not 0 <= index < len(facts) or index in seen:
+                return None
+            seen.add(index)
+            value = facts[index]
+        return (value, index) if isinstance(value, str) else None
+
+    groups: dict[tuple[str, str], list[tuple[dict[str, Any], str, int | None]]] = defaultdict(list)
     for row in records(result):
         method, coverage = row.get("method"), row.get("coverage")
         if (isinstance(method, str) and isinstance(coverage, str)
-                and coverage in _SOURCE_CODE_COVERAGE and isinstance(row.get("code"), str)):
-            groups[method, coverage].append(row)
+                and coverage in _SOURCE_CODE_COVERAGE):
+            resolved = code_value(row.get("code"))
+            if resolved is not None:
+                groups[method, coverage].append((row, *resolved))
     shared: list[str] = []
-    for rows in groups.values():
-        if len(rows) < 2:
+    changed_facts: set[int] = set()
+    for entries in groups.values():
+        if len(entries) < 2 or any(slot in changed_facts for _, _, slot in entries if slot is not None):
             continue
-        codes = [row["code"] for row in rows]
+        codes = [code for _, code, _ in entries]
         prefix = os.path.commonprefix(codes)
         prefix = prefix[:prefix.rfind("\n") + 1]
         suffix = os.path.commonprefix([code[len(prefix):][::-1] for code in codes])[::-1]
@@ -220,7 +257,9 @@ def compact_author_source_text(context: dict[str, Any]) -> dict[str, Any]:
         index = len(shared)
         blocks = [part for part in (prefix, suffix) if part]
         replacements = []
-        for row, code in zip(rows, codes):
+        pooled: dict[int, dict[str, Any]] = {}
+        originals = []
+        for row, code, slot in entries:
             middle = code[len(prefix):len(code) - len(suffix)] if suffix else code[len(prefix):]
             pieces: list[Any] = []
             if prefix:
@@ -229,16 +268,27 @@ def compact_author_source_text(context: dict[str, Any]) -> dict[str, Any]:
                 pieces.append(middle)
             if suffix:
                 pieces.append({"sourceText": index + bool(prefix)})
-            replacements.append({("sourceTextParts" if key == "code" else key):
-                                 (pieces if key == "code" else value) for key, value in row.items()})
-        if _size(replacements) + _size(blocks) >= _size(rows):
+            if slot is None:
+                originals.append(row)
+                replacements.append((row, {("sourceTextParts" if key == "code" else key):
+                                          (pieces if key == "code" else value) for key, value in row.items()}))
+            elif slot not in pooled:
+                # One physical string may have many code and non-code readers.
+                # Replace its value once, without inlining or renumbering aliases.
+                originals.append(facts[slot])
+                pooled[slot] = {"sourceTextValueParts": pieces}
+        projected = [replacement for _, replacement in replacements] + list(pooled.values())
+        if _size(projected) + _size(blocks) >= _size(originals):
             continue
         shared.extend(blocks)
-        for row, replacement in zip(rows, replacements):
+        for row, replacement in replacements:
             row.clear()
             row.update(replacement)
+        for slot, replacement in pooled.items():
+            facts[slot] = replacement
+        changed_facts.update(pooled)
     if not shared:
         return copy.deepcopy(context)
     result["nativeSourceText"] = shared
-    result["sourceTextNotation"] = _SOURCE_TEXT_READING
+    result["sourceTextNotation"] = _SOURCE_TEXT_READING + (_SOURCE_TEXT_VALUE_READING if changed_facts else "")
     return result if _size(result) < _size(context) else copy.deepcopy(context)

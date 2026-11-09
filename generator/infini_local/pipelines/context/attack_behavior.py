@@ -140,6 +140,7 @@ def _program(value: dict) -> dict:
     # Unknown program/row schemas retain their complete reference namespace.
     out.pop("sourceModuleVersionId", None)
     out.pop("sourceMethodSha256", None)
+    out.pop("metadataToken", None)
     if not (isinstance(out.get("observations"), list) and isinstance(out.get("dependencies"), dict)
             and isinstance(out.get("predicates"), list) and isinstance(out.get("symbols"), dict)):
         return copy.deepcopy(value)
@@ -204,7 +205,7 @@ def _program(value: dict) -> dict:
 _ROW_FIELDS = {"kind", "at", "block", "requiredPredicates", "expression", "call", "receiver", "arguments",
                  "scope", "orderedSourceUses", "id", "op", "inputs", "successors"}
 
-_PROGRAM_FIELDS = {"method", "sourceModuleVersionId", "sourceMethodSha256", "observations", "dependencies",
+_PROGRAM_FIELDS = {"metadataToken", "method", "sourceModuleVersionId", "sourceMethodSha256", "observations", "dependencies",
                    "predicates", "symbols", "coverage", "unresolved", "identityWindows", "predicateSources", "identityAlternatives"}
 
 
@@ -357,13 +358,14 @@ def _selected_program(value: dict, identity: Any) -> dict:
     if (not set(selected) <= _PROGRAM_FIELDS | {"identitySelection"}
             or any(type(value.get(key)) is not str or selected.get(key) != value[key]
                    for key in ("method", "sourceModuleVersionId", "sourceMethodSha256"))
+            or selected.get("metadataToken") != value.get("metadataToken")
             or not isinstance(selected.get("observations"), list)
             or not isinstance(selected.get("dependencies"), dict)
             or not isinstance(selected.get("predicates"), list)
             or not isinstance(selected.get("symbols"), dict)):
         return value
     unavailable_full_method = (
-        set(value) == {"method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "unresolved", "identitySelected"}
+        set(value) - {"metadataToken"} == {"method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "unresolved", "identitySelected"}
         and value.get("coverage") == "unknown" and isinstance(value.get("unresolved"), str) and bool(value["unresolved"])
     )
     # A producer may certify the captured-identity slice even when the complete

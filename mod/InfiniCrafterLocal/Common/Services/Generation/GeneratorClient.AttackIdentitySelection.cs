@@ -88,11 +88,17 @@ public sealed partial class GeneratorClient
         // scalar writes to other native Projectile fields are allowed. Each
         // nested call must have a closed nonvirtual body. Unknown instructions,
         // native implementations, recursive closures and budgets fail closed.
-        private bool IdentityPreservingEffect(MethodBase method, HashSet<MethodBase>? active = null)
+        private bool IdentityPreservingEffect(MethodBase method, HashSet<MethodBase>? active = null, Stack<Type>? initializing = null)
         {
-            if (identityPreservingEffects.TryGetValue(method, out bool cached)) return cached;
+            initializing ??= new();
+            // A proof made while an initializer is running is conditional on
+            // that initialization context. Never publish it as a global fact.
+            bool cacheable = initializing.Count == 0;
+            if (cacheable && identityPreservingEffects.TryGetValue(method, out bool cached)) return cached;
             active ??= new();
             if (active.Count >= 16 || !active.Add(method)) return false;
+            bool initializer = method is ConstructorInfo && method.IsStatic && method.DeclaringType is not null;
+            if (initializer) initializing.Push(method.DeclaringType!);
             bool safe = false;
             try
             {
@@ -107,8 +113,17 @@ public sealed partial class GeneratorClient
                 // A reference-type instance already exists; calling its instance
                 // method does not trigger its declaring type initializer. Static
                 // calls, value-type instance calls and static field loads can.
-                bool Initialized(Type? owner) => owner?.TypeInitializer is not MethodBase initializer
-                    || IdentityPreservingEffect(initializer, active);
+                bool Initialized(Type? owner)
+                {
+                    if (owner?.TypeInitializer is not MethodBase typeInitializer) return true;
+                    // CLR does not restart the initializer on a same-type
+                    // helper call. Cross-type initialization cycles still
+                    // refuse, as do explicit recursive method calls.
+                    if (initializing.Contains(owner)) return initializing.Peek() == owner;
+                    return IdentityPreservingEffect(typeInitializer, active, initializing);
+                }
+                bool Scalar(Type valueType) => valueType.IsPrimitive
+                    && valueType != typeof(IntPtr) && valueType != typeof(UIntPtr);
                 if ((method.IsStatic || method.DeclaringType?.IsValueType == true) && !Initialized(method.DeclaringType)) return false;
                 var code = AttackCode(method);
                 if (code.Count == 0 || code.Count > 2048) return false;
@@ -118,7 +133,26 @@ public sealed partial class GeneratorClient
                     string op = instruction.Op;
                     if (op is "call" or "callvirt")
                     {
-                        if (instruction.Arg is not MethodBase called || !IdentityPreservingEffect(called, active)) return false;
+                        if (instruction.Arg is not MethodBase called || !IdentityPreservingEffect(called, active, initializing)) return false;
+                        continue;
+                    }
+                    if (op == "starg")
+                    {
+                        // Only the callee's primitive by-value slot changes;
+                        // this neither writes the caller nor carries an alias.
+                        int first = method.IsStatic ? 0 : 1;
+                        var parameters = method.GetParameters();
+                        if (instruction.Arg is not int slot || slot < first || slot - first >= parameters.Length
+                            || !Scalar(parameters[slot - first].ParameterType)) return false;
+                        continue;
+                    }
+                    if (op == "stsfld")
+                    {
+                        // A primitive static slot cannot contain an actor or
+                        // overlap an instance identity field. Its initialization
+                        // effect is proved just as for a static load/call.
+                        if (instruction.Arg is not FieldInfo written || !Scalar(written.FieldType)
+                            || !Initialized(written.DeclaringType)) return false;
                         continue;
                     }
                     if (op == "stfld")
@@ -142,6 +176,7 @@ public sealed partial class GeneratorClient
                         continue;
                     }
                     if (op is "nop" or "ldarg" or "ldloc" or "stloc" or "const" or "ldnull" or "ldstr"
+                        or "ldc.r4" or "ldc.r8" or "ldc.i8"
                         or "ldfld" or "ldlen" or "dup" or "pop" or "ret" or "castclass" or "isinst"
                         or "add" or "sub" or "mul" or "div" or "div.un" or "rem" or "rem.un"
                         or "and" or "or" or "xor" or "not" or "neg" or "shl" or "shr" or "shr.un"
@@ -165,7 +200,12 @@ public sealed partial class GeneratorClient
                 return true;
             }
             catch (NotSupportedException) { return false; }
-            finally { active.Remove(method); identityPreservingEffects[method] = safe; }
+            finally
+            {
+                if (initializer) initializing.Pop();
+                active.Remove(method);
+                if (cacheable) identityPreservingEffects[method] = safe;
+            }
         }
 
         private void Work()

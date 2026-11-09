@@ -68,7 +68,7 @@ public sealed partial class GeneratorClient
                 if (identity is not null)
                 {
                     program["identitySelection"] = identity.Receipt.DeepClone();
-                    var envelope = MethodSourceIdentity(body.Method);
+                    var envelope = MethodSourceIdentity(body.Method, includeMetadataToken: true);
                     envelope["coverage"] = "unknown";
                     envelope["unresolved"] = "unspecialized_" + label + "_site_not_captured; bounded_captured_identity_source_slice_only";
                     envelope["identitySelected"] = program;
@@ -83,14 +83,14 @@ public sealed partial class GeneratorClient
                 // are not a claim of unconditional execution: closure is unknown.
                 if (IsProjectileSpawnSource(call))
                 {
-                    var reference = MethodSourceIdentity(body.Method);
+                    var reference = MethodSourceIdentity(body.Method, includeMetadataToken: true);
                     reference["at"] = call.At;
                     reference["requiredPredicates"] = new JsonArray();
                     reference["projectileTypes"] = new JsonArray();
                     reference["unresolved"] = "spawn_source_slice_unavailable:" + reason;
                     references.Add(reference);
                 }
-                var program = MethodSourceIdentity(body.Method);
+                var program = MethodSourceIdentity(body.Method, includeMetadataToken: true);
                 program["observations"] = new JsonArray(); program["dependencies"] = new JsonObject();
                 program["predicates"] = new JsonArray(); program["symbols"] = new JsonObject();
                 program["coverage"] = "unknown";
@@ -125,7 +125,7 @@ public sealed partial class GeneratorClient
         if (names.All(pair => pair.Key == pair.Value)) return true;
         // Only the serializer's known expression-bearing fields can be rebound.
         // A new schema may refer to symbols elsewhere and must stay separate.
-        var fields = new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "observations", "dependencies", "predicates", "symbols", "coverage", "unresolved", "identitySelection" };
+        var fields = new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "metadataToken", "observations", "dependencies", "predicates", "symbols", "coverage", "unresolved", "identitySelection" };
         if (source.Any(pair => !fields.Contains(pair.Key)) || names.Any(pair => !Regex.IsMatch(pair.Key, @"^[A-Za-z_][A-Za-z0-9_.`]*(?:#\d+)?$")
             || !Regex.IsMatch(pair.Value, @"^[A-Za-z_][A-Za-z0-9_.`]*(?:#\d+)?$"))) return false;
         var copy = source.DeepClone().AsObject();
@@ -220,7 +220,7 @@ public sealed partial class GeneratorClient
             // A selected graph can supplement an established all-identity
             // capture. Known outer graph tables stay in that original capture;
             // unfamiliar wrapper metadata must never disappear during union.
-            foreach (string key in new[] { "method", "sourceModuleVersionId", "sourceMethodSha256" })
+            foreach (string key in new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "metadataToken" })
                 if (!JsonNode.DeepEquals(destination[key], addition[key])) return false;
             var knownWrapper = new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "unresolved", "identitySelected",
                 "observations", "dependencies", "predicates", "symbols", "identitySelectionUnavailable" };
@@ -229,7 +229,7 @@ public sealed partial class GeneratorClient
         }
         var target = selected ? destination["identitySelected"]!.AsObject() : destination;
         var source = selected ? addition["identitySelected"]!.AsObject() : addition;
-        foreach (string key in new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "identitySelection" })
+        foreach (string key in new[] { "method", "sourceModuleVersionId", "sourceMethodSha256", "metadataToken", "coverage", "identitySelection" })
             if (!JsonNode.DeepEquals(target[key], source[key])) return false;
         if (!TryAlignProjectileSourceSymbols(target, source, out source)) return false;
         foreach (string key in new[] { "dependencies", "symbols" })

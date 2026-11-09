@@ -71,6 +71,20 @@ def expand_catalog_targets(cards: list[dict[str, Any]], target_sets: dict[str, l
 
 def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
     """Independent lossless check; request_dossier deliberately stays literal."""
+    def text_parts(parts: Any) -> str:
+        assert isinstance(parts, list) and 1 <= len(parts) <= 3
+        pieces = []
+        for part in parts:
+            if isinstance(part, str):
+                pieces.append(part)
+            else:
+                assert isinstance(part, dict) and set(part) == {"sourceText"}
+                index = part["sourceText"]
+                assert type(index) is int and 0 <= index < len(dossier["nativeSourceText"])
+                assert isinstance(dossier["nativeSourceText"][index], str)
+                pieces.append(dossier["nativeSourceText"][index])
+        return "".join(pieces)
+
     def expand(value: Any, active: tuple[int, ...] = ()) -> Any:
         if isinstance(value, dict):
             if set(value) == {"sourceSameAs"}:
@@ -78,22 +92,15 @@ def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
                 assert type(index) is int and 0 <= index < len(dossier["nativeSourceFacts"])
                 assert index not in active, "cyclic native source reference"
                 return expand(dossier["nativeSourceFacts"][index], (*active, index))
+            if set(value) == {"sourceTextValueParts"} and "sourceTextNotation" in dossier:
+                return text_parts(value["sourceTextValueParts"])
             result = {}
             for key, child in value.items():
                 if key in {"tooltipLines", "tooltipSource", "generatedParent"}:
                     result[key] = copy.deepcopy(child)
                 elif key == "sourceTextParts" and "sourceTextNotation" in dossier:
                     assert "code" not in value
-                    pieces = []
-                    for part in child:
-                        if isinstance(part, str):
-                            pieces.append(part)
-                        else:
-                            assert isinstance(part, dict) and set(part) == {"sourceText"}
-                            index = part["sourceText"]
-                            assert type(index) is int and 0 <= index < len(dossier["nativeSourceText"])
-                            pieces.append(dossier["nativeSourceText"][index])
-                    result["code"] = "".join(pieces)
+                    result["code"] = text_parts(child)
                 else:
                     result[key] = expand(child, active)
             return result

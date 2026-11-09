@@ -110,7 +110,16 @@ public sealed partial class GeneratorClient
 
     private static string? MechanicsPruningRefusal(NativeCSharpDocument document, AstNode? region = null, int type = 0, int style = 0)
     {
-        if (region is null && document.Method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0) return "exception_scope_not_pruned";
+        if (region is null && document.Method.GetMethodBody()!.ExceptionHandlingClauses.Count != 0)
+        {
+            var clauses = document.Method.GetMethodBody()!.ExceptionHandlingClauses;
+            var islands = document.Declaration.Body.DescendantsAndSelf.OfType<TryCatchStatement>().ToArray();
+            // Unsupported/unrepresented EH remains a whole-method refusal. All
+            // represented islands and their enclosing control structure stay intact.
+            if (clauses.Cast<ExceptionHandlingClause>().Any(clause => clause.Flags == ExceptionHandlingClauseOptions.Fault)
+                || islands.Sum(island => island.CatchClauses.Count + (island.FinallyBlock.IsNull ? 0 : 1)) != clauses.Count)
+                return "exception_scope_not_mapped";
+        }
         if (document.Method.IsStatic || document.Method.DeclaringType is null || !typeof(Projectile).IsAssignableFrom(document.Method.DeclaringType)) return "captured_this_receiver_not_established";
         // Read-only IL veto also covers unsafe &field syntax, not just the
         // decompiler's ref/out DirectionExpression representation.
@@ -356,6 +365,11 @@ public sealed partial class GeneratorClient
             {
                 cancellation.ThrowIfCancellationRequested();
                 if (!node.Ancestors.Contains(tree)) continue;
+                // Do not rewrite an exception island, anything within it, or a
+                // containing statement that could move/remove the island. Other
+                // siblings remain eligible under the same global identity veto.
+                if (node is TryCatchStatement || node.Ancestors.OfType<TryCatchStatement>().Any()
+                    || node.Descendants.OfType<TryCatchStatement>().Any()) continue;
                 if (node is IfElseStatement branch)
                 {
                     if (retainedGuards.Contains(branch)) continue;
@@ -412,12 +426,20 @@ public sealed partial class GeneratorClient
         var removedCalls = MechanicsCallOffsets(removedInvocations, callIndex, gaps);
         var remainingCalls = MechanicsCallOffsets(tree.Descendants.OfType<InvocationExpression>(), callIndex, gaps, includeAmbiguous: true);
         removedCalls.ExceptWith(remainingCalls);
-        var spawnTypes = refusal is null
+        // Local reaching-definition extraction does not model exceptional flow.
+        // Keep those calls unresolved rather than infer types across an EH edge.
+        bool hasExceptionIslands = tree.Descendants.OfType<TryCatchStatement>().Any();
+        var spawnTypes = refusal is null && !hasExceptionIslands
             ? MechanicsSpawnTypeCandidates(tree, callIndex, gaps) : new JsonArray();
         var rendered = RenderCSharp(tree, includeLocations: false);
         if (rendered.Code.Length > NativeCSharpRecordLimit) throw new NotSupportedException("mechanics_source_character_bound; strict_source_retained");
-        var record = MethodSourceIdentity(document.Method);
+        var record = MethodSourceIdentity(document.Method, includeMetadataToken: true);
+        // Producer permission is separate from coverage: unpruned source can
+        // still be safe, while an explicit refusal must never authorize pruning.
+        record["identityPruning"] = new JsonObject { ["allowed"] = capturedReceiverBound && refusal is null, ["refusal"] = refusal };
         record["coverage"] = retainedGuards.Count > 0 ? "approximate_identity_ast_regions" : removed + removedSections + removedUnreachable > 0 ? "approximate_identity_ast_method" : "unpruned_method";
+        int exceptionIslands = tree.Descendants.OfType<TryCatchStatement>().Count();
+        if (exceptionIslands > 0) record["preservedExceptionIslandCount"] = exceptionIslands;
         if (retainedGuards.Count > 0) record["entryGuards"] = conditionalRecord!["entryGuards"]!.DeepClone();
         record["approximation"] = MechanicsIdentityAssumption;
         record["receiverBinding"] = capturedReceiverBound ? "captured_actor_source_binding" : "unproved";

@@ -13,6 +13,8 @@ internal static partial class EngineRuntimeChecks
     private sealed class MechanicsSourceFixture : Projectile
     {
         internal static int Executions;
+        public void OverloadedIdentity(int unused) { if (type == 177) damage++; }
+        public void OverloadedIdentity(float unused) { if (type == 177) damage++; }
         [MethodImpl(MethodImplOptions.NoInlining)] private static bool Touch() { Executions++; return true; }
         [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
         public void OpaquePrefix()
@@ -65,6 +67,32 @@ internal static partial class EngineRuntimeChecks
         public void ExplicitMutation() { type = 178; if (type == 178) damage += 9; }
         public void AddressExposure() { TouchIdentity(ref type); if (type == 178) damage += 9; }
         private static void TouchIdentity(ref int value) { Executions++; value = 178; }
+        public void ExceptionFilterMutation() { try { Touch(); } catch (Exception) when ((type = 178) > 0) { damage++; } if (type == 177) damage++; }
+        public void ExceptionFilterRefEscape() { try { Touch(); } catch (Exception) when (System.Threading.Interlocked.Increment(ref type) > 0) { damage++; } if (type == 177) damage++; }
+        public void ExceptionNestedIdentity()
+        {
+            if (type == 178) { try { Touch(); } finally { Executions++; } }
+            switch (type) { case 178: try { try { Touch(); } catch { damage++; } } finally { Executions++; } break; }
+            if (type == 178) damage += 979;
+        }
+        public void ExceptionReturnThrowFinally()
+        {
+            try { if (type == 178) return; if (type == 177) throw new InvalidOperationException(); }
+            finally { Executions++; }
+            if (type == 178) damage += 979;
+        }
+        public void ExceptionTryMutation() { try { type = 178; } catch { damage++; } if (type == 177) damage++; }
+        public void ExceptionCatchMutation() { try { Touch(); } catch { type = 178; } if (type == 177) damage++; }
+        public void ExceptionFinallyMutation() { try { Touch(); } finally { aiStyle = 2; } if (type == 177) damage++; }
+        public void ExceptionRefEscape() { try { System.Threading.Interlocked.Increment(ref type); } finally { Executions++; } if (type == 177) damage++; }
+        public void ExceptionIslandSiblings()
+        {
+            if (type == 178) damage += 971;
+            try { if (type == 178) damage += 972; Touch(); }
+            catch (Exception) when (Touch()) { if (type == 178) damage += 973; }
+            finally { if (type == 178) damage += 974; }
+            if (type == 178) damage += 975;
+        }
         public void ExceptionScope() { try { if (type == 178) damage++; } finally { Executions++; } }
         public void OtherReceiver(Projectile other) { if (other.type == 178) damage++; }
         public void IdentitySwitch()
@@ -227,9 +255,10 @@ internal static partial class EngineRuntimeChecks
             if (type == 177) NewProjectile(null!, position.X, position.Y, 0, 0, 2, 1, 1, owner);
         }
     }
-    private static JsonObject MechanicsFixtureRecord(string name, CancellationToken cancellation = default, bool capturedReceiverBound = true, int capturedType = 177, bool conditional = false)
+    private static JsonObject MechanicsFixtureRecord(string name, CancellationToken cancellation = default, bool capturedReceiverBound = true, int capturedType = 177, bool conditional = false, Type? parameterType = null)
     {
-        var method = typeof(MechanicsSourceFixture).GetMethod(name)!;
+        var method = parameterType is null ? typeof(MechanicsSourceFixture).GetMethod(name)!
+            : typeof(MechanicsSourceFixture).GetMethod(name, new[] { parameterType })!;
         object Create(Type type, params object?[] values) => Activator.CreateInstance(type, CSharpFlags, null, values, null)!;
         using var module = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!, method.Module.FullyQualifiedName,
             File.ReadAllBytes(method.Module.FullyQualifiedName), method.Module.ModuleVersionId);
@@ -270,6 +299,18 @@ internal static partial class EngineRuntimeChecks
     {
         MechanicsSourceFixture.Executions = 0;
         var prefix = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.OpaquePrefix));
+        Equal(true, prefix["identityPruning"]!["allowed"]!.GetValue<bool>(), "safe bound method emits explicit pruning permission");
+        Equal(true, prefix["identityPruning"]!["refusal"] is null, "allowed receipt has no refusal");
+        var overloads = new[] { typeof(int), typeof(float) }.Select(t => MechanicsFixtureRecord(nameof(MechanicsSourceFixture.OverloadedIdentity), parameterType: t)).ToArray();
+        Equal(true, overloads[0]["metadataToken"]!.GetValue<int>() != overloads[1]["metadataToken"]!.GetValue<int>(), "overloads retain distinct real metadata tokens even with identical IL");
+        foreach (var t in new[] { typeof(int), typeof(float) })
+        {
+            var method = typeof(MechanicsSourceFixture).GetMethod(nameof(MechanicsSourceFixture.OverloadedIdentity), new[] { t })!;
+            var record = MechanicsFixtureRecord(method.Name, parameterType: t);
+            Equal(method.MetadataToken, record["metadataToken"]!.GetValue<int>(), "certificate token is MethodBase token");
+            Equal(method.Module.ModuleVersionId.ToString(), record["sourceModuleVersionId"]!.GetValue<string>(), "certificate binds exact module");
+            Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(method.GetMethodBody()!.GetILAsByteArray()!)).ToLowerInvariant(), record["sourceMethodSha256"]!.GetValue<string>(), "certificate binds exact IL");
+        }
         string text = prefix["code"]!.GetValue<string>();
         Equal(true, text.Contains("Touch() && type != 177"), "opaque prefix remains evaluated and guarded");
         Equal(false, text.Contains("+= 9"), "pure false identity prefix excludes unevaluated short-circuit suffix and body");
@@ -302,16 +343,47 @@ internal static partial class EngineRuntimeChecks
         Equal("approximate_identity_ast_method", approximate["coverage"]!.GetValue<string>(), "opaque calls permit only explicitly approximate identity");
         Equal(true, approximate["code"]!.GetValue<string>().Contains("Touch()"), "opaque call itself is never erased");
         Equal(true, approximate["approximation"]!.GetValue<string>().Contains("assumed stable across opaque calls"), "assumption is explicit, not a proof");
-        foreach (string name in new[] { nameof(MechanicsSourceFixture.ExplicitMutation), nameof(MechanicsSourceFixture.AddressExposure), nameof(MechanicsSourceFixture.ExceptionScope) })
+        foreach (string name in new[] { nameof(MechanicsSourceFixture.ExplicitMutation), nameof(MechanicsSourceFixture.AddressExposure), nameof(MechanicsSourceFixture.ExceptionTryMutation), nameof(MechanicsSourceFixture.ExceptionCatchMutation), nameof(MechanicsSourceFixture.ExceptionFinallyMutation), nameof(MechanicsSourceFixture.ExceptionRefEscape), nameof(MechanicsSourceFixture.ExceptionFilterMutation), nameof(MechanicsSourceFixture.ExceptionFilterRefEscape) })
         {
             var refused = MechanicsFixtureRecord(name);
+            Equal(false, refused["identityPruning"]!["allowed"]!.GetValue<bool>(), "unsafe scope has explicit denied receipt");
+            Equal(true, refused["identityPruning"]!["refusal"] is not null, "denied receipt carries exact refusal");
             Equal("unpruned_method", refused["coverage"]!.GetValue<string>(), "unsafe scope preserves full source: " + name);
             Equal(0, refused["excludedCallOffsets"]!.AsArray().Count, "unsafe scope excludes no children");
             Equal(true, refused["unresolved"]!.AsArray().Count > 0, "unsafe scope reports unknown");
         }
+        var exception = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionIslandSiblings));
+        Equal(true, exception["identityPruning"]!["allowed"]!.GetValue<bool>(), "mapped EH permits outside-only approximation");
+        Equal(2, exception["removedConditionalCount"]!.GetValue<int>(), "only sibling identity arms are removed");
+        var exceptionCode = exception["code"]!.GetValue<string>();
+        var originalException = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionIslandSiblings), capturedReceiverBound: false)["code"]!.GetValue<string>();
+        string Island(string code)
+        {
+            int start = code.IndexOf("try", StringComparison.Ordinal);
+            int end = code.IndexOf('{', code.IndexOf("finally", StringComparison.Ordinal));
+            int depth = 1;
+            while (depth > 0) { end++; if (code[end] == '{') depth++; else if (code[end] == '}') depth--; }
+            return code.Substring(start, end + 1 - start);
+        }
+        Equal(Island(originalException), Island(exceptionCode), "entire rendered exception island, including filter and finally, is byte-identical");
+        Equal(false, exceptionCode.Contains("971") || exceptionCode.Contains("975"), "foreign sibling effects removed");
+        Equal(true, exceptionCode.Contains("972") && exceptionCode.Contains("973") && exceptionCode.Contains("974"), "all EH identity arms remain");
+        var islandOnly = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionScope));
+        Equal(0, islandOnly["removedConditionalCount"]!.GetValue<int>(), "finally-only island remains untouched");
+        var nestedException = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionNestedIdentity));
+        Equal(true, nestedException["identityPruning"]!["allowed"]!.GetValue<bool>(), "nested EH is mapped");
+        Equal(1, nestedException["removedConditionalCount"]!.GetValue<int>(), "only the EH-free sibling is rewritten");
+        Equal(0, nestedException["removedSwitchSectionCount"]!.GetValue<int>(), "switch containing EH remains intact");
+        Equal(true, nestedException["code"]!.GetValue<string>().Contains("type == 178"), "identity wrapper containing EH remains intact");
+        var transfers = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionReturnThrowFinally));
+        var transfersOriginal = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ExceptionReturnThrowFinally), capturedReceiverBound: false);
+        Equal(Island(transfersOriginal["code"]!.GetValue<string>()), Island(transfers["code"]!.GetValue<string>()), "return, throw and finally remain byte-identical");
+        Equal(false, transfers.ContainsKey("spawnTypeCandidates"), "EH never uses normal-flow-only local spawn inference");
         var address = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.AddressExposure));
         Equal(true, address["unresolved"]!.ToJsonString().Contains("identity_field_address_exposure_not_pruned"), "exact IL identity-field address veto is active independently of AST spelling");
         var unbound = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.ChildCalls), capturedReceiverBound: false);
+        Equal(false, unbound["identityPruning"]!["allowed"]!.GetValue<bool>(), "unbound receiver has denied receipt");
+        Equal("captured_receiver_binding_unproved", unbound["identityPruning"]!["refusal"]!.GetValue<string>(), "unbound receipt records reason");
         Equal("unpruned_method", unbound["coverage"]!.GetValue<string>(), "unknown caller/receiver binding keeps full source");
         Equal(0, unbound["excludedCallOffsets"]!.AsArray().Count, "unbound receiver never removes child calls");
         var other = MechanicsFixtureRecord(nameof(MechanicsSourceFixture.OtherReceiver));

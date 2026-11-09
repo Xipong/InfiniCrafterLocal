@@ -12,6 +12,7 @@ import json
 import re
 from typing import Any
 
+from infini_local.pipelines.context.author_mechanics_policy import POLICY
 from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
@@ -120,7 +121,7 @@ _SOURCE_RECEIPTS = {
     "id", "sourceMethodSha256", "sourceModuleVersionId", "metadataToken", "assemblySha256",
     "decompiler", "codeSha256", "graphPaths", "locations", "coveredWindows", "excludedCallOffsets",
     "spawnTypeCandidates", "removedConditionalCount", "removedEmptyStatementCount",
-    "removedSwitchSectionCount", "removedUnreachableStatementCount",
+    "removedSwitchSectionCount", "removedUnreachableStatementCount", "identityPruning",
 }
 _SOURCE_FIELDS = {"method", "code", "coverage", "entryGuards", "entryCondition", "entryScope", "unresolved",
                   "approximation", "receiverBinding", "identitySpecialization", "identityWitnesses", "spawnSites"}
@@ -273,6 +274,9 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     def excluded(call: dict[str, Any], source: dict[str, Any], child_type: Any = None) -> bool:
         # Producer IL anchors, never line-based lexical ranges or numeric ID inference.
         for record in _rows(source.get("records")):
+            receipt = record.get("identityPruning")
+            if receipt is not None and receipt != {"allowed": True, "refusal": None}:
+                continue
             if not (all(call.get(key) is not None and call.get(key) == record.get(key)
                         for key in ("method", "sourceMethodSha256", "sourceModuleVersionId"))
                     and type(call.get("at")) is int):
@@ -328,7 +332,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         source = _source(profile)
         if source is not None:
             extra = {key: value for key, value in source.items() if key not in {
-                "source", "version", "identity", "records", "unresolved", "strictSourceRefusals", "verifiedSourceRecords"}}
+                "source", "version", "identity", "records", "unresolved", "strictSourceRefusals", "verifiedSourceRecords", "authorSelection"}}
             if extra:
                 retain_source(path + ".mechanicsSource", extra)
             if not source["records"]:
@@ -381,6 +385,22 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                     and type(csharp.get("version")) is int and csharp["version"] == 1 else [])
         source_aliases: list[tuple[str, dict[str, Any]]] = []
         source_targets: dict[str, set[int]] = {}
+        if source is not None and isinstance(source.get("authorSelection"), dict):
+            aliases = source["authorSelection"].get("aliases", {})
+            records = source["records"]
+            if isinstance(aliases, dict) and all(isinstance(k, str) and type(v) is int
+                    and 0 <= v < len(records) for k, v in aliases.items()):
+                retained = []
+                for record in fallback:
+                    identifier = record.get("id")
+                    if identifier in aliases:
+                        target = records[aliases[identifier]]
+                        source_aliases.append((identifier, target))
+                        retained.append(target)
+                    else:
+                        retained.append(record)
+                fallback = retained
+                retain_source(path + ".authorSourcePolicy", POLICY)
         if source is not None:
             supplements = _rows(source.get("verifiedSourceRecords"))
             # Compare the exact declared model projection, not a method name.
@@ -516,7 +536,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             for call in _rows(link_view.get("sourceCalls")):
                 location = call.get("sourceLocation")
                 if (isinstance(location, dict) and isinstance(location.get("sourceRecord"), str)
-                        and set(location) <= {"sourceRecord", "statement", "predicates"}):
+                        and set(location) <= {"sourceRecord", "statement", "predicates", "scope"}):
                     # Upstream line mappings name the profile-local verified
                     # source table. An approximate same-named body is not it.
                     call["sourceLocation"] = bind_source_refs({

@@ -579,3 +579,49 @@ def test_finite_spawn_candidates_keep_source_admission_and_unknown_siblings():
     assert linked[0]["requiredPredicates"] == calls[0]["requiredPredicates"]
     assert linked[0]["sourceLocation"]["predicates"][0]["id"] == "b3"
     assert (reference, calls) == before
+
+@pytest.mark.parametrize('token', [0x06000001, 0x06000002, True, 0, '100663297'])
+def test_new_producer_token_binds_without_model_growth(token):
+    parent = _parent()
+    reference, _ = _parts(parent)
+    reference['nativeCSharpSource']['records'][0]['metadataToken'] = 0x06000001
+    baseline, _ = native_csharp_source_for_llm(copy.deepcopy(reference))
+    reference['motion']['programs'][0]['metadataToken'] = token
+    before = copy.deepcopy(reference)
+    result, _ = native_csharp_source_for_llm(reference)
+    assert reference == before
+    if type(token) is int and token == 0x06000001:
+        assert result == baseline
+        assert 'metadataToken' not in json.dumps(result)
+    else:
+        assert result == reference
+
+
+def test_new_source_call_token_cannot_link_an_overload():
+    parent = _parent()
+    reference, calls = _parts(parent)
+    reference['nativeCSharpSource']['records'][0]['metadataToken'] = 0x06000001
+    reference['motion']['programs'][0]['metadataToken'] = 0x06000001
+    calls[0]['metadataToken'] = 0x06000002
+    result, linked = native_csharp_source_for_llm(reference, calls)
+    assert result == reference and linked == calls
+    calls[0]['metadataToken'] = 0x06000001
+    result, linked = native_csharp_source_for_llm(reference, calls)
+    assert result['motion']['programs'][0] == {'nativeCSharpSourceRef': 's0'}
+    assert 'metadataToken' not in json.dumps(linked)
+
+@pytest.mark.parametrize('selected_token', [None, 0x06000002])
+def test_new_selection_cannot_claim_another_or_unbound_definition(selected_token):
+    parent = _parent()
+    reference, _ = _parts(parent)
+    graph = reference['motion']['programs'][0]
+    graph['metadataToken'] = 0x06000001
+    reference['nativeCSharpSource']['records'][0]['metadataToken'] = 0x06000001
+    selected = copy.deepcopy(graph)
+    if selected_token is None:
+        selected.pop('metadataToken')
+    else:
+        selected['metadataToken'] = selected_token
+    graph['identitySelected'] = selected
+    result, _ = native_csharp_source_for_llm(reference)
+    assert result == reference

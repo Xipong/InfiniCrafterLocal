@@ -9,6 +9,7 @@ from infini_local.core.item_identity_tools import (
     generated_data_of,
     item_field,
 )
+from infini_local.pipelines.context.author_mechanics_policy import select_author_mechanics, selected_diagnostics, _definition, preferred_guarded_records
 from infini_local.pipelines.context.attack_behavior import project_attack_behavior
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.native_references import known_projectile_references
@@ -310,7 +311,7 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_attack_source(reference: dict[str, Any], references: Any, *,
                            prefer_readable_source: bool, has_mechanics: bool,
-                           memo: dict[str, Any] | None) -> tuple[Any, Any, Any]:
+                           memo: dict[str, Any] | None, preferred_source_records: list[str] | None = None) -> tuple[Any, Any, Any]:
     """Request-local reuse of pure source projection, never projectile envelopes.
 
     Keep JSON member order and scalar types in the key. Unsupported Python
@@ -328,7 +329,7 @@ def _compact_attack_source(reference: dict[str, Any], references: Any, *,
         return value is None or type(value) in (str, bool, int, float)
 
     key = None
-    inputs = [reference, readable, calls, prefer_readable_source, has_mechanics]
+    inputs = [reference, readable, calls, prefer_readable_source, has_mechanics, preferred_source_records]
     if memo is not None:
         try:
             if json_value(inputs):
@@ -344,7 +345,8 @@ def _compact_attack_source(reference: dict[str, Any], references: Any, *,
     linked_calls = None
     selected = None
     if "nativeCSharpSource" in reference and readable:
-        reference, linked_calls = native_csharp_source_for_llm(reference, calls)
+        reference, linked_calls = (native_csharp_source_for_llm(reference, calls, preferred_source_records=preferred_source_records)
+                                 if preferred_source_records else native_csharp_source_for_llm(reference, calls))
         if (not prefer_readable_source and "nativeCSharpSourceReading" in reference
                 and "nativeCSharpSourceReading" not in original):
             reference = copy.deepcopy(original)
@@ -409,15 +411,26 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
             # A partial approximate view must not lose a certified dispatcher
             # region just because the strict source view prefers its IL graph.
             mechanics.pop("verifiedSourceRecords", None)
+            mechanics.pop("authorSelection", None)
         attack, linked_calls, selected = _compact_attack_source(
             reference, proj.get("referencedProjectiles"), prefer_readable_source=prefer_readable_source,
             has_mechanics=isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
                 and type(mechanics.get("version")) is int and mechanics["version"] == 1,
-            memo=attack_source_memo)
+            memo=attack_source_memo, preferred_source_records=preferred_guarded_records(reference, mechanics, proj))
         out["attackReference"] = attack
         if (isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
                 and type(mechanics.get("version")) is int and mechanics["version"] == 1):
-            verified = _verified_mechanics_supplements(reference, attack)
+            selection = select_author_mechanics(reference, mechanics, attack, proj)
+            if selection["aliases"]:
+                mechanics["authorSelection"] = {"aliases": selection["aliases"]}
+                selected = selected_diagnostics(selected, selection["paths"])
+                # Existing source maps name strict source lines, not the new readable body.
+                for call in linked_calls or []:
+                    location = call.get("sourceLocation")
+                    if isinstance(location, dict) and location.get("sourceRecord") in selection["aliases"]:
+                        location["scope"] = "raw_capture_strict_source_lines; not_lines_of_readable_author_source"
+            verified = [record for record in _verified_mechanics_supplements(reference, attack)
+                        if _definition(record) not in selection["certificates"]]
             if verified:
                 mechanics["verifiedSourceRecords"] = verified
         if selected:

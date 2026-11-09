@@ -111,6 +111,7 @@ internal static partial class EngineRuntimeChecks
             ("weapon replacement profiles conditional opaque hook evidence", WeaponReplacementProfilesKeepConditionalAndOpaqueHookEvidence),
             ("weapon replacement profiles deferred cancellation parity", WeaponReplacementProfilesMatchDeferredAndCancelledCapture),
             ("parent source sparse locals match dense oracle", ParentSourceSparseLocalsMatchDenseOracle),
+            ("native CSharp token separates overloads and modules", NativeCSharpTokenSeparatesOverloads),
             ("native CSharp source exact PE identity and no execution", NativeCSharpSourceVerifiesExactPeWithoutExecution),
             ("native CSharp source semantic method header verification", NativeCSharpSourceVerifiesMethodHeader),
             ("native CSharp source complete exception descriptor verification", NativeCSharpSourceVerifiesExceptionRegions),

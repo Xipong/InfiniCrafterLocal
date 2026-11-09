@@ -23,7 +23,7 @@ internal static partial class EngineRuntimeChecks
     private static string PackSafetyHash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     private static MethodInfo PackSafetyMethod() => typeof(Projectile).GetMethod("Kill", CSharpFlags, null, Type.EmptyTypes, null)!;
     private static JsonObject PackSafetyCertificate(MethodInfo method)
-        => (JsonObject)CSharpOwner.GetMethod("MethodSourceIdentity", CSharpFlags)!.Invoke(null, new object[] { method })!;
+        => (JsonObject)CSharpOwner.GetMethod("MethodSourceIdentity", CSharpFlags)!.Invoke(null, new object[] { method, true })!;
     private static string PackSafetyKey(MethodInfo method, JsonObject input, string kind = "projectile_method")
         => (string)CSharpOwner.GetMethod("NativeSourceProjectionKey", CSharpFlags)!.Invoke(null, new object[] { kind, method, input })!;
 

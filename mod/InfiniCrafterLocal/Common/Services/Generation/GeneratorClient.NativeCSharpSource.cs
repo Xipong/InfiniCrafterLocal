@@ -531,14 +531,16 @@ public sealed partial class GeneratorClient
     private static bool CSharpProgramMatches(JsonObject row, MethodInfo method)
         => row["method"] is JsonValue name && name.TryGetValue<string>(out var text) && text == method.DeclaringType!.FullName + "." + method.Name
             && row["sourceModuleVersionId"] is JsonValue module && module.TryGetValue<string>(out var mvid) && mvid == method.Module.ModuleVersionId.ToString()
-            && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha) && sha == CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!);
+            && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha) && sha == CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!)
+            && row["metadataToken"] is JsonValue token && token.TryGetValue<int>(out var id) && id == method.MetadataToken;
 
-    private readonly record struct CSharpRowIdentity(string Method, string Mvid, string Sha);
+    private readonly record struct CSharpRowIdentity(string Method, string Mvid, string Sha, int Token);
     private static CSharpRowIdentity? CSharpRowKey(JsonObject row)
         => row["method"] is JsonValue name && name.TryGetValue<string>(out var text)
             && row["sourceModuleVersionId"] is JsonValue module && module.TryGetValue<string>(out var mvid)
             && row["sourceMethodSha256"] is JsonValue hash && hash.TryGetValue<string>(out var sha)
-            ? new(text, mvid, sha) : null;
+            && row["metadataToken"] is JsonValue token && token.TryGetValue<int>(out var id)
+            ? new(text, mvid, sha, id) : null;
 
     // Attachment-local indexes retain the existing exact tuple and row order.
     // They do not replace the independent native module/certificate checks.
@@ -560,7 +562,7 @@ public sealed partial class GeneratorClient
             string name = method.DeclaringType!.FullName + "." + method.Name;
             string mvid = method.Module.ModuleVersionId.ToString();
             if (!owners.Contains((name, mvid))) return Array.Empty<CSharpProgram>();
-            key = new(name, mvid, CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!));
+            key = new(name, mvid, CSharpHash(method.GetMethodBody()!.GetILAsByteArray()!), method.MetadataToken);
             return programs[key].ToArray();
         }
         internal HashSet<int> Links(CSharpRowIdentity? key) => CSharpRowLinkOffsets(calls[key]);
@@ -668,6 +670,7 @@ public sealed partial class GeneratorClient
         => new()
         {
             ["type"] = type, ["style"] = style, ["capturedReceiverBound"] = capturedReceiverBound,
+            ["mechanicsPolicyVersion"] = 2, // Producer receipt + preserved exception islands.
             ["windows"] = new JsonArray(CSharpIdentityWindows(programs).Select(window => (JsonNode?)window.DeepClone()).ToArray()),
             ["linkOffsets"] = new JsonArray(linkOffsets.Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray()),
         };
@@ -681,6 +684,15 @@ public sealed partial class GeneratorClient
             if (hasRecord == hasRefusal) return false;
             if (!hasRecord) return value[recordName] is null;
             var record = value[recordName]!.AsObject();
+            // Old cached mechanics projections do not carry producer permission.
+            // Recompute them rather than manufacturing a receipt on admission.
+            if (recordName == "mechanics" && (record["metadataToken"] is not JsonValue token
+                || !token.TryGetValue<int>(out int metadataToken) || metadataToken != method.MetadataToken
+                || record["identityPruning"] is not JsonObject permission
+                || permission["allowed"] is not JsonValue allowed || !allowed.TryGetValue<bool>(out bool canPrune)
+                || !permission.ContainsKey("refusal")
+                || (canPrune ? permission["refusal"] is not null
+                    : permission["refusal"] is not JsonValue reason || !reason.TryGetValue<string>(out _)))) return false;
             return value[refusalName] is null && record.ContainsKey("graphPaths") && record["graphPaths"] is null
                 && CSharpProgramMatches(record, method) && record["code"] is JsonValue code && code.TryGetValue<string>(out _)
                 && record["coverage"] is JsonValue coverage && coverage.TryGetValue<string>(out _);

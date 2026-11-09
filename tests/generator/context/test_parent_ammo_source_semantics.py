@@ -569,6 +569,26 @@ def _assert_eventide_state(mechanics, native):
                          **{key: original[key] for key in ("source", "inventorySlot", "profileScope", "sourceReferences")}}]
 
 
+def _assert_spawn_coverage(actual, captured):
+    if actual == captured:
+        return  # An unfamiliar envelope must stay literal, not become a summary.
+    assert actual.keys() == {"fields", "condition", "scope"}
+    assert actual["fields"].keys() == captured["fields"].keys()
+    assert "not final values or guaranteed execution" in actual["scope"]
+    assert "helpers and hooks remain unknown" in actual["scope"]
+    pairs = [(actual["condition"], captured["condition"])] + [
+        (actual["fields"][name], row) for name, row in captured["fields"].items()]
+    for row, original in pairs:
+        # Independent semantic oracle: all input statuses and distinct reasons
+        # survive at their own field/condition, including alias qualifications.
+        expected = {"status": original["status"],
+                    "reasons": list(dict.fromkeys(d["reason"] for d in original["unresolved"]))}
+        scoped = list(dict.fromkeys((d["reason"], d["scope"]) for d in original["unresolved"] if "scope" in d))
+        if scoped:
+            expected["reasonScopes"] = [{"reason": reason, "scope": scope} for reason, scope in scoped]
+        assert row == expected
+
+
 def _assert_spawn_mechanics(mechanics, native, name):
     stage = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]
     original = native["projectileSemanticsReference"]["stages"][1]
@@ -587,9 +607,7 @@ def _assert_spawn_mechanics(mechanics, native, name):
         inputs = site["spawnInputs"]
         assert inputs.keys() == source["spawnInputs"].keys()
         assert inputs["owner"] == "arg1"
-        # These actual fixtures retain the diagnostic envelope literally, including
-        # all fields, unresolved paths/reasons, guard coverage and conservative scope.
-        assert site["spawnInputCoverage"] == source["spawnInputCoverage"]
+        _assert_spawn_coverage(site["spawnInputCoverage"], source["spawnInputCoverage"])
         for field, value in source["spawnInputs"].items():
             if value["kind"] == "unknown":
                 assert inputs[field] == value  # Also retains full conditional sourceDefinition.
@@ -642,7 +660,8 @@ def _assert_spawn_mechanics(mechanics, native, name):
         assert stage["spawnOriginSetups"] == original["spawnOriginSetups"]
         assert stage["spawnOriginSetups"][0]["initialYRelativeToMountedCenterPx"] == -600
         assert site["whenSourceCondition"]["reason"] == "cyclic_source_path"
-        assert site["spawnInputCoverage"]["fields"]["velocityX"]["unresolved"][0]["reason"] == "cyclic_source_path"
+        coverage = site["spawnInputCoverage"]["fields"]["velocityX"]
+        assert "cyclic_source_path" in coverage.get("reasons", [d["reason"] for d in coverage.get("unresolved", [])])
 
 
 def _assert_exact_ammo_expressions(mechanics, native, name):
@@ -1295,3 +1314,28 @@ def test_spawn_argument_local_depth_bound_does_not_discard_other_fields():
     assert spawn['spawnInputs']['owner']['kind'] == 'argument'
     assert spawn['spawnInputs']['ai0']['value'] == 0.0
     assert spawn['spawnInputs']['type']['reason'] == 'branch_entry_value_unknown'
+
+
+@pytest.mark.parametrize("defect", ["field", "condition_status", "reason", "scope", "scope_owner"])
+def test_spawn_coverage_observer_rejects_lost_or_misbound_uncertainty(defect):
+    from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
+    row, = ammo_method_facts(_spawn_argument_fixture(
+        prefix=[('const', 0), ('stloc', 14), ('ldloca', 14), ('stloc', 30)],
+        mutate=[('const', 41), ('stloc', 14), ('ldloc', 30), ('const', 99), ('stind.i4', None)]), 'ItemCheck_Shoot')
+    captured = row['spawnSites'][0]['spawnInputCoverage']
+    actual = MechanicsRenderer().render(captured)
+    _assert_spawn_coverage(actual, captured)
+    assert actual != captured
+    damage = actual['fields']['damage']
+    if defect == "field":
+        actual['fields'].pop('owner')
+    elif defect == "condition_status":
+        actual['condition']['status'] = 'executed'
+    elif defect == "reason":
+        damage['reasons'].remove('address_exposed_local')
+    elif defect == "scope":
+        damage['reasonScopes'].clear()
+    else:
+        actual['fields']['owner']['reasonScopes'] = damage.pop('reasonScopes')
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_spawn_coverage(actual, captured)

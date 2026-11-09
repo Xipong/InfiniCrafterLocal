@@ -151,6 +151,9 @@ def expand_source_text(context):
             return [visit(child) for child in value]
         if not isinstance(value, dict):
             return value
+        if set(value) == {"sourceTextValueParts"}:
+            return "".join(shared[part["sourceText"]] if isinstance(part, dict) else part
+                           for part in value["sourceTextValueParts"])
         result = {}
         for key, child in value.items():
             if key in {"generatedParent", "tooltipLines", "tooltipSource"}:
@@ -162,7 +165,8 @@ def expand_source_text(context):
                 result[key] = visit(child)
         return result
 
-    return {key: visit(child) for key, child in context.items()
+    return {key: copy.deepcopy(child) if key in {"generatedParent", "tooltipLines", "tooltipSource"}
+            else visit(child) for key, child in context.items()
             if key not in {"nativeSourceText", "sourceTextNotation"}}
 
 
@@ -202,7 +206,7 @@ def test_shared_code_roundtrip_metadata_maps_references_and_no_mutation():
     assert expand_source_text(broken) != source
 
 
-@pytest.mark.parametrize("key", ["sourceTextParts", "nativeSourceText", "sourceTextNotation", "sourceText"])
+@pytest.mark.parametrize("key", ["sourceTextParts", "sourceTextValueParts", "nativeSourceText", "sourceTextNotation", "sourceText"])
 def test_source_text_future_notation_collisions_stay_literal(key):
     source = _source_text_context()
     source["future"] = {key: "unrecognized existing literal"}
@@ -236,3 +240,127 @@ def test_source_text_and_location_notation_compose_without_changing_line_maps():
     projected = compact_author_parent_context(source)
     assert "parentContextNotation" in projected and "nativeSourceText" in projected
     assert expand_notation(expand_source_text(projected)) == source
+
+
+def _pooled_source_text_context():
+    source = _source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    code = rows[0]["code"]
+    source["nativeSourceFacts"] = [code, {"sourceSameAs": 0}, {"unknown": ["keep", "keep"]}]
+    rows[0]["code"] = {"sourceSameAs": 1}
+    source["nonCodeReader"] = {"sourceSameAs": 0}
+    source["nonCodeReaderAgain"] = {"sourceSameAs": 1}
+    source["generatedParent"] = {"code": code, "future": {"sourceTextValueParts": "literal"}}
+    return source
+
+
+def test_pooled_code_is_factored_once_and_all_alias_readers_keep_string_type():
+    from prompt_packet_helpers import expand_native_source_references
+    source = _pooled_source_text_context()
+    before = copy.deepcopy(source)
+    projected = compact_author_parent_context(source)
+    assert source == before
+    assert expand_source_text(projected) == source
+    assert len(json.dumps(projected)) < len(json.dumps(source))
+    assert compact_author_parent_context(projected) == projected
+    assert "a string, not an object" in projected["sourceTextNotation"]
+    assert len(projected["nativeSourceFacts"]) == len(source["nativeSourceFacts"])
+    assert projected["nativeSourceFacts"][1:] == source["nativeSourceFacts"][1:]
+    assert set(projected["nativeSourceFacts"][0]) == {"sourceTextValueParts"}
+    assert len(projected["nativeSourceFacts"][0]["sourceTextValueParts"]) <= 3
+    rows = projected["parents"]["A"]["packet"]["raw"]["source"]
+    assert rows[0]["code"] == {"sourceSameAs": 1}
+    assert len(rows[1]["sourceTextParts"]) <= 3
+    assert projected["generatedParent"] == source["generatedParent"]
+    original_code = source["nativeSourceFacts"][0]
+    assert original_code not in projected["nativeSourceFacts"]
+    assert original_code not in projected["nativeSourceText"]
+    restored = expand_native_source_references(projected)
+    original = expand_native_source_references(source)
+    assert restored["nonCodeReader"] == restored["nonCodeReaderAgain"] == original_code
+    assert isinstance(restored["nonCodeReader"], str)
+    assert {k: v for k, v in restored.items() if k not in {"nativeSourceText", "sourceTextNotation"}} == original
+    corrupted = copy.deepcopy(projected)
+    corrupted["nativeSourceFacts"][0]["sourceTextValueParts"].append("changed")
+    assert expand_source_text(corrupted) != source
+    corrupted = copy.deepcopy(projected)
+    corrupted["nativeSourceFacts"][0] = {"code": original_code}
+    assert expand_source_text(corrupted) != source
+
+
+@pytest.mark.parametrize("reference", [
+    {"sourceSameAs": -1}, {"sourceSameAs": 3}, {"sourceSameAs": True},
+    {"sourceSameAs": "0"}, {"sourceSameAs": None},
+    {"sourceSameAs": 0, "future": "literal"}, {"sourceSameAs": 2},
+])
+def test_invalid_or_unknown_code_references_remain_literal(reference):
+    source = _pooled_source_text_context()
+    source["parents"]["A"]["packet"]["raw"]["source"][0]["code"] = reference
+    assert compact_author_parent_context(source) == source
+
+
+@pytest.mark.parametrize("pool", [
+    [{"sourceSameAs": 0}, {"sourceSameAs": 0}],
+    [{"sourceSameAs": 1}, {"sourceSameAs": 0}],
+    {"sourceSameAs": "future_pool"},
+    None,
+])
+def test_cyclic_or_malformed_code_pools_remain_literal(pool):
+    source = _pooled_source_text_context()
+    source["nativeSourceFacts"] = pool
+    assert compact_author_parent_context(source) == source
+
+
+def test_one_physical_code_string_with_many_references_is_not_shared_with_itself():
+    source = _pooled_source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    rows[1]["code"] = {"sourceSameAs": 0}
+    rows.extend(copy.deepcopy(rows) * 20)
+    assert compact_author_parent_context(source) == source
+
+
+def test_pooled_code_unknown_coverage_and_protected_fields_remain_literal():
+    source = _pooled_source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    for row in rows:
+        row["coverage"] = "unknown_future_capture"
+    for key in ("tooltipLines", "tooltipSource"):
+        source[key] = [{**copy.deepcopy(row), "coverage": "whole_method"} for row in rows]
+    assert compact_author_parent_context(source) == source
+
+
+def test_shared_pooled_string_across_groups_is_never_factored_twice():
+    source = _pooled_source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    source["otherMethod"] = [{**copy.deepcopy(row), "method": "Other.Method"} for row in rows]
+    projected = compact_author_parent_context(source)
+    assert expand_source_text(projected) == source
+    assert projected["otherMethod"] == source["otherMethod"]
+    assert len(projected["nativeSourceFacts"][0]["sourceTextValueParts"]) <= 3
+
+
+def test_pooled_outlier_cannot_undo_existing_inline_source_sharing():
+    source = _source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    source["nativeSourceFacts"] = ["EntirelyDifferent();\n" * 200]
+    rows.append({"method": rows[0]["method"], "coverage": rows[0]["coverage"],
+                 "code": {"sourceSameAs": 0}, "projectiles": [9]})
+    projected = compact_author_parent_context(source)
+    assert expand_source_text(projected) == source
+    actual = projected["parents"]["A"]["packet"]["raw"]["source"]
+    assert all("sourceTextParts" in row for row in actual[:2])
+    assert actual[2] == rows[2]
+    assert projected["nativeSourceFacts"] == source["nativeSourceFacts"]
+    assert "sourceTextValueParts" not in projected["sourceTextNotation"]
+
+
+def test_two_distinct_pooled_strings_keep_both_original_indices_and_types():
+    source = _source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    source["nativeSourceFacts"] = [rows[0]["code"], rows[1]["code"]]
+    for index, row in enumerate(rows):
+        row["code"] = {"sourceSameAs": index}
+    projected = compact_author_parent_context(source)
+    assert expand_source_text(projected) == source
+    assert projected["parents"] == source["parents"]
+    assert all(set(value) == {"sourceTextValueParts"} for value in projected["nativeSourceFacts"])

@@ -202,6 +202,7 @@ def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] |
                     for identity, record in records.items()]}
     if linked is not None:
         for call in linked:
+            call.pop("metadataToken", None)
             location = call.get("sourceLocation")
             if isinstance(location, dict) and location.get("sourceRecord") in ids:
                 location["sourceRecord"] = ids[location["sourceRecord"]]
@@ -220,6 +221,15 @@ def _certificate(value: Any) -> tuple[str, str, str] | None:
     if not isinstance(value, dict) or any(not isinstance(value.get(key), str) or not value[key] for key in _CERT):
         return None
     return tuple(value[key] for key in _CERT)
+
+
+def _token_matches(graph: dict[str, Any], record: dict[str, Any]) -> bool:
+    # Existing captures keep their old contract. A newly supplied definition
+    # token must bind exactly; never infer a missing token from a source row.
+    if "metadataToken" not in graph:
+        return True
+    token = graph["metadataToken"]
+    return type(token) is int and token & 0xff000000 == 0x06000000 and token & 0xffffff != 0 and token == record.get("metadataToken")
 
 
 def _records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -333,7 +343,8 @@ def _known_graph(program: Any) -> bool:
     if program.get("predicateSources"):
         return False  # A separate callee graph requires its own explicit replacement.
     selected = program.get("identitySelected")
-    return selected is None or _known_graph(selected) and _certificate(selected) == _certificate(program)
+    return selected is None or (_known_graph(selected) and _certificate(selected) == _certificate(program)
+                                and selected.get("metadataToken") == program.get("metadataToken"))
 
 
 def _at_path(reference: dict[str, Any], path: list[str | int]) -> tuple[Any, str | int, Any] | None:
@@ -360,7 +371,7 @@ def _windows(program: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _capture_metadata(program: dict[str, Any]) -> dict[str, Any]:
     result = {key: copy.deepcopy(value) for key, value in program.items()
-              if key not in {*_CERT, "observations", "dependencies", "predicates", "symbols", "identitySelected"}}
+              if key not in {*_CERT, "metadataToken", "observations", "dependencies", "predicates", "symbols", "identitySelected"}}
     if isinstance(program.get("identitySelected"), dict):
         result["selectedCapture"] = _capture_metadata(program["identitySelected"])
     return result
@@ -432,7 +443,7 @@ def known_native_csharp_context(reference: dict[str, Any]) -> bool:
             target = _at_path(reference, path)
             if (target is None or not known_native_csharp_program(target[2])
                     or target[2]["nativeCSharpSourceRef"] != record["id"]
-                    or _certificate(target[2]) != _certificate(record)):
+                    or _certificate(target[2]) != _certificate(record) or not _token_matches(target[2], record)):
                 return False
             declared.add(tuple(path))
 
@@ -568,7 +579,7 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
     for path in record["graphPaths"]:
         found = _at_path(reference, path)
         graph = found[2] if found else {}
-        if _certificate(graph) != _certificate(record):
+        if _certificate(graph) != _certificate(record) or not _token_matches(graph, record):
             return None
         selected = graph.get("identitySelected", graph)
         receipt = selected.get("identitySelection") if isinstance(selected, dict) else None
