@@ -1,5 +1,6 @@
 """Author keeps strict evidence beside, not replaced by, approximate source."""
 import copy
+from collections import Counter
 import json
 
 from infini_local.pipelines.author.request import build_initial_author_request
@@ -45,7 +46,22 @@ def test_author_preserves_strict_graph_and_identity_selected_with_readable_sourc
         if key in selected:
             assert chosen[key] == selected[key]
     assert "strict_graph_unknown" in json.dumps(raw)
-    assert sum(row["code"] == record["code"] for row in raw["mechanics"]["source"]) == 1
+    # Equal code is not equal evidence: the approximate row has no coverage
+    # declaration, while the certified original retains its whole-method scope
+    # and specialization provenance. The shorter selected body is separate too.
+    specialization = record["identitySpecialized"]
+    expected_source = [
+        {"projectiles": [1], **profile["mechanicsSource"]["records"][0]},
+        {"projectiles": [1], "method": record["method"], "code": specialization["code"],
+         "coverage": specialization["coverage"], "unresolved": record["unresolved"],
+         "entryGuards": record["entryGuards"], "identitySpecialization": {
+             key: specialization["proof"][key] for key in ("identityPredicates", "scope")}},
+        {"projectiles": [1], **{key: record[key] for key in
+             ("method", "code", "coverage", "entryGuards", "unresolved")},
+         "sourceFields": {"identitySpecialized": specialization}},
+    ]
+    assert Counter(json.dumps(row, sort_keys=True) for row in raw["mechanics"]["source"]) == Counter(
+        json.dumps(row, sort_keys=True) for row in expected_source)
     assert parent == before
 
 

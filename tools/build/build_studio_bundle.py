@@ -127,6 +127,11 @@ def verify_resources(read: Callable[[str], bytes], *, source_root: Path | None =
                 descriptor.get("python", ""), descriptor.get("entryPoint", ""),
                 "generator/server.py", "generator/config.example.env",
                 "generator/infini_local/desktop/web_studio.py",
+                "generator/infini_local/desktop/studio_onboarding.py",
+                "generator/infini_local/desktop/studio_sdcpp_install.py",
+                "generator/infini_local/desktop/webui/studio-onboarding.js",
+                "generator/infini_local/desktop/webui/studio-onboarding.css",
+
                 "generator/infini_local/desktop/webui/index.html",
                 "generator/infini_local/desktop/webui/studio.js",
                 "generator/infini_local/desktop/webui/studio.css",
@@ -150,7 +155,7 @@ def verify_resources(read: Callable[[str], bytes], *, source_root: Path | None =
                 for path, source in source_files(source_root).items():
                     if path not in files or archive.read(path) != source.read_bytes():
                         raise ValueError(f"Studio source missing or changed: {path}")
-            bad_state = ("config.env", "config.env.defaults.json", "gui_user_presets.json", "codex-auth.json")
+            bad_state = ("config.env", "config.env.defaults.json", "config.env.studio.json", "gui_user_presets.json", "codex-auth.json")
             for path in files:
                 parts = PurePosixPath(path).parts
                 if (parts[:2] == ("generator", "images") or PurePosixPath(path).name in bad_state

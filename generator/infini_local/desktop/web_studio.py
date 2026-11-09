@@ -28,11 +28,13 @@ ACTIONS = frozenset({
     'save', 'start', 'stop', 'health', 'validate', 'trace', 'applyPreset', 'savePreset',
     'codexLogin', 'codexStatus', 'codexCatalog', 'codexPing', 'clearLora', 'useLora',
     'resetSprite', 'openConfig', 'openConfigFolder', 'openCache', 'clearTrace', 'browse', 'help', 'exitStudio',
-    'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults',
+    'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults', 'onboardingProgress', 'sdCatalog', 'sdInstall', 'sdCancel',
 })
 STATIC_FILES = {'/studio.css': ('studio.css', 'text/css; charset=utf-8'),
                 '/studio.js': ('studio.js', 'text/javascript; charset=utf-8'),
                 '/studio-i18n.js': ('studio-i18n.js', 'text/javascript; charset=utf-8'),
+                '/studio-onboarding.js': ('studio-onboarding.js', 'text/javascript; charset=utf-8'),
+                '/studio-onboarding.css': ('studio-onboarding.css', 'text/css; charset=utf-8'),
                 '/studio-motion.js': ('studio-motion.js', 'text/javascript; charset=utf-8')}
 
 
@@ -279,6 +281,9 @@ class StudioServer:
         self._thread.start()
 
     def close(self) -> None:
+        installer = getattr(self, 'sdcpp_installer', None)
+        if installer is not None:
+            installer.close()
         if self._thread is not None:
             self.httpd.shutdown()
             self._thread.join(timeout=3)
@@ -292,6 +297,10 @@ class StudioController:
         self.fields = self._fields()
         self._saved_values: dict | None = None
         self._projections = {}
+        from infini_local.desktop.studio_sdcpp_install import SdcppInstaller
+        self.installer = SdcppInstaller(app.config_path)
+        if server is not None:
+            server.sdcpp_installer = self.installer
 
     def _fields(self):
         from infini_local.desktop.settings_fields import FIELDS
@@ -327,6 +336,7 @@ class StudioController:
         from infini_local import APP_VERSION
         from infini_local.desktop.settings_schema import DEFAULTS, FIELD_HELP, PRESETS
         from infini_local.desktop.settings_defaults import defaults_offer
+        from infini_local.desktop.studio_onboarding import load_progress
         CONFIG_PATH, EXAMPLE_PATH = self.app.config_path, self.app.example_path
         from infini_local.services.codex_auth import auth_status
         from infini_local.services.codex_text_backend import EFFORTS
@@ -374,6 +384,7 @@ class StudioController:
         return {
             'values': values, 'savedValues': saved_values, 'savedLanEnabled': saved_lan, 'savedRevision': saved_revision,
             'defaults': DEFAULTS, 'fieldHelp': FIELD_HELP, 'defaultsUpdate': defaults_update,
+            'onboarding': load_progress(CONFIG_PATH), 'sdcppInstall': self.installer.snapshot(),
             'fields': fields, 'presets': PRESETS,
             'inactiveSettings': ['INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED', 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD'],
             'userPresets': self.app.user_presets, 'status': saved_error or self.app.status,
@@ -397,6 +408,7 @@ class StudioController:
         self.app.update_values(values, lan_enabled=extra.get('lanEnabled'))
 
     def apply(self, command):
+        previous_action = self.app.actions.last_action
         identifier = self.app.actions.start(command)
         try:
             outcome = self._apply(command)
@@ -410,6 +422,9 @@ class StudioController:
             self.app.actions.finish(identifier, False, str(exc))
             raise
         finally:
+            # Help progress must not hide a failed generator action on the dashboard.
+            if command['action'] in {'onboardingProgress', 'sdCatalog', 'sdInstall', 'sdCancel'}:
+                self.app.actions.last_action = previous_action
             self.app.actions.command_id = None
             self.app.actions.expected_config_revision = None
 
@@ -418,6 +433,19 @@ class StudioController:
         CONFIG_PATH = self.app.config_path
         app = self.app
         action, extra = command['action'], command.get('extra', {})
+        if action == 'onboardingProgress':
+            from infini_local.desktop.studio_onboarding import save_progress
+            progress = save_progress(CONFIG_PATH, extra)
+            return {'message': '', 'result': {'kind': 'onboarding', 'progress': progress}}
+        if action in {'sdCatalog', 'sdInstall', 'sdCancel'}:
+            expected = {'buildId'} if action == 'sdInstall' else set()
+            if set(extra) != expected:
+                raise ValueError('Unexpected installer arguments')
+            if action == 'sdInstall':
+                result = self.installer.install(extra['buildId'])
+            else:
+                result = (self.installer.refresh_catalog if action == 'sdCatalog' else self.installer.cancel)()
+            return {'message': '', 'result': {'kind': 'sdcppInstall', 'state': result}}
         if action == 'forceRestart' and extra.get('confirm') is not True:
             raise ValueError('Explicit confirmation is required to interrupt active generation')
         if action in {'start', 'forceRestart'} and 'server-action' in app.actions.tasks:

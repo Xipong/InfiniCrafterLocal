@@ -143,6 +143,6 @@ def test_spawn_source_locations_bind_only_exact_capture_local_source(same_body):
             assert mechanics["source"][location["mechanicsSourceIndex"]]["code"] == f"void AI() {{ Spawn({kind}); }}"
             assert "unresolvedNativeCSharpSourceRef" not in location
         else:
-            assert "mechanicsSourceIndex" not in location
-            assert location["unresolvedNativeCSharpSourceRef"] == "s0"
+            assert mechanics["source"][location["mechanicsSourceIndex"]]["code"] == "other body"
+            assert "unresolvedNativeCSharpSourceRef" not in location
     assert raw == before

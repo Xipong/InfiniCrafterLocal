@@ -34,7 +34,7 @@ from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from infini_local.pipelines.context.presentation import presentation_parent_card_for_llm
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
 from infini_local.pipelines.images.prompts import visual_background_transport_rule
-from infini_local.pipelines.visual.modes import visual_asset_mode_catalog
+from infini_local.pipelines.visual.modes import entity_baked_sprites_enabled, visual_asset_mode_catalog
 from infini_local.pipelines.visual.contract import (
     MalformedVisualDirectorOutput,
     _response_schema,
@@ -79,11 +79,12 @@ def _request_visual_kit(
         raise PlannerUnavailable("Visual syntax must be recovered locally before scoped Repair")
     scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
                      and not any(error.get("path") == "$" for error in repair_errors or []))
+    allow_entity_baked = entity_baked_sprites_enabled()
     schema = (
-        _scoped_visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id, repair_scope or {}, previous)
-        if scoped_repair else _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
+        _scoped_visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id, repair_scope or {}, previous, allow_entity_baked=allow_entity_baked)
+        if scoped_repair else _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id, allow_entity_baked=allow_entity_baked)
         if repair
-        else _response_schema(entity_ids, equipment_overlay_required, item_body_id)
+        else _response_schema(entity_ids, equipment_overlay_required, item_body_id, allow_entity_baked=allow_entity_baked)
     )
     response_format = llm_json_response_format(
         "infini_visual_kit_repair_patch" if repair else "infini_visual_kit_runtime_entities",

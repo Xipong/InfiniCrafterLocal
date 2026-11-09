@@ -75,6 +75,33 @@ def authored_vfx(renderer: str, texture: str = "entity") -> dict:
     return {"schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
              "slots": [slot]}
 
+
+@pytest.mark.parametrize("mode", ["reuse_item_icon", "runtime_geometry", "no_asset"])
+def test_entity_png_off_keeps_authored_non_png_modes_deliverable(offline_backend, monkeypatch, mode):
+    from infini_local.core.images import config
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    monkeypatch.setattr(visual_sprite_generation, "VISUAL_ASSET_MODE", "off")
+    data = visual_data(mode)
+    # VFX PNGs are independent of entity-body PNGs and remain requested.
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, {
+        "schema": vfx_contract.VFX_DIRECTOR_SCHEMA,
+        "assets": [_request()], "slots": [_slot("selected", "grain")],
+    }, "entity-png-off")
+    final = visual_sprite_generation.maybe_generate_visual_assets(data)
+    report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)
+    assert report["ok"], report
+    assert len(offline_backend[0]) == 2  # root item and the authored VFX ingredient
+    orb = next(row for row in final["runtimeProgram"]["entities"] if row["id"] == "orb")
+    assert orb["visual"]["assetMode"] == mode
+    assert final["vfxManifest"]["assets"][0]["spriteStatus"] in {"generated", "generated_warn_invalid"}
+
+
+def test_entity_png_off_still_plans_equipment_overlay():
+    plan = [{"role": "equip_overlay", "prompt": "authored badge", "assetId": "badge", "canvas": 32}]
+    jobs = list(visual_sprite_generation._independent_image_jobs({}, plan, "off"))
+    assert [row[0] for row in jobs] == ["item", "equip_overlay"]
+    assert jobs[1][1] == ("equip_overlay", "authored badge", "", "badge", 32)
+
 def roundtrip(data, tmp_path):
     assert validate_runtime_wire(data)["ok"]
     assert world_storage.is_deliverable_recipe_payload(data)

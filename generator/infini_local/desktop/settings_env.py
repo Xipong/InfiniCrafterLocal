@@ -27,6 +27,8 @@ def user_preset_snapshot(data: dict[str, str]) -> dict[str, str]:
         and key.startswith("INFINI_")
         and isinstance(value, str)
         and key != "INFINI_GUI_PIPELINE_PRESET"
+        # Arbitrary provider headers may contain credentials under any name.
+        and key.upper() != "INFINI_IMAGE_API_EXTRA_HEADERS_JSON"
         and not re.search(r"(?:^|_)(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)(?:_|$)", key.upper())
     }
 

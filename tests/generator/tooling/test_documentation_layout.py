@@ -89,3 +89,19 @@ def test_bash_release_wrapper_resolves_public_entrypoint_from_any_cwd(tmp_path):
                             cwd=tmp_path, env=environment, text=True, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "--group" in result.stdout
+
+
+def test_agent_navigation_links_resolve_existing_repository_targets():
+    import re
+    from urllib.parse import unquote, urlsplit
+
+    sources = ("AGENTS.md", "generator/infini_local/AGENTS.md", "mod/InfiniCrafterLocal/AGENTS.md",
+               "tests/generator/AGENTS.md", "tools/README_RU.md", "docs/development/CODE_MAP_RU.md")
+    for name in sources:
+        source = ROOT / name
+        for target in re.findall(r"\]\(([^\s)]+)\)", source.read_text(encoding="utf-8")):
+            link = urlsplit(target)
+            if link.scheme or link.netloc or not link.path:
+                continue
+            path = (source.parent / unquote(link.path)).resolve()
+            assert path.is_relative_to(ROOT.resolve()) and path.exists(), (name, target)

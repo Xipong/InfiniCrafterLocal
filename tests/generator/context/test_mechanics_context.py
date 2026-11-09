@@ -260,11 +260,13 @@ def test_partial_mechanics_keeps_verified_dispatcher_and_lifecycle_regions():
             {"method": "Projectile.Kill", "code": "SpawnChild(8);", "coverage": "conditional_ast_regions", "entryCondition": "type == 31"}]},
     }
     rows = mechanics_context(raw)["mechanics"]["source"]
-    assert [r["method"] for r in rows] == ["Projectile.AI", "Projectile.VanillaAI", "Projectile.Kill"]
+    assert [r["method"] for r in rows] == ["Projectile.AI", "Projectile.VanillaAI", "Projectile.AI", "Projectile.Kill"]
+    assert rows[2]["code"] == "unselected larger body"
+    assert rows[2]["coverage"] == "whole_method"
     assert rows[1]["code"] == "if (charge > 120) damage *= 3;"
     assert rows[1]["entryGuards"] == [guard]
-    assert rows[2]["entryCondition"] == "type == 31"
-    assert rows[2]["entryScope"] == "entry guard must be reached"
+    assert rows[3]["entryCondition"] == "type == 31"
+    assert rows[3]["entryScope"] == "entry guard must be reached"
 
 
 def test_exact_profile_alias_is_not_a_source_extraction_failure():
@@ -433,9 +435,10 @@ def test_slice_ref_does_not_bind_a_different_body_with_the_same_method():
                               "records": [{"id": "s1", "method": "Terraria.Utils.Helper", "code": "other body"}]},
         "collision": {"method": "T.Projectile.Colliding", "observations": [],
                       "predicateSources": [{"nativeCSharpSourceRef": "s1"}]}}
-    ref = mechanics_context(raw)["mechanics"]["sourceSlices"][0]["program"]["predicateSources"][0]
-    assert "mechanicsSourceIndex" not in ref
-    assert ref["unresolvedNativeCSharpSourceRef"] == "s1"
+    mechanics = mechanics_context(raw)["mechanics"]
+    ref = mechanics["sourceSlices"][0]["program"]["predicateSources"][0]
+    assert mechanics["source"][ref["mechanicsSourceIndex"]]["code"] == "other body"
+    assert "unresolvedNativeCSharpSourceRef" not in ref
 
 
 def test_capture_speed_alias_resolution_preserves_unknown_and_explicit_values():
@@ -655,3 +658,62 @@ def test_partial_finite_spawn_candidates_never_exclude_other_child_profiles():
     assert [row["defaults"]["type"] for row in result["projectiles"]] == [31, 1009, 1010, 1011]
     assert not result["uncertainty"].get("excludedChildProfiles")
     assert raw == before
+
+
+@pytest.mark.parametrize("coverage", ["whole_method", "conditional_ast_regions"])
+@pytest.mark.parametrize("readable", [True, False])
+def test_compaction_keeps_distinct_verified_coverage_of_same_method(coverage, readable):
+    import hashlib
+    from collections import Counter
+    from tests.generator.context.test_native_csharp_source_view import _parent
+
+    profile = _parent()["directProjectileRaw"]
+    reference = profile["attackReference"]
+    record = reference["nativeCSharpSource"]["records"][0]
+    if coverage == "conditional_ast_regions":
+        window = {"field": "type", "literal": 1, "guardOffset": 3}
+        reference["motion"]["programs"][0]["identityWindows"] = [window]
+        record.update(coverage=coverage, coveredWindows=[window], entryGuards=[{
+            "field": "Terraria.Projectile.type", "operator": "==", "literal": 1, "ilOffset": 3,
+            "scope": "only_if_original_guard_is_reached; enclosing_dispatch_unknown"}])
+        # Exercise the path where the strict view keeps the smaller graph.
+        record["code"] += "/*" + "source fixture " * 2000 + "*/"
+        record["codeSha256"] = hashlib.sha256(record["code"].encode()).hexdigest()
+    partial = {"method": record["method"], "coverage": "approximate_identity_ast_regions",
+               "code": "if (wet) damage *= 2;", "entryGuards": ["wet"],
+               "sourceMethodSha256": record["sourceMethodSha256"],
+               "sourceModuleVersionId": record["sourceModuleVersionId"]}
+    profile["mechanicsSource"] = {**_profile(1)["mechanicsSource"], "records": [partial]}
+    before = copy.deepcopy(profile)
+    compact = compact_projectile_profile(profile, prefer_readable_source=readable)
+    rows = mechanics_context({"directProjectile": compact})["mechanics"]["source"]
+    assert Counter(row["code"] for row in rows) == Counter([partial["code"], record["code"]])
+    verified, = [row for row in rows if row["code"] == record["code"]]
+    assert verified["coverage"] == coverage
+    assert verified["entryGuards"] == record["entryGuards"]
+    assert profile == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("same_code", [False, True])
+def test_author_and_repair_keep_verified_whole_body_beside_same_named_region(monkeypatch, mode, same_code):
+    from collections import Counter
+    from tests.generator.context.test_native_csharp_source_view import _parent
+
+    parent = _parent()
+    profile = parent["directProjectileRaw"]
+    record = profile["attackReference"]["nativeCSharpSource"]["records"][0]
+    partial = {"method": record["method"], "coverage": "approximate_identity_ast_regions",
+               "code": record["code"] if same_code else "if (wet) damage *= 2;", "entryGuards": ["wet"]}
+    profile["mechanicsSource"] = {**_profile(1)["mechanicsSource"], "records": [partial]}
+    for raw in _request_parent_views(monkeypatch, parent, mode):
+        rows = raw["mechanics"]["source"]
+        assert Counter(row["code"] for row in rows) == Counter([partial["code"], record["code"]])
+        whole, = [row for row in rows if row["coverage"] == "whole_method"]
+        assert whole["entryGuards"] == []
+        links, = [row["value"] for row in raw["mechanics"]["uncertainty"]["sourceFacts"]
+                  if row["sourcePath"] == "directProjectile.referencedProjectiles"]
+        location = links["sourceCalls"][0]["sourceLocation"]
+        assert "unresolvedNativeCSharpSourceRef" not in location
+        assert rows[location["mechanicsSourceIndex"]] == whole
+        assert location["predicates"][0]["id"] == "b3"

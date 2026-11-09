@@ -258,7 +258,7 @@ internal static class StudioBundle
         }
     }
 
-    internal static void WriteExternalLauncher(string studioDirectory, StudioBundleSpec spec)
+    internal static void WriteExternalLauncher(string studioDirectory, StudioBundleSpec spec, string imageRoot)
     {
         // Relative paths survive a moved Documents directory and avoid embedding a user's
         // name or shell metacharacters. This launcher shares data but has no game lifetime.
@@ -266,9 +266,10 @@ internal static class StudioBundle
         string runtime = "runtimes\\" + spec.Sha256 + "\\";
         string python = (runtime + spec.Python.Replace('/', '\\')).Replace("%", "%%");
         string entryPoint = (runtime + spec.EntryPoint.Replace('/', '\\')).Replace("%", "%%");
+        string encodedImageRoot = Convert.ToBase64String(Encoding.UTF8.GetBytes(imageRoot));
         string contents = "@echo off\r\nsetlocal DisableDelayedExpansion\r\n"
             + "set PYTHONNOUSERSITE=1\r\nset PYTHONDONTWRITEBYTECODE=1\r\nset PYTHONIOENCODING=utf-8\r\n"
-            + $"\"%~dp0{python}\" -X utf8 -u -B \"%~dp0{entryPoint}\" --data-dir \"%~dp0data\" --tml-save-dir \"%~dp0..\\..\"\r\n"
+            + $"\"%~dp0{python}\" -X utf8 -u -B \"%~dp0{entryPoint}\" --data-dir \"%~dp0data\" --tml-save-dir \"%~dp0..\\..\" --image-root-base64 \"{encodedImageRoot}\"\r\n"
             + "set \"IFC_STUDIO_EXIT=%ERRORLEVEL%\"\r\nif not \"%IFC_STUDIO_EXIT%\"==\"0\" pause\r\nexit /b %IFC_STUDIO_EXIT%\r\n";
         string destination = Path.Combine(studioDirectory, "OPEN_INFINICRAFT.bat");
         string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";

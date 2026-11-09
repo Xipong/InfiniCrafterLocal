@@ -57,8 +57,6 @@ def test_unversioned_configuration_refused_by_runtime_and_editor_without_rewrite
 
 @pytest.mark.parametrize("key,value,replacement", [
     ("INFINI_LLM_FALLBACK_API_KEY", "retired-secret", "INFINI_LLM_POOL_2_API_KEY"),
-    ("INFINI_PROJECTILE_ICON_TARGET_FILL", "0.84", None),
-    ("INFINI_CHILD_ICON_TARGET_FILL", "0.72", None),
 ])
 def test_retired_keys_are_refused_not_translated_or_persisted(tmp_path, key, value, replacement):
     config = tmp_path / "config.env"
@@ -74,3 +72,35 @@ def test_retired_keys_are_refused_not_translated_or_persisted(tmp_path, key, val
         assert "remove this obsolete setting; no replacement" in str(error.value)
     assert config.read_bytes() == original
     assert list(tmp_path.iterdir()) == [config]
+
+
+@pytest.mark.parametrize("key", ["INFINI_PROJECTILE_ICON_TARGET_FILL", "INFINI_CHILD_ICON_TARGET_FILL"])
+def test_inert_framing_settings_warn_without_refusal_or_migration(tmp_path, key):
+    config = tmp_path / "config.env"
+    config.write_text(FORMAT_HEADER + f'\n{key}="0.72"\n')
+    original = config.read_bytes()
+    load_env_file(config)
+    with pytest.warns(UserWarning, match=key) as warnings:
+        reject_retired_config(os.environ)
+    assert "0.72" not in str(warnings[0].message)
+    assert config.read_bytes() == original
+    assert os.environ[key] == "0.72"
+
+
+@pytest.mark.parametrize("source", ["file", "process"])
+def test_startup_import_accepts_inert_settings_without_using_them(tmp_path, source):
+    import subprocess
+    import sys
+    from suite_paths import GENERATOR_ROOT
+    values = {"INFINI_PROJECTILE_ICON_TARGET_FILL": "0.72", "INFINI_CHILD_ICON_TARGET_FILL": "0.84"}
+    config = tmp_path / "config.env"
+    config.write_text(FORMAT_HEADER + "\n" + ("".join(f'{k}="{v}"\n' for k, v in values.items()) if source == "file" else ""))
+    original = config.read_bytes()
+    env = dict(os.environ, PYTHONPATH=str(GENERATOR_ROOT), INFINI_DATA_DIR=str(tmp_path))
+    if source == "process":
+        env.update(values)
+    result = subprocess.run([sys.executable, "-c", "from infini_local.core import config_bootstrap; from infini_local.core.images import config; assert not hasattr(config, 'PROJECTILE_ICON_TARGET_FILL'); assert not hasattr(config, 'CHILD_ICON_TARGET_FILL')"], env=env, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert all(key in result.stderr for key in values)
+    assert "0.72" not in result.stderr and "0.84" not in result.stderr
+    assert config.read_bytes() == original

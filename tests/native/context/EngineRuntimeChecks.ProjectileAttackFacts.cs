@@ -323,6 +323,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ProjectileAttackIdentitySelectionKeepsUnknownConditions()
     {
+        ProjectileAttackArrayAliasKeepsUnknownIdentity();
         ProjectileAttackDisconnectedBindingRefusesLocally();
         ProjectileAttackDisjointWindowsPreserveLaterRoot();
         JsonObject Inspect(string name) => GeneratorClient.InspectProjectileAttackIdentitySource(
@@ -415,6 +416,76 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, native["symbols"]!.AsObject().ContainsKey("Entity.position"), "matching sibling retains its own position controller");
         }
     }
+    private static void ProjectileAttackArrayAliasKeepsUnknownIdentity()
+    {
+        // Execute just the tiny fixture, never the game loop: the array slot
+        // really aliases the captured actor, and mutation takes the other arm.
+        Projectile saved = Terraria.Main.projectile[0];
+        try
+        {
+            var actor = new Projectile { whoAmI = 0, type = 982, aiStyle = 190 };
+            Terraria.Main.projectile[0] = actor;
+            AttackIdentityArrayTypeWrite(actor);
+            Equal(2.5f, actor.scale, "array type write changes the actual selected arm");
+            actor.type = 982;
+            AttackIdentityArrayStyleWrite(actor);
+            Equal(2.5f, actor.scale, "array style write changes the actual selected arm");
+            actor.aiStyle = 190;
+            AttackIdentityArrayCall(actor);
+            Equal(2.5f, actor.scale, "array helper alias changes the actual selected arm");
+        }
+        finally { Terraria.Main.projectile[0] = saved; }
+        foreach (string name in new[] { nameof(AttackIdentityArrayTypeWrite), nameof(AttackIdentityArrayStyleWrite), nameof(AttackIdentityArrayCall) })
+        {
+            var proof = GeneratorClient.InspectProjectileAttackIdentitySource(
+                typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!, 982, 190);
+            Equal(0, proof["identitySelection"]!["selectedEdges"]!.AsArray().Count,
+                "array receiver may be the captured actor before identity read: " + name);
+            Equal(true, proof.ToJsonString().Contains("2.5", StringComparison.Ordinal),
+                "mutated identity alternative remains visible: " + name);
+        }
+        foreach (string name in new[] { nameof(AttackIdentityArrayScalarWrite), nameof(AttackIdentityUnrelatedArrayCall) })
+        {
+            var readOnly = GeneratorClient.InspectProjectileAttackIdentitySource(
+                typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!, 982, 190);
+            Equal(true, readOnly["identitySelection"]!["selectedEdges"]!.AsArray().Count > 0,
+                "array scalar write does not invalidate captured identity");
+            Equal(false, readOnly.ToJsonString().Contains("2.5", StringComparison.Ordinal),
+                "array use alone does not discard useful specialization: " + name);
+        }
+    }
+
+    private static void AttackIdentityUnrelatedArrayCall(Projectile projectile, string[] labels)
+    {
+        Console.WriteLine(labels[0]);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityArrayTypeWrite(Projectile projectile)
+    {
+        Terraria.Main.projectile[projectile.whoAmI].type = 983;
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityArrayStyleWrite(Projectile projectile)
+    {
+        Terraria.Main.projectile[projectile.whoAmI].aiStyle = 191;
+        if (projectile.aiStyle == 190) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityArrayCall(Projectile projectile)
+    {
+        AttackMutateActor(Terraria.Main.projectile[projectile.whoAmI]);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityArrayScalarWrite(Projectile projectile)
+    {
+        Terraria.Main.projectile[projectile.whoAmI].rotation = 3f;
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+
     private static void AttackIdentityUnreachableMutation(Projectile projectile)
     {
         if (projectile.type == 983) AttackMutateActor(projectile);

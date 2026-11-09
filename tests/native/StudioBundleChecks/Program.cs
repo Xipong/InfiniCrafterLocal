@@ -105,8 +105,10 @@ try
     Require(Directory.GetDirectories(runtimes, ".install-*").Length == 0, "failed installations clean staging directories");
     // A completed replacement alone does not retire the working version.
     string oldLauncher = Path.Combine(studio, "OPEN_INFINICRAFT.bat");
-    StudioBundle.WriteExternalLauncher(studio, spec);
+    StudioBundle.WriteExternalLauncher(studio, spec, Path.Combine(temporary, "игра & % ! root"));
     string launcherBytes = File.ReadAllText(oldLauncher);
+    string encodedRoot = launcherBytes.Split("--image-root-base64 \"")[1].Split('"')[0];
+    Require(Encoding.UTF8.GetString(Convert.FromBase64String(encodedRoot)) == Path.Combine(temporary, "игра & % ! root"), "external opener preserves game-selected image root without shell interpolation");
     Reject<InvalidDataException>(() => StudioBundle.Install(missing, Spec(missing), runtimes, CancellationToken.None));
     Require(File.ReadAllText(oldLauncher) == launcherBytes && Directory.Exists(installed), "failed replacement preserves opener and working runtime");
     string models = Path.Combine(temporary, "external-models");
@@ -186,7 +188,7 @@ try
     File.WriteAllText(Path.Combine(unknownStage, "personal.txt"), "preserve");
     using (var guard = StudioBundle.AcquireInstallationLock(runtimes, CancellationToken.None))
     {
-        StudioBundle.WriteExternalLauncher(studio, Spec(update));
+        StudioBundle.WriteExternalLauncher(studio, Spec(update), Path.Combine(temporary, "игра & % ! root"));
         StudioBundle.RetirePreviousRuntimesLocked(runtimes, Spec(update));
     }
     Require(!Directory.Exists(abandoned), "verified interrupted extraction between completed files is retired");

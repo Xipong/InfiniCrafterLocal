@@ -39,9 +39,9 @@ def _scoped_visual_patch_node(schema: Mapping[str, Any], paths: list[str]) -> di
 
 def _scoped_visual_repair_schema(
     entity_ids: list[str], equipment_overlay_required: bool, item_body_id: str,
-    scope: Mapping[str, Any], previous: Any,
+    scope: Mapping[str, Any], previous: Any, *, allow_entity_baked: bool = True,
 ) -> dict[str, Any]:
-    full = _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
+    full = _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id, allow_entity_baked=allow_entity_baked)
     permissions = scope.get("fieldPermissions") or {}
     properties = {key: copy.deepcopy(full["properties"][key]) for key in ("schema", "note")}
     for key, paths_key, owner in (("itemPatch", "itemPaths", _visual_item_schema()),
@@ -56,7 +56,7 @@ def _scoped_visual_repair_schema(
     for row in source_rows:
         if isinstance(row, Mapping) and isinstance(row.get("entityId"), str):
             rows.setdefault(row["entityId"], row)
-    entity_schema = _visual_entity_schema(entity_ids, item_body_id)
+    entity_schema = _visual_entity_schema(entity_ids, item_body_id, allow_entity_baked=allow_entity_baked)
     branches = entity_schema.get("oneOf") or [entity_schema]
     variants = []
     for permission in permissions.get("entities") or []:
@@ -91,6 +91,7 @@ def _build_visual_repair_scope(
     item_body_id: str,
     *,
     equipment_overlay_required: bool = False,
+    allow_entity_baked: bool = True,
 ) -> dict[str, Any]:
     rows_raw = raw.get("entities") if isinstance(raw, Mapping) else None
     rows = rows_raw if isinstance(rows_raw, list) else []
@@ -196,6 +197,14 @@ def _build_visual_repair_scope(
         for entity_id in entity_ids:
             grant_entity(entity_id, "")
         delete_indices.update(range(len(rows)))
+    if not allow_entity_baked:
+        for row in rows:
+            if (isinstance(row, Mapping) and row.get("entityId") in entity_ids
+                    and row.get("entityId") != item_body_id and row.get("assetMode") == "baked_sprite"
+                    and "assetMode" in entity_paths.get(row["entityId"], set())):
+                # A new geometry is an exact conditional dependency of the
+                # available runtime_geometry choice. Keep scale and identity frozen.
+                grant_entity(row["entityId"], "geometry")
     replacement_transactions: list[dict[str, Any]] = []
     if not whole_response and len(delete_indices) == 1 and len(missing_ids) == 1:
         replacement_transactions.append({

@@ -14,6 +14,8 @@ Visual Director выбирает внешний вид принятого gamepl
 | `reuse_item_icon` | `entityId`, `assetMode`, `visualProjectRef=item`, `scale`; exact root PNG, base size, canvas и ось; свои prompt/size/canvas/axis запрещены |
 | `runtime_geometry`, `no_asset` | `entityId`, `assetMode`, `visualProjectRef=none`, `scale`; не authored sprite prompts |
 
+`INFINI_VISUAL_ASSET_MODE=off` исключает отдельный entity `baked_sprite` из initial/Repair schema и каталога до выбора дизайна. `item_body` по-прежнему использует корневой PNG; для других сущностей модель выбирает `reuse_item_icon`, `runtime_geometry` или `no_asset`. Недоступный режим проходит узкий Visual Repair без замены дизайна кодом. PNG ингредиентов VFX и equipment overlay независимы от этой настройки: их задания и расходы image backend сохраняются. Visual/VFX Director не отключаются этой настройкой.
+
 `entityId` ссылается на уже принятый runtime entity. `scale` [.25,4] — visual multiplier, не hitbox, в том числе для `no_asset`. Из exact mode/identity может losslessly нормализоваться единственный `visualProjectRef`; это не разрешение угадать mode или дизайн. VFX ingredients объявляются отдельными asset requests у VFX Director; они не меняют основной Visual.
 
 <a id="image-contract"></a>

@@ -410,7 +410,7 @@ FIELD_HELP = {
     "INFINI_A1111_URL": "URL Automatic1111. Активен только при image backend = a1111.",
     "INFINI_COMFYUI_URL": "URL ComfyUI. Активен только при image backend = comfyui.",
 
-    "INFINI_VISUAL_ASSET_MODE": "full — генерировать выбранные моделью PNG сущностей; off — отключить дополнительные PNG. Обязательная иконка предмета управляется отдельно.",
+    "INFINI_VISUAL_ASSET_MODE": "full — генерировать выбранные моделью PNG сущностей; off — исключить отдельные PNG сущностей из выбора Visual Director. Иконка предмета, VFX PNG и слой экипировки остаются отдельными заданиями и могут обращаться к image backend.",
     "INFINI_VISUAL_DIRECTOR_LLM": "Разрешает LLM сформировать visual kit/направление для PNG, вместо голой генерации по имени.",
     "INFINI_VISUAL_DIRECTOR_MAX_TOKENS": "Лимит output tokens для шага Visual Director (LLM, который пишет visual kit/prompt'ы для Z-Image). Пусто = наследовать общий Max answer tokens.",
     "INFINI_SPRITE_MASTER_CANVAS": "Промежуточный большой RGBA-canvas (обычно 256), на который спрайт сначала нормализуется после вырезания фона, а уже потом печётся в 32/48/64. Это нужно, чтобы high-res fake pixel-art не деградировал от прямого 512→32 resize.",
@@ -504,7 +504,7 @@ OPTION_HELP = {
     },
     "INFINI_VISUAL_ASSET_MODE": {
         "full": "Генерировать все выбранные моделью PNG сущностей.",
-        "off": "Не генерировать дополнительные PNG сущностей; обязательная иконка предмета управляется отдельно.",
+        "off": "Без отдельных PNG сущностей. Иконка предмета, VFX PNG и слой экипировки не отключаются и могут расходовать квоту image backend.",
     },
     "INFINI_BG_REMOVE_MODE": {
         "sprite_keyer": "Единственный рабочий режим удаления фона: Photoshop-like selection/keying под Terraria/fake pixel-art.",

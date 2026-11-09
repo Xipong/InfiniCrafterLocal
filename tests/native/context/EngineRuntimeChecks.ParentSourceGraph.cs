@@ -120,6 +120,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void ParentSourceGraphKeepsReachabilityConditionsAndEventOwnership()
     {
+        ParentSourceGraphKeepsWeaponModifiers();
         GraphSourceExecutions = 0;
         int childId = ProjectileID.WoodenArrowFriendly;
         bool hadSample = ContentSamples.ProjectilesByType.TryGetValue(childId, out Projectile? oldSample);

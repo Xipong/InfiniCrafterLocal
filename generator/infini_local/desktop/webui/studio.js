@@ -46,6 +46,7 @@
   const basicKeys = new Set(Object.keys(shortHelp).concat(['INFINI_USE_LLM','INFINI_LLM_TEMPERATURE','INFINI_LLM_MAX_TOKENS','INFINI_OPENROUTER_MODEL','INFINI_OPENROUTER_PROVIDER','INFINI_OPENAI_COMPAT_BASE_URL','INFINI_OPENAI_COMPAT_MODEL','INFINI_CODEX_LLM_MODEL','INFINI_SDCPP_STEPS','INFINI_SDCPP_CFG','INFINI_SDCPP_SAMPLER','INFINI_SDCPP_WIDTH','INFINI_SDCPP_HEIGHT','INFINI_CODEX_IMAGE_MODEL','INFINI_CODEX_IMAGE_SIZE','INFINI_CODEX_IMAGE_QUALITY','INFINI_IMAGE_API_BASE_URL','INFINI_IMAGE_API_KEY','INFINI_IMAGE_API_MODEL','INFINI_IMAGE_API_SIZE','INFINI_A1111_URL','INFINI_COMFYUI_URL','INFINI_REMOVE_BG','INFINI_PIXEL_POSTERIZE','INFINI_MAX_COLORS','INFINI_SPRITE_MASTER_CANVAS','INFINI_PORT','INFINI_TERRARIA_PORT','INFINI_ASSET_PUBLIC_BASE_URL']));
   const state = {remote:null, draft:{}, baseline:{}, fields:[], dirty:new Set(), edits:{}, editClock:0, lan:false, baselineLan:false, lanEdit:0, page:'operate', connected:false, pending:null, submission:null, posting:false, pollTimer:null, fetching:false, filter:'', searchIndex:0, searchMatches:[], traceTab:'summary', openDetails:new Set(), helpFields:new Set(), shutdown:false, seenNotifications:new Set(), notifications:[], picker:null};
   const token = window.INFINI_BOOTSTRAP?.token || '';
+  const onboarding = window.InfiniOnboarding?.create({api, focusField, value, state, getGaps:configurationGaps, applyDraft:applyOnboardingDraft, notify: message=>toast(message,true), navigateTo: page => {if(location.hash.slice(1) !== page) location.hash=page;else navigate();}});
   // Keep the launcher's bootstrap query for authenticated refresh. Never render or log it.
   function label(field) {
     if (names[field.key]) return t(names[field.key]);
@@ -124,7 +125,7 @@
     if (key === 'INFINI_LLM_REASONING_MAX_TOKENS' && (provider === 'local' || !['tokens','token_budget','max_tokens','budget'].includes(reasoning))) return t('Для API с режимом бюджета токенов');
     if (['INFINI_IMAGE_PARALLEL','INFINI_IMAGE_MAX_CONCURRENCY'].includes(key) && backend === 'off') return t('Изображения выключены');
     if (key === 'INFINI_IMAGE_MAX_CONCURRENCY' && value('INFINI_IMAGE_PARALLEL') === '0') return t('Параллельная генерация выключена: запросы идут по одному');
-    if (['INFINI_VISUAL_DIRECTOR_LLM','INFINI_VFX_LLM_DIRECTOR'].includes(key) && (backend === 'off' || value('INFINI_VISUAL_ASSET_MODE') !== 'full')) return t('Дополнительные визуальные ассеты выключены');
+    if (['INFINI_VISUAL_DIRECTOR_LLM','INFINI_VFX_LLM_DIRECTOR'].includes(key) && backend === 'off') return t('Дополнительные визуальные ассеты выключены');
     if (['INFINI_CODEX_LLM_MODEL','INFINI_CODEX_VISUAL_REASONING'].includes(key) && value('INFINI_USE_LLM') === '0') return t('Текстовая генерация выключена');
     if (['INFINI_REMOVE_BG','INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_BG_COLOR') === 'transparent') return t('Нативная прозрачность: локальный keyer не используется');
     if (['INFINI_BG_REMOVE_MODE','INFINI_CHROMA_TOLERANCE','INFINI_SPRITE_KEYER_SPILL_RADIUS','INFINI_SPRITE_KEYER_RESIDUE_STEPS','INFINI_SPRITE_CHROMA_DEFRINGE'].includes(key) && value('INFINI_REMOVE_BG') === '0') return t('Удаление фона выключено');
@@ -302,6 +303,7 @@
     $('#version').textContent = t("Версия {0}", remote.version || 'α');
     if($('#defaults-summary')) $('#defaults-summary').textContent=defaultsSummary();
     restoreActionFocus(finished);
+    onboarding?.sync(remote);
     return true;
   }
   async function poll() {
@@ -480,12 +482,26 @@
     if(textEnabled && provider === 'local' && !value('INFINI_LMSTUDIO_URL').trim()) gaps.push({title:t('Не указан адрес LM Studio'),detail:t('Добавить адрес текстового сервера'),key:'INFINI_LMSTUDIO_URL'});
     if(textEnabled && provider === 'openrouter' && !value('INFINI_OPENROUTER_API_KEY').trim()) gaps.push({title:t('Нет ключа OpenRouter'),detail:t('Подключить выбранный источник'),key:'INFINI_OPENROUTER_API_KEY'});
     if(textEnabled && provider === 'openai_compat' && !value('INFINI_OPENAI_COMPAT_BASE_URL').trim()) gaps.push({title:t('Не указан адрес API'),detail:t('Настроить источник текста'),key:'INFINI_OPENAI_COMPAT_BASE_URL'});
+    if(textEnabled && provider === 'openrouter' && !value('INFINI_OPENROUTER_MODEL').trim()) gaps.push({title:t('Не выбрана текстовая модель'),detail:t('Укажите ID модели OpenRouter'),key:'INFINI_OPENROUTER_MODEL'});
+    if(textEnabled && provider === 'openai_compat') {
+      if(!value('INFINI_OPENAI_COMPAT_MODEL').trim()) gaps.push({title:t('Не выбрана текстовая модель'),detail:t('Укажите ID модели API'),key:'INFINI_OPENAI_COMPAT_MODEL'});
+      let local=false;
+      try {local=['localhost','127.0.0.1','[::1]'].includes(new URL(value('INFINI_OPENAI_COMPAT_BASE_URL')).hostname);} catch(_) {}
+      if(!local && !value('INFINI_OPENAI_COMPAT_API_KEY').trim()) gaps.push({title:t('Нет ключа текстового API'),detail:t('Для локального API ключ может не требоваться'),key:'INFINI_OPENAI_COMPAT_API_KEY'});
+    }
     if(textEnabled && provider === 'openai_codex' && !value('INFINI_CODEX_LLM_MODEL').trim()) gaps.push({title:t('Не выбрана текстовая модель'),detail:t('Указать модель Codex'),key:'INFINI_CODEX_LLM_MODEL'});
     if((textEnabled && provider === 'openai_codex' || backend === 'openai_codex') && !state.remote?.account?.authenticated) gaps.push({title:t('Нужен вход в Codex'),detail:t('Открыть настройки аккаунта'),key:textEnabled && provider === 'openai_codex' ? 'INFINI_CODEX_LLM_MODEL':'INFINI_CODEX_IMAGE_MODEL'});
     if(backend === 'sdcpp') {
       if(value('INFINI_SDCPP_SERVER_AUTOSTART') === '1') {
         if(!value('INFINI_SDCPP_SERVER_EXE')) gaps.push({title:t('Не выбрана программа sd.cpp'),detail:t('Указать путь к sd-server'),key:'INFINI_SDCPP_SERVER_EXE'});
         if(!value('INFINI_SDCPP_MODEL')) gaps.push({title:t('Не выбрана модель изображения'),detail:t('Указать файл локальных весов'),key:'INFINI_SDCPP_MODEL'});
+        // Only known FLUX/Klein file names imply these split-model dependencies.
+        // An arbitrary custom model is not silently classified as FLUX.
+        if(/flux|klein/i.test(value('INFINI_SDCPP_MODEL'))) {
+          if(!value('INFINI_SDCPP_LLM').trim()) gaps.push({title:t('Не выбран текстовый энкодер FLUX'),detail:t('Для FLUX.2 Klein нужен совместимый Qwen3 4B'),key:'INFINI_SDCPP_LLM'});
+          if(!value('INFINI_SDCPP_VAE').trim()) gaps.push({title:t('Не выбран VAE / AE FLUX'),detail:t('Укажите совместимый VAE для FLUX.2'),key:'INFINI_SDCPP_VAE'});
+        }
+
       } else if(!value('INFINI_SDCPP_SERVER_URL')) gaps.push({title:t('Не указан адрес sd.cpp'),detail:t('Укажите адрес sd.cpp, который запускаете самостоятельно'),key:'INFINI_SDCPP_SERVER_URL'});
     }
     if(backend === 'image_api' && !value('INFINI_IMAGE_API_BASE_URL')) gaps.push({title:t('Не указан адрес Image API'),detail:t('Настроить источник изображений'),key:'INFINI_IMAGE_API_BASE_URL'});
@@ -900,6 +916,7 @@
     }
   }
   function navigate() {
+    onboarding?.dismiss();
     const target = location.hash.slice(1).split('?')[0];
     const animateRoute = state.pointerRoute === target && target !== state.page && !!state.remote;
     state.pointerRoute = null;
@@ -979,6 +996,13 @@
     $('#file-location').onsubmit=event=>{event.preventDefault();loadFiles($('#file-path').value);};
     $('#file-select').onclick=()=>selectFile(state.picker?.selection);
     await loadFiles(value(key));
+  }
+  function applyOnboardingDraft(values) {
+    if(state.shutdown) return;
+    for(const [key,val] of Object.entries(values)) {
+      state.draft[key]=val;state.edits[key]=++state.editClock;
+    }
+    state.fields=makeFields(state.remote);recomputeDirty();render();
   }
   function selectFile(path) {
     if (!path || !state.picker) return;
@@ -1126,6 +1150,7 @@
       case 'defaults-refresh':refreshDefaultsUpdate();break;
       case 'search':showSearch();break;
       case 'review-conflict':showSaveConflict();break;
+      case 'onboarding':onboarding?.open();break;
       case 'notifications':utility(t('Уведомления'),state.notifications.length ? `<div class="notification-history">${[...state.notifications].reverse().map(notice=>`<article class="notification-entry${notice.error ? ' is-error':''}"><span>${icon(notice.error ? 'alert':'check')}</span><p>${esc(notice.message)}</p></article>`).join('')}</div>` : `<p class="dialog-copy">${t("Уведомлений пока нет.")}</p>`);break;
       case 'retry':poll();break;
       case 'close-dialog':if (button.closest('dialog')?.dataset.kind !== 'defaults' || !(state.pending || state.posting)) button.closest('dialog')?.close();break;
@@ -1153,7 +1178,7 @@
   document.addEventListener('keydown',event => {
     state.pointerRoute = null;
     $('#workspace').classList.remove('route-enter');
-    if((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {event.preventDefault();if(!$('#utility-dialog').open) showSearch();}
+    if((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {event.preventDefault();if(!document.querySelector('dialog[open]')) showSearch();}
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {event.preventDefault();if(state.remote && !state.shutdown && !document.querySelector('dialog[open]')) action('save');}
     if($('#search-dialog').open && event.target.id === 'global-search' && ['ArrowDown','ArrowUp','Enter'].includes(event.key)) {
       event.preventDefault();

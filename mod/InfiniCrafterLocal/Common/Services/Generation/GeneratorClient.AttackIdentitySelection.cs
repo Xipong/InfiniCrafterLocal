@@ -210,7 +210,7 @@ public sealed partial class GeneratorClient
             hazards = foundHazards.ToArray();
             Receipt = new JsonObject { ["source"] = "certified_receiver_identity_cfg", ["version"] = 1,
                 ["identityPredicates"] = new JsonObject { ["Projectile.type"] = type, ["Projectile.aiStyle"] = style },
-                ["scope"] = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage." };
+                ["scope"] = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours and hidden global effects remain outside capture coverage." };
             var edges = new JsonArray();
             const int refusalLimit = 32;
             var refusals = new List<(ParentSourceMethod.Value Branch, ParentSourceMethod.Value Read, ParentSourceMethod.Value Hazard)>();
@@ -303,6 +303,22 @@ public sealed partial class GeneratorClient
                     .SelectMany(v => v.Inputs).Any(i => MayTarget(i, new(seen)));
             if (value.Op is "ldloc" or "stloc" or "predecessor_stack_alternatives" or "castclass" or "isinst")
                 return value.Inputs.Any(i => MayTarget(i, new(seen)));
+            // Reference array elements are possible aliases, not proven target
+            // receivers. Restrict known arrays by their element type so unrelated
+            // reference arrays do not turn every later identity read opaque.
+            if (value.Op == "ldelem.ref" && value.Inputs.Count > 0)
+                return body.Definitions(value.Inputs[0]).Any(origin => {
+                    Type? arrayType = origin.Operand switch {
+                        FieldInfo arrayField => arrayField.FieldType,
+                        MethodInfo arrayCall => arrayCall.ReturnType,
+                        Type cast when origin.Op is "castclass" or "isinst" => cast,
+                        Type element when origin.Op == "newarr" => element.MakeArrayType(),
+                        int argument when origin.Op == "ldarg" && argument >= (body.Method.IsStatic ? 0 : 1)
+                            => body.Method.GetParameters()[argument - (body.Method.IsStatic ? 0 : 1)].ParameterType,
+                        _ => null,
+                    };
+                    return arrayType?.GetElementType() is not Type elementType || ActorType(elementType);
+                });
             // A global/foreign field or call can alias the target even though it
             // cannot prove the exact receiver for an identity comparison.
             return value.Operand is FieldInfo field && ActorType(field.FieldType)

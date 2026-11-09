@@ -157,6 +157,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> ItemEvents = new(StringComparer.Ordinal)
         {
             "AltFunctionUse", "CanUseItem", "CanShoot", "UseItem", "UseStyle", "HoldItem", "HoldStyle", "UseAnimation",
+            "ModifyWeaponDamage", "ModifyWeaponKnockback",
             "Shoot", "ModifyShootStats", "OnHitNPC", "ModifyHitNPC", "CanHitNPC", "OnHitPvp", "ModifyHitPvp", "CanHitPvp",
             "UpdateEquip", "UpdateAccessory", "UpdateVanity", "UpdateInventory", "IsArmorSet", "UpdateArmorSet",
             "CanEquipAccessory", "UseItemHitbox", "MeleeEffects", "OnConsumeItem", "ConsumeItem",
@@ -169,6 +170,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> BuffEvents = new(StringComparer.Ordinal) { "Update", "ReApply", "SetStaticDefaults" };
         private static readonly HashSet<string> PlayerEvents = new(StringComparer.Ordinal)
         {
+            "ModifyWeaponDamage", "ModifyWeaponKnockback",
             "CanUseItem", "CanShoot", "Shoot", "ModifyShootStats", "OnHitNPCWithItem", "ModifyHitNPCWithItem",
             "OnHitNPCWithProj", "ModifyHitNPCWithProj", "OnHitPvp", "ModifyHitPvp", "OnHitAnything",
         };

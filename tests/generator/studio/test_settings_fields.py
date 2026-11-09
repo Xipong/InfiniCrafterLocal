@@ -70,3 +70,12 @@ def test_parallel_images_default_on_basic_checkbox_preserves_disabled_limit():
     assert values == original
     assert not disabled_reasons({**values, 'INFINI_IMAGE_PARALLEL': '1'})['INFINI_IMAGE_MAX_CONCURRENCY']
     assert disabled_reasons({**values, 'INFINI_IMAGE_BACKEND': 'off'})['INFINI_IMAGE_PARALLEL']
+
+
+def test_entity_png_setting_does_not_disable_visual_or_vfx_directors():
+    values = {**DEFAULTS, "INFINI_IMAGE_BACKEND": "sdcpp", "INFINI_VISUAL_ASSET_MODE": "off"}
+    before = deepcopy(values)
+    reasons = disabled_reasons(values)
+    assert not reasons["INFINI_VISUAL_DIRECTOR_LLM"]
+    assert not reasons["INFINI_VFX_LLM_DIRECTOR"]
+    assert values == before

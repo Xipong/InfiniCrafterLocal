@@ -572,8 +572,9 @@ public sealed partial class InfiniCraftPlayer
                 && active.SourceGeneration != 0
                 && (active.SourceAuthorityConfirmed ? active.SourceGeneration == buff.SourceGeneration
                     : Player.whoAmI == Main.myPlayer && buff.SourceGeneration < _lastAuthoritativeBuffGeneration
+                        && active.SourceGeneration < _airJumpPredictionRecoveryGeneration
                         && !_airJumpPredictionHistoryOverflow
-                        && !_retiredAirJumpPredictions.Contains(AirJumpPredictionKey(active)))
+                        && !_retiredAirJumpPredictions.ContainsKey(AirJumpPredictionKey(active)))
                 && active.SourceItemId == buff.SourceItemId && active.SourceDefinitionIdentity == buff.SourceDefinitionIdentity
                 && active.SourceComponent == buff.SourceComponent && active.InitialDurationTicks == buff.InitialDurationTicks
                 && active.SameEffect(buff));

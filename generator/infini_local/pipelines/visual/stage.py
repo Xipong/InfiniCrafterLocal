@@ -14,6 +14,7 @@ from infini_local.core.provider_schema import project_provider_nullable_optional
 from infini_local.core.runtime_authoring.wire_views import runtime_visual_roles
 from infini_local.core.images.config import VISUAL_DIRECTOR_LLM
 from infini_local.pipelines.visual.assets import equipment_overlay_requirement
+from infini_local.pipelines.visual.modes import entity_baked_sprites_enabled
 from infini_local.pipelines.visual.contract import (
     MalformedVisualDirectorOutput,
     VISUAL_KIT_SCHEMA,
@@ -158,6 +159,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         data.setdefault("debug", {})["visualDirectorStatus"] = "development_fixture"
         return _apply_kit(data, kit)
 
+    allow_entity_baked = entity_baked_sprites_enabled()
     accounting = stage_accounting(data)
     accounting["visualDirectorCalls"] += 1
     raw = _request_visual_kit(data, a, b)
@@ -168,7 +170,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         except (TypeError, ValueError) as error:
             raise PlannerUnavailable(f"Visual Director returned unrecoverable JSON: {error}") from error
         raw = project_provider_nullable_optionals_to_local(
-            raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id),
+            raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id, allow_entity_baked=allow_entity_baked),
             response_format=source.response_format,
         )
         debug = data.setdefault("debug", {})
@@ -182,6 +184,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
         item_body_id,
         equipment_overlay_required=equipment_overlay_required,
         accepted_data=data,
+        allow_entity_baked=allow_entity_baked,
     )
     if kit is None:
         accounting["visualRepairCalls"] += 1
@@ -191,6 +194,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             entity_ids,
             item_body_id,
             equipment_overlay_required=equipment_overlay_required,
+            allow_entity_baked=allow_entity_baked,
         )
         patch = _request_visual_kit(data, a, b, repair_errors=errors, previous=raw, repair_scope=repair_scope)
         if not isinstance(patch, Mapping):
@@ -202,6 +206,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             item_body_id,
             equipment_overlay_required=equipment_overlay_required,
             accepted_data=data,
+            allow_entity_baked=allow_entity_baked,
         )
         if kit is None:
             raise PlannerUnavailable("Visual Repair did not produce an entity-complete visual kit: " + json.dumps(errors[:16], ensure_ascii=False))

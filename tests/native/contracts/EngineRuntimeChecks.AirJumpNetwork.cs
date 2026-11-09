@@ -592,6 +592,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void AirJumpPredictionRejectsAmbiguousOldConfirmation()
     {
+        AirJumpPredictionRecoversAfterAuthorityFence();
+        AirJumpRecoveryRejectsRetiredFence();
+        AirJumpRecoveryRetainsLaterRetirements();
+        AirJumpRecoveryWaitsForAsyncUtility();
         foreach (string retirement in new[] { "expiry", "same-tick", "eviction", "correction" })
         WithAirJumpNetwork((peers, jumps, emission, players) => {
             var data = AirJumpNetworkBuff("jump_ambiguous_prediction", retirement == "eviction" ? 10 : 1, held: false); peers.Register(data);
@@ -624,6 +628,184 @@ internal static partial class EngineRuntimeChecks
             ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
             byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
             AirJumpPeerMode(peers, players[1], 1); peers.Receive(claim, 0); AirJumpTakeEvent(peers);
+        });
+    }
+
+
+    private static void AirJumpPredictionRecoversAfterAuthorityFence()
+    {
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_recover_prediction", 10, held: false); peers.Register(data);
+            AirJumpPeerMode(peers, players[0], 0);
+            var buff = data.RuntimeProgram.EffectGroups![0].GeneratedBuff;
+            players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            players[0].Effects.ClearGeneratedUtilityState();
+            // Fill the bounded retirement history, then repeat an existing
+            // key at capacity. Only a genuinely new key may overflow it.
+            for (int index = 0; index < 31; index++) {
+                var other = AirJumpNetworkBuff("jump_retired_" + index, 10, held: false); peers.Register(other);
+                players[0].Effects.ApplyGeneratedUtilityBuff(other.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: other);
+                players[0].Effects.ClearGeneratedUtilityState();
+            }
+            players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            players[0].Effects.ClearGeneratedUtilityState();
+            bool Overflow() => (bool)typeof(InfiniCraftPlayer).GetField("_airJumpPredictionHistoryOverflow", MobilityConsumptionFlags)!.GetValue(players[0].Effects)!;
+            Equal(false, Overflow(), "retiring duplicate at capacity does not overflow history");
+            var overflow = AirJumpNetworkBuff("jump_retired_overflow", 10, held: false); peers.Register(overflow);
+            players[0].Effects.ApplyGeneratedUtilityBuff(overflow.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: overflow);
+            players[0].Effects.ClearGeneratedUtilityState();
+            Equal(true, Overflow(), "distinct retirement beyond capacity fails closed until fence");
+            // Drive the real utility synchronization tick, not a manufactured
+            // acknowledgement or a mutation of private correlation state.
+            peers.Sent.Clear();
+            typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityRespawnSync", MobilityConsumptionFlags)!
+                .Invoke(players[0].Effects, null);
+            Equal(1, peers.Sent.Count, "retired prediction requests a bounded authority fence");
+            byte[] request = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[1], 1);
+            players[1].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            byte[] oldSnapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            peers.Receive(request, 0);
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(1, peers.Sent.Count, "authority returns one correlated generation fence");
+            byte[] reply = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[0], 0);
+            var unrelatedReply = (byte[])reply.Clone(); unrelatedReply[2] ^= 1;
+            peers.Receive(unrelatedReply); peers.Receive(reply, 0);
+            Equal(true, Overflow(), "wrong nonce or nonserver reply cannot release history");
+            peers.Receive(oldSnapshot); peers.Receive(reply);
+            Equal(false, Overflow(), "correlated fence recovers overflow without evicting unknown history");
+            Equal(0, peers.Sent.Count, "fence cannot revive retired prediction");
+            bool sound = true;
+            players[0].Effects.ClearGeneratedUtilityState();
+            players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            players[0].Player.RefreshExtraJumps(); jumps.Jump.OnStarted(players[0].Player, ref sound);
+            Equal(0, peers.Sent.Count, "fresh predicted occurrence still waits for authority");
+            AirJumpPeerMode(peers, players[1], 1); players[1].Effects.ClearGeneratedUtilityState();
+            players[1].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
+            byte[] claim = AirJumpTakeEvent(peers);
+            peers.Receive(snapshot); peers.Receive(reply);
+            Equal(0, peers.Sent.Count, "replayed snapshot and fence cannot resend occurrence");
+            AirJumpPeerMode(peers, players[1], 1); peers.Receive(claim, 0); AirJumpTakeEvent(peers);
+        });
+    }
+
+    private static void AirJumpRecoveryRetainsLaterRetirements()
+    {
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_inflight_retirement", 1, held: false); peers.Register(data);
+            var buff = data.RuntimeProgram.EffectGroups![0].GeneratedBuff;
+            void TickSync() => typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityRespawnSync", MobilityConsumptionFlags)!.Invoke(players[0].Effects, null);
+            int HistoryCount() => ((IDictionary)typeof(InfiniCraftPlayer).GetField("_retiredAirJumpPredictions", MobilityConsumptionFlags)!.GetValue(players[0].Effects)!).Count;
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            players[0].Effects.ClearGeneratedUtilityState(); peers.Sent.Clear(); TickSync();
+            byte[] request = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[1], 1);
+            players[1].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            peers.Receive(request, 0);
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything(); byte[] reply = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            MaterialClock(101); ResetNativeAirJumpTick(players[0].Player, players[0].Effects);
+            peers.Receive(reply);
+            Equal(1, HistoryCount(), "earlier fence cannot clear a retirement allocated after its request");
+            TickSync(); request = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[1], 1); peers.Receive(request, 0);
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            reply = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(reply);
+            Equal(0, HistoryCount(), "next ordered fence safely recovers the later retirement");
+        });
+    }
+
+    private static void AirJumpRecoveryWaitsForAsyncUtility()
+    {
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_delayed_fence", 10, held: false); peers.Register(data);
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            players[0].Effects.ClearGeneratedUtilityState(); peers.Sent.Clear();
+            typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityRespawnSync", MobilityConsumptionFlags)!.Invoke(players[0].Effects, null);
+            byte[] request = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[1], 1);
+            var action = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.ApplyGeneratedBuff,
+                Event = RuntimeEventKind.OnHurt, EffectGroupId = "primary_effects", DelayTicks = 10 };
+            Equal(true, InfiniCrafterLocal.Common.Runtime.RuntimeDelayedActionScheduler.TrySchedule(data,
+                new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, action, players[1].Player,
+                new Terraria.DataStructures.EntitySource_Misc("InfiniRuntimeEquipmentReaction"), Vector2.Zero, Vector2.UnitX,
+                null, 0, 0, new InfiniCrafterLocal.Common.Runtime.RuntimeSpawnBudget(0)), "server queued utility predates fence");
+            peers.Receive(request, 0);
+            Equal(0, peers.Sent.Count, "packet arrival alone cannot acknowledge delayed utility");
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(0, peers.Sent.Count, "pending delayed utility keeps fence closed");
+            MaterialClock(111); InfiniCrafterLocal.Common.Runtime.RuntimeDelayedActionScheduler.Update();
+            Equal(1, AirJumpBuffRows(players[1].Effects).Count, "delayed production action actually allocated authority generation");
+            peers.Sent.Clear(); players[1].Player.itemAnimation = 1;
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(0, peers.Sent.Count, "native use in progress keeps fence closed");
+            players[1].Player.itemAnimation = 0;
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(1, peers.Sent.Count, "drained native update acknowledges fence");
+            byte[] reply = peers.Sent.Single(); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(reply);
+            Equal(AirJumpBuffRows(players[1].Effects).Single().Generation,
+                (long)typeof(InfiniCraftPlayer).GetField("_lastAuthoritativeBuffGeneration", MobilityConsumptionFlags)!.GetValue(players[0].Effects)!,
+                "fence watermark includes late delayed allocation");
+            InfiniCrafterLocal.Common.Runtime.RuntimeDelayedActionScheduler.Clear();
+        });
+        using (var f = new QuickUtilityPeers()) {
+            var data = AirJumpNetworkBuff("jump_quick_fence", 10, held: false); f.Peers.Register(data);
+            f.Mode(1); f.OwnerBuff.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            f.OwnerBuff.ClearGeneratedUtilityState();
+            byte[] prepare = f.Prepare();
+            var tick = typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityRespawnSync", MobilityConsumptionFlags)!;
+            f.Peers.Sent.Clear(); tick.Invoke(f.OwnerBuff, null);
+            Equal(0, f.Peers.Sent.Count, "local Prepare waiting for Ready cannot send a premature fence");
+            byte[] ready = f.Ready(prepare), commit = f.Commit(ready);
+            f.Mode(1); f.Owner.itemAnimation = f.Owner.itemTime = 0; f.Owner.controlUseItem = false;
+            f.Peers.Sent.Clear(); tick.Invoke(f.OwnerBuff, null);
+            byte[] request = f.Peers.Sent.Single(); f.Peers.Sent.Clear();
+            // Intentionally deliver request before Commit to prove server-side
+            // pending tickets are checked independently of the owner's gate.
+            f.ReceiveServer(request); new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(0, f.Peers.Sent.Count, "server Ready awaiting Commit keeps fence closed");
+            f.ReceiveServer(commit); f.Peers.Sent.Clear();
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything();
+            Equal(1, f.Peers.Sent.Count, "consumed one-shot ticket permits fence after native update");
+        }
+    }
+
+    private static void AirJumpRecoveryRejectsRetiredFence()
+    {
+        foreach (string boundary in new[] { "death", "world", "connection" })
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var connection = Netplay.Connection; var socket = connection.Socket;
+            try {
+                var data = AirJumpNetworkBuff("jump_old_fence", 10, held: false); peers.Register(data);
+                var buff = data.RuntimeProgram.EffectGroups![0].GeneratedBuff;
+                AirJumpPeerMode(peers, players[0], 0);
+                players[0].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+                players[0].Effects.ClearGeneratedUtilityState(); peers.Sent.Clear();
+                typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityRespawnSync", MobilityConsumptionFlags)!.Invoke(players[0].Effects, null);
+                byte[] request = peers.Sent.Single(); peers.Sent.Clear();
+                AirJumpPeerMode(peers, players[1], 1);
+                players[1].Effects.ApplyGeneratedUtilityBuff(buff, source: data);
+                peers.Receive(request, 0);
+            new GeneratedAirJumpLifecycleSystem().PostUpdateEverything(); byte[] reply = peers.Sent.Single(); peers.Sent.Clear();
+                AirJumpPeerMode(peers, players[0], 0);
+                if (boundary == "death") {
+                    players[0].Player.dead = true; players[0].Effects.UpdateDead(); players[0].Player.dead = false;
+                } else if (boundary == "world") new GeneratedAirJumpLifecycleSystem().OnWorldUnload();
+                else connection.Socket = (Terraria.Net.Sockets.ISocket)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Terraria.Net.Sockets.TcpSocket));
+                peers.Receive(reply);
+                Equal(0L, (long)typeof(InfiniCraftPlayer).GetField("_lastAuthoritativeBuffGeneration", MobilityConsumptionFlags)!.GetValue(players[0].Effects)!,
+                    "retired fence cannot import the old authority watermark after " + boundary);
+            } finally { connection.Socket = socket; }
         });
     }
 

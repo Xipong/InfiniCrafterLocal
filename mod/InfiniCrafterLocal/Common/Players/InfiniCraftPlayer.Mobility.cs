@@ -92,7 +92,7 @@ public sealed partial class InfiniCraftPlayer
     private long _nextGeneratedBuffSourceGeneration;
     private long _lastAuthoritativeBuffGeneration;
     private readonly List<ActiveGeneratedUtilityBuff> _finalTickAirJumpSources = new();
-    private readonly HashSet<(string Item, string Definition, string Component)> _retiredAirJumpPredictions = new();
+    private readonly Dictionary<(string Item, string Definition, string Component), long> _retiredAirJumpPredictions = new();
     private bool _airJumpPredictionHistoryOverflow;
     private bool _airJumpAuthorityInitialized;
     private object? _airJumpAuthoritySocket;
@@ -103,10 +103,15 @@ public sealed partial class InfiniCraftPlayer
 
     private void RetireAirJumpPrediction(ActiveGeneratedUtilityBuff buff)
     {
-        if (buff.SourceGeneration >= 0 || buff.SourceAuthorityConfirmed) return;
-        if (_retiredAirJumpPredictions.Count < MaxAirJumpSources)
-            _retiredAirJumpPredictions.Add(AirJumpPredictionKey(buff));
-        else _airJumpPredictionHistoryOverflow = true; // fail closed instead of evicting history
+        if (buff.SourceGeneration >= 0 || buff.SourceAuthorityConfirmed
+            || buff.SourceGeneration >= _airJumpPredictionRecoveryGeneration) return;
+        _airJumpPredictionLastRetiredGeneration = Math.Min(_airJumpPredictionLastRetiredGeneration, buff.SourceGeneration);
+        var key = AirJumpPredictionKey(buff);
+        if (_retiredAirJumpPredictions.TryGetValue(key, out long previous))
+            _retiredAirJumpPredictions[key] = Math.Min(previous, buff.SourceGeneration);
+        else if (_retiredAirJumpPredictions.Count < MaxAirJumpSources)
+            _retiredAirJumpPredictions.Add(key, buff.SourceGeneration);
+        else _airJumpPredictionHistoryOverflow = true; // recovered only by an ordered authority fence
     }
 
     private bool IsCurrentAirJumpAuthority => !_airJumpAuthorityInitialized
@@ -130,6 +135,8 @@ public sealed partial class InfiniCraftPlayer
         _lastAuthoritativeBuffGeneration = 0;
         _retiredAirJumpPredictions.Clear();
         _airJumpPredictionHistoryOverflow = false;
+        _airJumpPredictionRecoveryGeneration = 0;
+        _airJumpPredictionLastRetiredGeneration = 0;
         _airJumpAuthorityInitialized = false;
     }
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Mapping
 
+from infini_local.core.images import config as image_config
+
 
 VISUAL_ASSET_MODE_DESCRIPTIONS: Mapping[str, str] = MappingProxyType({
     "baked_sprite": "Generate and deliver a real PNG, never a placeholder. Required for kind=item_body regardless of entityId: use visualProjectRef=item and only entityId/assetMode/visualProjectRef/scale; inherit the root item design without prompt/silhouette/visualIdentity. A distinct baked entity uses visualProjectRef=entity and owns its prompt, silhouette, visualIdentity, renderSizePx, preferredCanvasSize and forwardAngleDegrees.",
@@ -15,9 +17,14 @@ VISUAL_ASSET_MODE_DESCRIPTIONS: Mapping[str, str] = MappingProxyType({
 VISUAL_ASSET_MODES = tuple(VISUAL_ASSET_MODE_DESCRIPTIONS)
 
 
+def entity_baked_sprites_enabled() -> bool:
+    return image_config.VISUAL_ASSET_MODE == "full"
+
+
 def visual_asset_mode_catalog() -> list[dict[str, str]]:
     return [
-        {"mode": mode, "runtimeEffect": runtime_effect}
+        {"mode": mode, "runtimeEffect": (runtime_effect if mode != "baked_sprite" or entity_baked_sprites_enabled() else
+            "Only item_body may use baked_sprite and must reference the root item project. Separate entity PNG generation is disabled; choose reuse_item_icon, runtime_geometry or no_asset for non-item entities. VFX ingredient and equipment-overlay PNG generation remain independent.")}
         for mode, runtime_effect in VISUAL_ASSET_MODE_DESCRIPTIONS.items()
     ]
 

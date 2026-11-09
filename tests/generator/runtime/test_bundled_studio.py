@@ -7,6 +7,7 @@ test runner's cached configuration or the operator's INFINI settings.
 from __future__ import annotations
 from suite_paths import GENERATOR_ROOT
 
+import base64
 import hashlib
 import json
 import os
@@ -54,7 +55,7 @@ class BundledPathsTests(unittest.TestCase):
         self.data = self.root / "Документы" / "My Games" / "Studio data"
         self.save = self.root / "custom tML save"
 
-    def run_application(self, *, runtime: Path | None = None, updates: dict | None = None, environment: dict | None = None) -> dict:
+    def run_application(self, *, runtime: Path | None = None, updates: dict | None = None, environment: dict | None = None, image_root: str | None = None) -> dict:
         script = r'''
 import importlib.util, json, os, sys
 from pathlib import Path
@@ -62,7 +63,16 @@ runtime, data, save = map(Path, sys.argv[1:4])
 spec = importlib.util.spec_from_file_location("bundled_entry", runtime / "scripts/bundled_studio.py")
 entry = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(entry)
-entry.configure_environment(data, save)
+if sys.argv[5]:
+    # Exercise the real CLI/bootstrap, replacing only the blocking UI boundary.
+    import types
+    ui = types.ModuleType("infini_local.desktop.web_studio")
+    ui.main = lambda arguments: None
+    sys.modules[ui.__name__] = ui
+    entry.main(["--data-dir", str(data), "--tml-save-dir", str(save),
+                "--image-root-base64", sys.argv[5]])
+else:
+    entry.configure_environment(data, save)
 from infini_local.core import app_paths
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.settings_env import parse_env
@@ -89,11 +99,20 @@ app.on_close()
 '''
         result = subprocess.run(
             [sys.executable, "-I", "-B", "-c", script, str(runtime or self.runtime),
-             str(self.data), str(self.save), json.dumps(updates)],
+             str(self.data), str(self.save), json.dumps(updates),
+             base64.b64encode(image_root.encode()).decode() if image_root else ""],
             cwd=self.root, env={**isolated_environment(), **(environment or {})}, capture_output=True,
             text=True, encoding="utf-8", timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return json.loads(result.stdout)
+
+    def test_external_launcher_uses_game_root_over_saved_and_inherited_overrides(self):
+        self.run_application(updates={"INFINI_IMAGE_DIR": str(self.root / "saved-other")})
+        chosen = str(self.root / "игра & % ! root")
+        embedded = self.run_application(environment={"INFINI_IMAGE_DIR": chosen})
+        external = self.run_application(image_root=chosen, environment={"INFINI_IMAGE_DIR": str(self.root / "explorer-other")})
+        self.assertEqual(embedded["images"], chosen)
+        self.assertEqual(external["images"], embedded["images"])
 
     def test_saved_settings_and_cache_survive_another_runtime_without_runtime_writes(self):
         second_runtime = copy_runtime(self.root / "runtime-two")
@@ -174,7 +193,13 @@ app.on_close()
         self.assertEqual(source.returncode, 0, source.stderr)
         self.assertEqual(inventory(self.runtime), before)
 
-    def test_generator_launch_keeps_runtime_read_only_when_python_environment_is_ignored(self):
+    def test_managed_generator_launch_keeps_runtime_read_only(self):
+        self.check_generator_launch(managed=True)
+
+    def test_external_generator_launch_keeps_root_and_lan_binding(self):
+        self.check_generator_launch(managed=False)
+
+    def check_generator_launch(self, *, managed):
         # Replace only the child program with an import probe. The real launch
         # owner still chooses its executable, flags, cwd and environment.
         (self.runtime / "child_fixture.py").write_text("VALUE = 'готово'\n", encoding="utf-8")
@@ -196,15 +221,17 @@ spec.loader.exec_module(entry)
 entry.configure_environment(data, save)
 from infini_local.desktop.settings_controller import SettingsController
 app = SettingsController()
-app._managed_by_tmodloader = True
+app._managed_by_tmodloader = sys.argv[4] == "True"
 app.update_values({"INFINI_LANGUAGE": "en", "INFINI_DATA_DIR": "must-not-replace-selected-data",
-                   "INFINI_IMAGE_DIR": "must-not-replace-native-image-root"})
+                   "INFINI_IMAGE_DIR": "must-not-replace-native-image-root",
+                   "INFINI_HOST": "0.0.0.0", "INFINI_MP_ASSET_TRANSPORT": "native"}, lan_enabled=True)
 with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     result = app._start_server_after_guard()
     assert result["ok"], result
     assert launch.call_count == 1
     command = launch.call_args.args[0]
     options = launch.call_args.kwargs
+    assert options["env"]["INFINI_HOST"] == "0.0.0.0"
     assert options["env"]["INFINI_STUDIO_LAUNCH_ID"] == app._owned_server_launch_id
     launch_id = app._owned_server_launch_id
     assert isinstance(launch_id, str) and launch_id
@@ -220,7 +247,7 @@ assert json.loads(child.stdout)["launch_id"] == launch_id
 print(child.stdout, end="")
 '''
         result = subprocess.run(
-            [sys.executable, "-I", "-B", "-c", script, str(self.runtime), str(self.data), str(self.save)],
+            [sys.executable, "-I", "-B", "-c", script, str(self.runtime), str(self.data), str(self.save), str(managed)],
             cwd=self.root, env=isolated_environment(), capture_output=True,
             text=True, encoding="utf-8", timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -405,7 +432,7 @@ def inspect_ready(*values, **kwargs):
             assert response.status == 200
             assert b"<html" in response.read().lower()
         origin = url.split("?", 1)[0].rstrip("/")
-        for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js"):
+        for asset in ("studio.js", "studio.css", "studio-i18n.js", "studio-motion.js", "studio-onboarding.js", "studio-onboarding.css"):
             with urllib.request.urlopen(origin + "/" + asset, timeout=5) as response:
                 assert response.status == 200 and response.read()
         observed.append("ready")

@@ -255,6 +255,8 @@ public sealed partial class InfiniCraftPlayer
         // A retained short buff or the same equipped item can return after
         // death/world exit. Its old presentation binding must not revive.
         AirJumpLifetime = new();
+        _airJumpPredictionFence = Guid.Empty;
+        _airJumpPredictionServerFence = Guid.Empty;
         foreach (var active in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
             RetireAirJumpPrediction(active);
         _finalTickAirJumpSources.Clear();
@@ -277,6 +279,14 @@ public sealed class GeneratedAirJumpLifecycleSystem : ModSystem
     {
         if (player.TryGetModPlayer<InfiniCraftPlayer>(out var owner)) owner.RunGeneratedAirJumpMovement(nativeMovement);
         else nativeMovement(player);
+    }
+
+    public override void PostUpdateEverything()
+    {
+        if (Main.netMode != Terraria.ID.NetmodeID.Server) return;
+        foreach (var player in Main.player)
+            if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var owner))
+                owner.CompleteAirJumpPredictionFence();
     }
 
     private static void ClearPlayers()

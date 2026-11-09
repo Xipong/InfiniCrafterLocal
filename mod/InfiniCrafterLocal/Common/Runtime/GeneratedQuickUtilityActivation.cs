@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
@@ -39,6 +40,16 @@ internal static class GeneratedQuickUtilityActivation
     }
     private static readonly OwnerState?[] owners = new OwnerState?[Main.maxPlayers];
     private static readonly Dictionary<ulong, Local> local = new();
+
+    internal static bool HasPendingUtility(Player player)
+    {
+        Prune();
+        if (Main.netMode == NetmodeID.MultiplayerClient)
+            return local.Values.Any(pending => ReferenceEquals(pending.Owner, player));
+        return owners[player.whoAmI] is { } state && ReferenceEquals(state.Owner, player)
+            && ReferenceEquals(state.Socket, Netplay.Clients[player.whoAmI]?.Socket)
+            && state.Pending.Count > 0;
+    }
 
     internal static bool IsEligible(GeneratedItemData data)
         => data.PrimaryUseEffects.GeneratedBuff?.HasAnyEffect == true

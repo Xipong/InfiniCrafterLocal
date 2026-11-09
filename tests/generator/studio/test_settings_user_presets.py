@@ -32,6 +32,7 @@ def test_snapshot_keeps_exact_string_settings_without_credentials():
         "INFINI_PASSWORD": "FAKE-SECRET-CANARY",
         "INFINI_CREDENTIALS": "FAKE-SECRET-CANARY",
         "INFINI_CREDENTIAL": "FAKE-SECRET-CANARY",
+        "INFINI_IMAGE_API_EXTRA_HEADERS_JSON": '{"Authorization":"FAKE-SECRET-CANARY"}',
     }
     data = {
         **safe, **secrets,
@@ -165,6 +166,7 @@ def test_loaded_neighbors_are_sanitized_but_token_limits_and_bounded_names_survi
         "schema": "infini.gui-user-presets.v1",
         "presets": {"Existing": {**safe, "INFINI_AUTH_TOKEN": "FAKE-SECRET-CANARY",
                                   "INFINI_CLIENT_SECRET": "FAKE-SECRET-CANARY",
+                                  "INFINI_IMAGE_API_EXTRA_HEADERS_JSON": '{"x-api-key":"FAKE-SECRET-CANARY"}',
                                   "INFINI_GUI_PIPELINE_PRESET": "Custom"}},
     }), encoding="utf-8")
     original = path.read_bytes()

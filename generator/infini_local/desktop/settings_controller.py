@@ -133,7 +133,7 @@ class SettingsController(StudioOperations):
             self.status = f"sd.cpp command template repaired on save: {reason}"
         transport = "http" if data.get("INFINI_MP_ASSET_TRANSPORT", "native").lower() == "http" else "native"
         data["INFINI_MP_ASSET_TRANSPORT"] = transport
-        if lan_enabled and transport == "http":
+        if lan_enabled:
             data["INFINI_HOST"] = "0.0.0.0"
         else:
             if data.get("INFINI_HOST") == "0.0.0.0":

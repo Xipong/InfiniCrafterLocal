@@ -252,7 +252,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             for index, child in enumerate(value):
                 retain_refusals(f"{path}[{index}]", child)
 
-    def add_code(record: dict[str, Any], identity: Any) -> None:
+    def add_code(record: dict[str, Any], identity: Any) -> int:
         # Only declared receipts are lossy. New entry constraints and current
         # receiver/identity assumptions must travel with the body they qualify.
         row = {key: value for key, value in record.items() if key in _SOURCE_FIELDS}
@@ -268,6 +268,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             code.append(stored)
         if identity not in seen_code[key]["projectiles"]:
             seen_code[key]["projectiles"].append(identity)
+        return code.index(seen_code[key])
 
     def excluded(call: dict[str, Any], source: dict[str, Any], child_type: Any = None) -> bool:
         # Producer IL anchors, never line-based lexical ranges or numeric ID inference.
@@ -378,11 +379,32 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         fallback = (_rows(csharp.get("records")) if isinstance(csharp, dict)
                     and csharp.get("source") == "read_only_native_csharp_view"
                     and type(csharp.get("version")) is int and csharp["version"] == 1 else [])
+        source_aliases: list[tuple[str, dict[str, Any]]] = []
+        source_targets: dict[str, set[int]] = {}
         if source is not None:
-            selected_methods = {record.get("method") for record in fallback}
-            fallback += [record for record in _rows(source.get("verifiedSourceRecords"))
-                         if record.get("method") not in selected_methods]
-        represented = {record.get("method") for record in _rows(source.get("records"))} if source else set()
+            supplements = _rows(source.get("verifiedSourceRecords"))
+            # Compare the exact declared model projection, not a method name.
+            # Prefer the supplement's original entry offsets when both views
+            # carry the same body, coverage, guards and uncertainty.
+            def model_record(record: dict[str, Any]) -> dict[str, Any]:
+                return {**{key: record[key] for key in (
+                    "method", "code", "coverage", "unresolved", "identitySpecialization") if key in record},
+                    "entryGuards": ([{key: value for key, value in guard.items() if key != "ilOffset"}
+                                     if isinstance(guard, dict) else guard
+                                     for guard in record.get("entryGuards", [])]
+                                    if isinstance(record.get("entryGuards", []), list)
+                                    else record["entryGuards"])}
+            projections = [model_record(record) for record in supplements]
+            unmatched = []
+            for record in fallback:
+                projected = {key: value for key, value in record.items() if key != "id"}
+                matches = [supplement for supplement, projection in zip(supplements, projections)
+                           if projected == projection]
+                if matches and isinstance(record.get("id"), str):
+                    source_aliases.extend((record["id"], target) for target in matches)
+                else:
+                    unmatched.append(record)
+            fallback = unmatched + supplements
         roles: dict[str, set[str]] = {}
 
         def collect_roles(value: Any, root: str) -> None:
@@ -401,30 +423,29 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             if root not in ("nativeCSharpSource", "lifecycle", "interactionSources"):
                 collect_roles(value, root)
         for record in fallback:
-            if record.get("method") in represented:
-                continue
             paths = record.get("graphPaths", [])
-            identifier = record.get("id")
-            record_roles = roles.get(identifier, set()) if isinstance(identifier, str) else set()
+            identifiers = [identifier for identifier in [record.get("id"),
+                           *(alias for alias, target in source_aliases if target is record)]
+                           if isinstance(identifier, str)]
+            record_roles = set().union(*(roles.get(identifier, set()) for identifier in identifiers))
             if ((paths and all(isinstance(p, list) and p and p[0] == "draw" for p in paths))
                     or record_roles and record_roles <= {"draw"}):
                 continue
             if isinstance(record.get("code"), str):
-                add_code(record, profile.get("type"))
+                index = add_code(record, profile.get("type"))
+                for identifier in identifiers:
+                    source_targets.setdefault(identifier, set()).add(index)
         lifecycle = reference.get("lifecycle")
         if (isinstance(lifecycle, dict) and lifecycle.get("source") == "read_only_conditional_native_lifecycle_csharp"
                 and type(lifecycle.get("version")) is int and lifecycle["version"] == 1):
             for record in _rows(lifecycle.get("records")):
-                if isinstance(record.get("code"), str) and record.get("method") not in represented:
+                if isinstance(record.get("code"), str):
                     add_code({**record, "entryScope": lifecycle.get("scope", "source_entry_unknown")}, profile.get("type"))
             for gap in lifecycle.get("unresolved", []) if isinstance(lifecycle.get("unresolved"), list) else []:
                 gaps.add("lifecycle:" + str(gap))
         # A same-named readable record can be only a conditional region. Keep
         # connected symbolic programs unless the upstream verified projection
         # has already replaced that exact slice with a source reference.
-        def method_name(value: Any) -> Any:
-            return "Terraria." + value[2:] if isinstance(value, str) and value.startswith("T.") else value
-
         def bind_source_refs(value: Any) -> Any:
             if isinstance(value, list):
                 return [bind_source_refs(child) for child in value]
@@ -435,15 +456,9 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             if "nativeCSharpSourceRef" not in value:
                 return result
             identifier = value["nativeCSharpSourceRef"]
-            # IDs are local to this profile's verified source table. Match the
-            # actual emitted body, not just a same-named partial method.
-            records = [record for record in fallback
-                       if isinstance(identifier, str) and record.get("id") == identifier]
-            matches = {index for record in records for index, emitted in enumerate(code)
-                       if profile.get("type") in emitted["projectiles"]
-                       and method_name(record.get("method")) == method_name(emitted.get("method"))
-                       and isinstance(record.get("code"), str)
-                       and record["code"] == emitted.get("code")}
+            # Bind the exact record emitted in this capture, including aliases
+            # proved equal above. Names/bodies alone cannot identify coverage.
+            matches = source_targets.get(identifier, set()) if isinstance(identifier, str) else set()
             if len(matches) == 1:
                 result["mechanicsSourceIndex"] = next(iter(matches))
             else:

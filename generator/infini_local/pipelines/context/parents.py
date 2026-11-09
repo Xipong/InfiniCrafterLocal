@@ -381,9 +381,8 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
             mechanics.pop("verifiedSourceRecords", None)
             verified = _verified_csharp_records(reference)
             if verified:
-                represented = {row.get("method") for row in mechanics.get("records", []) if isinstance(row, dict)}
-                mechanics["verifiedSourceRecords"] = [copy.deepcopy(row) for row in verified.values()
-                                                       if row.get("method") not in represented]
+                # Matching names do not prove matching bodies or coverage.
+                mechanics["verifiedSourceRecords"] = copy.deepcopy(list(verified.values()))
         attack, linked_calls, selected = _compact_attack_source(
             reference, proj.get("referencedProjectiles"), prefer_readable_source=prefer_readable_source,
             has_mechanics=isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"

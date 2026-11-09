@@ -48,6 +48,10 @@ internal static class RuntimeDelayedActionScheduler
     private static uint? DispatchTick;
     private static int ExecutedThisTick;
 
+    internal static bool HasPendingGeneratedBuff(Player owner)
+        => Pending.Exists(pending => ReferenceEquals(pending.Owner, owner)
+            && pending.Action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff);
+
     public static bool TrySchedule(
         GeneratedItemData data,
         RuntimeEntitySpec sourceEntity,

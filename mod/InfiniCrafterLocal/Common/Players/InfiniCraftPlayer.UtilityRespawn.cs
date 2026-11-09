@@ -90,6 +90,7 @@ public sealed partial class InfiniCraftPlayer
     private void TickGeneratedUtilityRespawnSync()
     {
         EnsureGeneratedUtilityRespawnScope();
+        TickAirJumpPredictionRecovery();
         if (Main.netMode != NetmodeID.MultiplayerClient || Player.whoAmI != Main.myPlayer
             || Player.dead || !_generatedUtilityAwaitingRespawnSync
             || _generatedUtilityRespawnRequest == Guid.Empty) return;

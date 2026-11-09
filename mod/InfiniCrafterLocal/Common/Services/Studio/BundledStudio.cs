@@ -147,7 +147,7 @@ internal sealed class BundledStudio : IDisposable
                 throw new IOException("Studio exited during startup; the previous launcher was preserved.");
             try
             {
-                StudioBundle.WriteExternalLauncher(studioDirectory, spec);
+                StudioBundle.WriteExternalLauncher(studioDirectory, spec, start.Environment["INFINI_IMAGE_DIR"]!);
                 StudioBundle.RetirePreviousRuntimesLocked(runtimes, spec);
             }
             catch (IOException) { Trace.TraceWarning("Studio started, but runtime housekeeping could not finish."); }

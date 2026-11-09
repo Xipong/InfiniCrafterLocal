@@ -298,11 +298,19 @@ def command_verify(args: argparse.Namespace) -> int:
     return 0 if passed else 2 if report["status"] in {"not_selected", "incomplete"} else 1
 
 
-def _read_context_file(path: str, remaining: int, *, start_line: int = 1) -> tuple[dict[str, Any], int]:
+def _read_context_file(path: str, remaining: int, *, start_line: int = 1, find: str | None = None) -> tuple[dict[str, Any], int]:
     target = ROOT / path
     if not target.is_file() or remaining <= 0:
         return {"path": path, "available": False}, remaining
     lines = target.read_text(encoding="utf-8-sig", errors="replace").splitlines(keepends=True)
+    if find is not None:
+        matches = [index for index, line in enumerate(lines, 1) if find in line]
+        if not matches:
+            raise ValueError(f"anchor not found in {path}: {find!r}")
+        if len(matches) != 1:
+            locations = ", ".join(map(str, matches[:12]))
+            raise ValueError(f"anchor matches {len(matches)} lines in {path}; lines {locations}; use --line or a more specific --find")
+        start_line = matches[0]
     if start_line < 1 or start_line > max(1, len(lines)):
         raise ValueError(f"context line is outside {path}: {start_line}")
     text = "".join(lines[start_line - 1:])
@@ -317,6 +325,11 @@ def _read_context_file(path: str, remaining: int, *, start_line: int = 1) -> tup
 def command_context(args: argparse.Namespace) -> int:
     # A source lookup must not scan or repeat an unrelated branch diff. The
     # verify/diff commands own changed-file reports; context owns this request.
+    find = getattr(args, "find", None)
+    if find is not None and (not args.path or len(args.path) != 1 or not find.strip()
+                             or len(find.splitlines()) != 1 or "\n" in find or "\r" in find
+                             or getattr(args, "line", None) is not None):
+        raise ValueError("--find requires one --path and a non-empty single-line literal; cannot combine with --line")
     scope = "paths" if args.path else "areas" if args.area else "changes"
     selected = args.path or ([] if args.area else changed_files(args.base))
     paths = repository_paths(selected, require_files=bool(args.path))
@@ -328,7 +341,10 @@ def command_context(args: argparse.Namespace) -> int:
     rules, _, _ = impacted(paths, areas=areas)
     # Exact source first. Broader owner documentation remains opt-in via --area.
     requested = [path for path in paths if (ROOT / path).is_file()] if args.path else []
-    requested.extend(path for rule in rules for path in rule.get("entrypoints", []))
+    entrypoints = list(dict.fromkeys(path for rule in rules for path in rule.get("entrypoints", [])))
+    # Area discovery should reach executable owners before spending the excerpt
+    # budget on instructions/catalogs. Keep their links in the full entrypoint list.
+    requested.extend(sorted(entrypoints, key=lambda path: path.endswith(".md")) if not args.path else entrypoints)
     if not args.path:
         requested.extend(path for path in paths if (ROOT / path).is_file())
         requested.extend(path for rule in rules for path in rule.get("context", []))
@@ -338,8 +354,10 @@ def command_context(args: argparse.Namespace) -> int:
         raise ValueError("--budget must be positive")
     docs: list[dict[str, Any]] = []
     for path in dict.fromkeys(requested):
-        limit = remaining if start_line is not None and path == paths[0] else min(remaining, 3000)
-        row, unused = _read_context_file(path, limit, start_line=start_line if start_line is not None and path == paths[0] else 1)
+        located = (start_line is not None or find is not None) and path == paths[0]
+        limit = remaining if located else min(remaining, 3000)
+        row, unused = _read_context_file(path, limit, start_line=start_line if located and start_line is not None else 1,
+                                         find=find if located else None)
         remaining -= limit - unused
         docs.append(row)
         if remaining <= 0:
@@ -355,7 +373,7 @@ def command_context(args: argparse.Namespace) -> int:
         "paths": paths,
         "areas": sorted({rule["area"] for rule in rules}),
         "availableAreas": sorted({rule["area"] for rule in all_rules}),
-        "entrypoints": list(dict.fromkeys(path for rule in rules for path in rule.get("entrypoints", []))),
+        "entrypoints": entrypoints,
         "suggestedVerification": plan,
         "validationRun": False,
         "releaseReady": False,
@@ -514,7 +532,7 @@ def main() -> int:
     verify.add_argument("--require-build", action="store_true")
     verify.add_argument("--out")
     verify.set_defaults(func=command_verify)
-    context = sub.add_parser("context"); context.add_argument("--task", default=""); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--line", type=int, help="Start the selected source excerpt at this 1-based line (one --path)"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=5000); context.add_argument("--out"); context.set_defaults(func=command_context)
+    context = sub.add_parser("context"); context.add_argument("--task", default="", help="Optional task label, not a search query"); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--line", type=int, help="Start the selected source excerpt at this 1-based line (one --path)"); context.add_argument("--find", help="Start at a unique literal line match, such as a function signature (one --path)"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=5000); context.add_argument("--out"); context.set_defaults(func=command_context)
     diff = sub.add_parser("diff"); diff.add_argument("--base"); diff.set_defaults(func=command_diff)
     handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)
     task_check = sub.add_parser("task-check"); task_check.add_argument("--task-file", required=True); task_check.set_defaults(func=command_task_check)

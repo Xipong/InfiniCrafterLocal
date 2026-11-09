@@ -28,6 +28,84 @@ def _runtime_mechanics(data):
     return program
 
 
+@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
+@pytest.mark.parametrize("asset_mode", ["full", "off"])
+def test_visual_asset_setting_reaches_real_request_before_design(wire_transport, monkeypatch, format_mode, asset_mode):
+    from infini_local.core.images import config
+    from infini_local.core.schema_validation import strict_schema_errors
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", asset_mode)
+    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["item"]["grip"] = {"normalizedX": 0.5, "normalizedY": 0.5}
+    responses, requests = wire_transport
+    responses.append(raw)
+    result = visual_stage.apply_visual_director(data, {}, {})
+    packet = request_dossier(requests[0])
+    schema = packet["responseSchema"]
+    assert not strict_schema_errors(raw, schema)
+    distinct = copy.deepcopy(raw)
+    distinct["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        grip={"normalizedX": 0.5, "normalizedY": 0.5},
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    assert bool(strict_schema_errors(distinct, schema)) == (asset_mode == "off")
+    if format_mode == "json_schema":
+        wire_schema = requests[0]["response_format"]["json_schema"]["schema"]
+        assert not strict_schema_errors(raw, wire_schema)
+        assert bool(strict_schema_errors(distinct, wire_schema)) == (asset_mode == "off")
+    # The capability-neutral export and saved wire do not lose a valid mode
+    # merely because a new craft has chosen a restricted image configuration.
+    public_schema = visual_contract.visual_response_schema(
+        [row["entityId"] for row in distinct["entities"]], False, item_body_id="item")
+    assert not strict_schema_errors(distinct, public_schema)
+    assert result["visualKit"]["entities"] == raw["entities"]
+    assert _runtime_mechanics(result) == _runtime_mechanics(data)
+    assert len(requests) == 1 and not responses
+
+
+@pytest.mark.parametrize("replacement", ["reuse_item_icon", "no_asset", "runtime_geometry"])
+def test_disabled_entity_png_repairs_only_unavailable_presentation(wire_transport, monkeypatch, replacement):
+    from infini_local.core.images import config
+    from tests.generator.visual_geometry_fixtures import segment_geometry
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    changed = {"entityId": raw["entities"][1]["entityId"], "assetMode": replacement,
+               "visualProjectRef": "item" if replacement == "reuse_item_icon" else "none", "scale": 2.0}
+    if replacement == "runtime_geometry":
+        changed["geometry"] = segment_geometry()
+    patch = dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+                 entitiesUpsert=[changed], note="Choose available authored presentation")
+    responses, requests = wire_transport
+    responses.extend([raw, patch])
+    result = visual_stage.apply_visual_director(data, {}, {})
+    assert len(requests) == 2 and not responses
+    fixed = result["visualKit"]["entities"][1]
+    assert fixed == {**changed, "scale": raw["entities"][1]["scale"]}
+    assert result["visualKit"]["item"] == raw["item"]
+    assert result["visualKit"]["entities"][0] == raw["entities"][0]
+    assert _runtime_mechanics(result) == _runtime_mechanics(data)
+    assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
+
+
+def test_disabled_entity_png_is_not_silently_accepted_after_failed_repair(wire_transport, monkeypatch):
+    from infini_local.core.errors import PlannerUnavailable
+    from infini_local.core.images import config
+    monkeypatch.setattr(config, "VISUAL_ASSET_MODE", "off")
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["entities"][1].update(assetMode="baked_sprite", visualProjectRef="entity", prompt="door",
+        silhouette="door", visualIdentity="bronze", preferredCanvasSize=64, renderSizePx=48, forwardAngleDegrees=0)
+    responses, requests = wire_transport
+    responses.extend([raw, dict(schema=visual_contract.VISUAL_REPAIR_PATCH_SCHEMA,
+        entitiesUpsert=[raw["entities"][1]], note="still unavailable")])
+    with pytest.raises(PlannerUnavailable, match="Visual Repair did not produce"):
+        visual_stage.apply_visual_director(data, {}, {})
+    assert len(requests) == 2 and not responses
+
+
 def kit() -> dict:
     """Opaque-ID input retained for adjacent exact Repair-location scenarios."""
     item = dict(prompt="object", negativePrompt="", silhouette="object", visualIdentity="object", palette=["red"], preferredCanvasSize=32, renderSizePx=40, forwardAngleDegrees=45, inventoryScale=1.0, worldScale=1.0)

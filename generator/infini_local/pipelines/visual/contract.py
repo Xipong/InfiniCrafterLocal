@@ -104,7 +104,7 @@ def _visual_equip_overlay_schema() -> dict[str, Any]:
     }
 
 
-def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None) -> dict[str, Any]:
+def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None, *, allow_entity_baked: bool = True) -> dict[str, Any]:
     entity_id = {"type": "string", "enum": entity_ids}
     scale = {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _ENTITY_SCALE_DESCRIPTION}
     authored = {
@@ -161,10 +161,10 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
             branch["properties"]["geometry"] = body_geometry_schema()
             branch["required"].append("geometry")
         non_sprite_branches.append(branch)
-    return {"oneOf": [authored, distinct, reuse, *non_sprite_branches]} if nonitem_id["enum"] else authored
+    return {"oneOf": [authored, *([distinct] if allow_entity_baked else []), reuse, *non_sprite_branches]} if nonitem_id["enum"] else authored
 
 
-def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
+def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None, *, allow_entity_baked: bool = True) -> dict[str, Any]:
     # itemPatch is partial: Repair returns only the visual fields it is fixing.
     # Omitted fields stay frozen - the deterministic merge completes the patch from
     # the previous kit before applying; valid design remains frozen.
@@ -178,7 +178,7 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_REPAIR_PATCH_SCHEMA},
         "itemPatch": {"anyOf": [partial_item, {"type": "null"}]},
-        "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "maxItems": len(entity_ids)},
+        "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id, allow_entity_baked=allow_entity_baked), "maxItems": len(entity_ids)},
         "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
         "entityIndicesDelete": {"type": "array", "description": "Zero-based array index values into the previous entities array to delete; structural positions, not time or size.", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
         "note": {"type": "string", "minLength": 1, "maxLength": 500},
@@ -195,11 +195,11 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
     }
 
 
-def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
+def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None, *, allow_entity_baked: bool = True) -> dict[str, Any]:
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_KIT_SCHEMA},
         "item": _visual_item_schema(),
-        "entities": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
+        "entities": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id, allow_entity_baked=allow_entity_baked), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
         "animationPlan": {"type": "string", "maxLength": 1200, "description": "Optional advisory presentation intent for later generators; never executable or a Repair requirement."},
     }
     required = ["schema", "item", "entities"]
@@ -243,6 +243,7 @@ def _validate_kit(
     *,
     equipment_overlay_required: bool = False,
     accepted_data: Mapping[str, Any] | None = None,
+    allow_entity_baked: bool = True,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     errors: list[dict[str, Any]] = []
     if isinstance(raw, MalformedVisualDirectorOutput):
@@ -274,10 +275,10 @@ def _validate_kit(
                 else "none"
             )
     raw = candidate
-    schema_errors = strict_schema_errors(raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id))
+    schema_errors = strict_schema_errors(raw, _response_schema(entity_ids, equipment_overlay_required, item_body_id, allow_entity_baked=allow_entity_baked))
     for index, source_row in enumerate(source_rows):
         target_schema = _known_baked_project_target_schema(source_row, entity_ids, item_body_id)
-        if target_schema is None:
+        if target_schema is None or (not allow_entity_baked and source_row.get("entityId") != item_body_id):
             continue
         # The authored ref is still invalid and must be chosen by Repair. The
         # accepted identity/mode fixes its ownership domain, so diagnose against
@@ -340,6 +341,8 @@ def _validate_kit(
                 errors.append({"path": path + ".assetMode", "message": f"item entity {item_body_id!r} must use baked_sprite"})
             if project_ref != "item":
                 errors.append({"path": path + ".visualProjectRef", "message": "item body must reference the single item visual project"})
+        elif mode == "baked_sprite" and not allow_entity_baked:
+            errors.append({"path": path + ".assetMode", "message": "separate entity PNG generation is disabled by INFINI_VISUAL_ASSET_MODE=off"})
         elif mode == "baked_sprite" and project_ref != "entity":
             errors.append({"path": path + ".visualProjectRef", "message": "distinct baked entity must own the entity visual project"})
         elif mode == "reuse_item_icon" and project_ref != "item":

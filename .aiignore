@@ -4,12 +4,18 @@
 .nuget/
 .tml-build-cache/
 agent_reports/
+artifacts/
 build_logs/
 
 **/bin/
 **/obj/
 **/__pycache__/
 **/.pytest_cache/
+**/.ruff_cache/
+**/.hypothesis/
+**/.venv/
+**/.venv-dev/
+**/venv/
 
 *.dll
 *.pdb

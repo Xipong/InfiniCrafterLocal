@@ -38,6 +38,9 @@ def test_delayed_save_and_transform_ack_never_hide_unsaved_draft(tmp_path, monke
                       'INFINI_CACHE_DIR':str(tmp_path / 'cache'),
                       'INFINI_SPRITE_DOWNSCALE_FILTER':'bilinear',
                       'INFINI_SPRITE_PREMULTIPLIED_RESIZE':'0'})
+    # These flows exercise returning users; first-run help has its own browser tests.
+    from infini_local.desktop.studio_onboarding import save_progress
+    save_progress(config, {'step': 0})
     app = SettingsController(config_path=config)
     server = StudioServer(GENERATOR_ROOT / 'infini_local' / 'desktop' / 'webui')
     controller = StudioController(app, server)
@@ -146,6 +149,9 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                 b'INFINI_OPENAI_COMPAT_API_KEY=opaque-test-key\r\nINFINI_SDCPP_MODEL=C:\\Models\\keep.gguf\r\n'
                 b'INFINI_HOST=127.0.0.1\r\nINFINI_CACHE_DIR=' + str(tmp_path / 'cache').encode() + b'\r\n'))
     config.write_bytes(original)
+    # These flows exercise returning users; first-run help has its own browser tests.
+    from infini_local.desktop.studio_onboarding import save_progress
+    save_progress(config, {'step': 0})
     app = SettingsController(config_path=config)
     def forbidden(*_args, **_kwargs):
         raise AssertionError('Defaults consent must never call generic save/collect')

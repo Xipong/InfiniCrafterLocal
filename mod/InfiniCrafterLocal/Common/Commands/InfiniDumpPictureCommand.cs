@@ -60,29 +60,6 @@ public sealed class InfiniDumpPictureCommand : ModCommand
         public List<DumpAsset> Assets { get; set; } = new();
     }
 
-    private sealed class TextureMetrics
-    {
-        public int textureWidth { get; set; }
-        public int textureHeight { get; set; }
-        public int frames { get; set; }
-        public int frameWidth { get; set; }
-        public int frameHeight { get; set; }
-        public int[] visibleBBox { get; set; } = Array.Empty<int>(); // [left, top, width, height]
-        public int visibleWidth { get; set; }
-        public int visibleHeight { get; set; }
-        public int visibleMajorAxis { get; set; }
-        public int visibleMinorAxis { get; set; }
-        public int visibleAreaPixels { get; set; }
-        public int nonEmptyFrames { get; set; }
-        public double occupancyX { get; set; }
-        public double occupancyY { get; set; }
-        public double alphaCoverageInFrame { get; set; }
-        public double fillRatioInBBox { get; set; }
-        public int alphaThreshold { get; set; } = 8;
-        public bool unavailable { get; set; }
-        public string note { get; set; } = "";
-    }
-
     private sealed class SourceTextureDump
     {
         public string Kind { get; set; } = "";
@@ -94,7 +71,7 @@ public sealed class InfiniDumpPictureCommand : ModCommand
         public int Width { get; set; }
         public int Height { get; set; }
         public long Bytes { get; set; }
-        public TextureMetrics? TextureMetrics { get; set; }
+        public RuntimeDumpTextureMetrics? TextureMetrics { get; set; }
         public string Notes { get; set; } = "";
     }
 
@@ -257,8 +234,8 @@ public sealed class InfiniDumpPictureCommand : ModCommand
                     itemName = it.Name,
                     sourceMod = it.ModItem?.Mod?.Name ?? "Terraria",
                     fullName = it.ModItem is not null ? (it.ModItem.Mod.Name + "/" + it.ModItem.Name) : ($"Terraria/Item_{type}"),
-                    itemTextureMetrics = TryItemTextureMetrics(type),
-                    projectileTextureMetrics = it.shoot > ProjectileID.None ? TryProjectileTextureMetrics(it.shoot) : null,
+                    itemTextureMetrics = RuntimeDumpTextureMetrics.TryItem(type),
+                    projectileTextureMetrics = it.shoot > ProjectileID.None ? RuntimeDumpTextureMetrics.TryProjectile(it.shoot) : null,
                     width = it.width,
                     height = it.height,
                     damage = it.damage,
@@ -467,7 +444,7 @@ public sealed class InfiniDumpPictureCommand : ModCommand
             if (tag.Contains("_self")) file = "item.png";
             string path = Path.Combine(assetDir, file);
             SaveTexturePng(texture, path);
-            TextureMetrics metrics = TextureMetricsForTexture(texture, 1);
+            RuntimeDumpTextureMetrics metrics = RuntimeDumpTextureMetrics.Capture(texture, 1);
             dumps.Add(new SourceTextureDump
             {
                 Kind = "item",
@@ -504,7 +481,7 @@ public sealed class InfiniDumpPictureCommand : ModCommand
             if (tag.Contains("_shoot")) file = "projectile_shoot.png";
             string path = Path.Combine(assetDir, file);
             SaveTexturePng(texture, path);
-            TextureMetrics metrics = TextureMetricsForTexture(texture, SafeProjFrames(type));
+            RuntimeDumpTextureMetrics metrics = RuntimeDumpTextureMetrics.Capture(texture, RuntimeDumpTextureMetrics.ProjectileFrames(type));
             dumps.Add(new SourceTextureDump
             {
                 Kind = "projectile",
@@ -524,133 +501,6 @@ public sealed class InfiniDumpPictureCommand : ModCommand
         {
             errors.Add($"projectile {type}: {e.GetType().Name}: {e.Message}");
         }
-    }
-
-    private static TextureMetrics? TryItemTextureMetrics(int type)
-    {
-        try
-        {
-            if (Main.dedServ || type <= ItemID.None || type >= ItemLoader.ItemCount) return null;
-            Main.instance.LoadItem(type);
-            return TextureMetricsForTexture(TextureAssets.Item[type].Value, 1);
-        }
-        catch (Exception e)
-        {
-            return new TextureMetrics { unavailable = true, note = e.GetType().Name };
-        }
-    }
-
-    private static TextureMetrics? TryProjectileTextureMetrics(int type)
-    {
-        try
-        {
-            if (Main.dedServ || type <= ProjectileID.None || type >= ProjectileLoader.ProjectileCount) return null;
-            Main.instance.LoadProjectile(type);
-            return TextureMetricsForTexture(TextureAssets.Projectile[type].Value, SafeProjFrames(type));
-        }
-        catch (Exception e)
-        {
-            return new TextureMetrics { unavailable = true, note = e.GetType().Name };
-        }
-    }
-
-    private static int SafeProjFrames(int projectileType)
-    {
-        try
-        {
-            if (projectileType >= ProjectileID.None && projectileType < Main.projFrames.Length)
-                return Main.projFrames[projectileType];
-        }
-        catch { }
-        return 0;
-    }
-
-    private static TextureMetrics TextureMetricsForTexture(Texture2D texture, int frameCount)
-    {
-        const int alphaThreshold = 8;
-        var m = new TextureMetrics { unavailable = true, note = "empty_texture", alphaThreshold = alphaThreshold };
-        if (texture is null || texture.Width <= 0 || texture.Height <= 0)
-            return m;
-
-        int textureWidth = texture.Width;
-        int textureHeight = texture.Height;
-        int frames = Math.Clamp(frameCount <= 0 ? 1 : frameCount, 1, Math.Max(1, textureHeight));
-        int frameWidth = textureWidth;
-        int frameHeight = Math.Max(1, textureHeight / frames);
-        m.textureWidth = textureWidth;
-        m.textureHeight = textureHeight;
-        m.frames = frames;
-        m.frameWidth = frameWidth;
-        m.frameHeight = frameHeight;
-        m.visibleBBox = new[] { 0, 0, 0, 0 };
-        m.unavailable = false;
-        m.note = "";
-
-        if ((long)textureWidth * textureHeight > 1_048_576L)
-        {
-            m.unavailable = true;
-            m.note = "texture_too_large_for_metrics";
-            return m;
-        }
-
-        var pixels = new Color[textureWidth * textureHeight];
-        texture.GetData(pixels);
-
-        int minX = frameWidth, minY = frameHeight, maxX = -1, maxY = -1;
-        int visible = 0;
-        int nonEmptyFrames = 0;
-
-        for (int f = 0; f < frames; f++)
-        {
-            int top = f * frameHeight;
-            if (top >= textureHeight) break;
-            int thisFrameVisible = 0;
-            int yLimit = Math.Min(frameHeight, textureHeight - top);
-            for (int y = 0; y < yLimit; y++)
-            {
-                int row = (top + y) * textureWidth;
-                for (int x = 0; x < frameWidth; x++)
-                {
-                    if (pixels[row + x].A <= alphaThreshold) continue;
-                    thisFrameVisible++;
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
-                }
-            }
-            if (thisFrameVisible > 0)
-            {
-                nonEmptyFrames++;
-                visible += thisFrameVisible;
-            }
-        }
-
-        m.visibleAreaPixels = visible;
-        m.nonEmptyFrames = nonEmptyFrames;
-        if (visible <= 0 || maxX < minX || maxY < minY)
-        {
-            m.visibleBBox = new[] { 0, 0, 0, 0 };
-            return m;
-        }
-
-        int visibleWidth = maxX - minX + 1;
-        int visibleHeight = maxY - minY + 1;
-        int bboxArea = Math.Max(1, visibleWidth * visibleHeight);
-        int frameArea = Math.Max(1, frameWidth * frameHeight);
-        int coverageDenom = Math.Max(1, frameArea * Math.Max(1, nonEmptyFrames));
-        int fillDenom = Math.Max(1, bboxArea * Math.Max(1, nonEmptyFrames));
-
-        m.visibleBBox = new[] { minX, minY, visibleWidth, visibleHeight };
-        m.visibleWidth = visibleWidth;
-        m.visibleHeight = visibleHeight;
-        m.visibleMajorAxis = Math.Max(visibleWidth, visibleHeight);
-        m.visibleMinorAxis = Math.Min(visibleWidth, visibleHeight);
-        m.occupancyX = Math.Round(visibleWidth / (double)Math.Max(1, frameWidth), 4);
-        m.occupancyY = Math.Round(visibleHeight / (double)Math.Max(1, frameHeight), 4);
-        m.alphaCoverageInFrame = Math.Round(visible / (double)coverageDenom, 4);
-        m.fillRatioInBBox = Math.Round(visible / (double)fillDenom, 4);
-        return m;
     }
 
     private static string DumpRelPath(string outputDir, string file)

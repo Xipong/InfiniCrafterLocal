@@ -904,3 +904,76 @@ def test_explicit_matrix_count_refuses_empty_or_unbounded_work(monkeypatch, caps
         shards.main()
     assert exc.value.code == 2
     assert not capsys.readouterr().out
+
+
+@pytest.mark.parametrize("area", ["runtime", "native", "storage", "transport", "studio"])
+def test_area_context_reaches_source_with_default_budget(monkeypatch, capsys, area):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("area lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--area", area])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["documents"][0]["path"].endswith((".py", ".cs"))
+    assert report["documents"][0]["content"]
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 5000
+    assert report["validationRun"] is False
+
+
+@pytest.mark.parametrize("path, anchor", [
+    ("generator/infini_local/pipelines/author/stage.py", "def compile_and_validate_authored_runtime("),
+    ("mod/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs", "public static void ExecuteAction("),
+])
+def test_context_finds_literal_source_anchor_without_line_lookup(monkeypatch, capsys, path, anchor):
+    lines = (ROOT / path).read_text(encoding="utf-8").splitlines()
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("source lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--find", anchor, "--budget", "1200"])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    document = report["documents"][0]
+    assert document["content"].lstrip().startswith(anchor)
+    assert document["startLine"] == next(i for i, line in enumerate(lines, 1) if anchor in line)
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 1200
+    assert report["suggestedVerification"]["mode"] == "iteration"
+
+
+@pytest.mark.parametrize("anchor, error", [("absent", "not found"), ("same", "lines 1, 3")])
+def test_context_does_not_guess_a_missing_or_ambiguous_anchor(monkeypatch, tmp_path, capsys, anchor, error):
+    (tmp_path / "owner.py").write_text("same(\nunique[\nsame(\n", encoding="utf-8-sig")
+    monkeypatch.setattr(agentctl, "ROOT", tmp_path)
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", "owner.py", "--find", anchor])
+    assert agentctl.main() == 2
+    output = capsys.readouterr()
+    assert not output.out
+    assert error in json.loads(output.err)["error"]
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--find", "def main("],
+    ["--path", "tools/agentctl.py", "--find", ""],
+    ["--path", "tools/agentctl.py", "--find", "def main(\n"],
+    ["--path", "tools/agentctl.py", "--find", "def main(", "--line", "10"],
+    ["--path", "tools/agentctl.py", "--path", "AGENTS.md", "--find", "def main("],
+])
+def test_context_rejects_invalid_anchor_scope_without_discovering_changes(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("invalid lookup must not scan changes"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", *arguments])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
+
+
+@pytest.mark.parametrize("owner", ["codex_auth.py", "codex_text_backend.py", "codex_image_backend.py"])
+def test_codex_transport_owner_selects_native_backend_regressions(owner):
+    plan = agentctl.verification_plan([f"generator/infini_local/services/{owner}"])
+    assert plan["mode"] == "iteration"
+    assert "tests/generator/providers/test_codex_subscription_contract.py" in plan["tests"]
+    assert "tests/generator/providers/test_codex_transport_trace.py" in plan["tests"]
+    assert "tests/generator/images/test_image_transport_join.py" in plan["tests"]
+    assert not plan["requiresBuild"]
+    assert "native_checks" not in plan["checks"]
+
+
+def test_navigation_metadata_resolves_existing_owners_and_test_families():
+    rules = json.loads(agentctl.RULES_PATH.read_text(encoding="utf-8"))["rules"]
+    for rule in rules:
+        for path in [*rule.get("entrypoints", []), *rule.get("context", [])]:
+            assert (ROOT / path).is_file(), (rule["id"], path)
+        agentctl.verification_plan([], areas=[rule["area"]])

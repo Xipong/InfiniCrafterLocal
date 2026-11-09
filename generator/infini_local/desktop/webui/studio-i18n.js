@@ -2,6 +2,16 @@
 'use strict';
 (() => {
   const en = {
+  "Укажите ID модели OpenRouter": "Enter the OpenRouter model ID",
+  "Укажите ID модели API": "Enter the API model ID",
+  "Нет ключа текстового API": "Text API key is missing",
+  "Для локального API ключ может не требоваться": "A local API may not require a key",
+  "Не выбран текстовый энкодер FLUX": "FLUX text encoder is missing",
+  "Для FLUX.2 Klein нужен совместимый Qwen3 4B": "FLUX.2 Klein requires a compatible Qwen3 4B",
+  "Не выбран VAE / AE FLUX": "FLUX VAE / AE is missing",
+  "Укажите совместимый VAE для FLUX.2": "Choose a compatible FLUX.2 VAE",
+
+  "Быстрый старт": "Quick start",
   "Устаревшие настройки блокируют запуск генератора": "Retired settings block generator startup",
   "Среда процесса": "Process environment",
   "Очисти устаревшие поля в полном списке и сохрани настройки. Замены настраиваются отдельно; ничего не переносится автоматически.": "Clear retired fields in the full list and save settings. Configure replacements separately; nothing is migrated automatically.",

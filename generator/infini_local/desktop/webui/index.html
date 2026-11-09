@@ -9,6 +9,8 @@
   <link rel="icon" type="image/svg+xml" href="assets/mark.svg">
   <link rel="stylesheet" href="studio.css">
   <script defer src="studio-i18n.js"></script>
+  <link rel="stylesheet" href="studio-onboarding.css">
+  <script defer src="studio-onboarding.js"></script>
   <script defer src="studio.js"></script>
   <script defer src="studio-motion.js"></script>
 </head>
@@ -81,6 +83,8 @@
 <div class="save-tray" id="save-tray" hidden><span class="tray-dot"></span><div><strong id="dirty-label"><span data-i18n="Есть изменения">Есть изменения</span></strong><small><span data-i18n="Сначала сохранить. Затем безопасно перезапустить.">Сначала сохранить. Затем безопасно перезапустить.</span></small></div><button class="text-button" data-ui="discard"><span data-i18n="Отменить">Отменить</span></button><button class="button button-primary" data-action="save"><svg><use href="#i-save"/></svg><span data-i18n="Сохранить">Сохранить</span></button></div>
 <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title"><div class="dialog-top"><h2 id="search-title"><span data-i18n="Найти настройку">Найти настройку</span></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть поиск" data-i18n-aria-label="Закрыть поиск"><svg><use href="#i-close"/></svg></button></div><div class="command-input"><svg><use href="#i-search"/></svg><input id="global-search" placeholder="Модель, прозрачность, порт…" autocomplete="off" aria-label="Поиск настроек" data-i18n-placeholder="Модель, прозрачность, порт…" data-i18n-aria-label="Поиск настроек"><kbd>Esc</kbd></div><div id="search-results" class="search-results"></div><div class="search-footer"><span data-i18n="Поиск по всем параметрам, включая неактивные">Поиск по всем параметрам, включая неактивные</span><span><span data-i18n="↑ ↓ выбрать · Enter открыть">↑ ↓ выбрать · Enter открыть</span></span></div></dialog>
 <dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"><div class="dialog-top"><h2 id="utility-title"></h2><button class="icon-button" data-ui="close-dialog" aria-label="Закрыть" data-i18n-aria-label="Закрыть"><svg><use href="#i-close"/></svg></button></div><div id="utility-body"></div></dialog>
+<button id="onboarding-launcher" class="onboarding-launcher" data-ui="onboarding" aria-haspopup="dialog" aria-controls="onboarding-dialog" disabled><svg aria-hidden="true"><use href="#i-help"/></svg><span data-i18n="Быстрый старт">Быстрый старт</span></button>
+<dialog id="onboarding-dialog" class="onboarding-dialog" aria-labelledby="onboarding-title"></dialog>
 <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <noscript><div class="no-script"><span data-i18n="Для настроек нужен JavaScript. Включи его и обнови страницу.">Для настроек нужен JavaScript. Включи его и обнови страницу.</span></div></noscript>
 </body>

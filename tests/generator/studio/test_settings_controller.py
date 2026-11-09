@@ -166,8 +166,8 @@ def test_lora_collect_and_use_preserve_path_and_weight_semantics(studio, path, d
     assert app.values['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag + ' <lora:other:0.2>'
 
 
-@pytest.mark.parametrize('lan,transport,host', [(True,'native','127.0.0.1'), (True,'http','0.0.0.0'), (False,'http','127.0.0.1')])
-def test_lan_overlay_only_exposes_http_asset_transport(studio, lan, transport, host):
+@pytest.mark.parametrize('lan,transport,host', [(True,'native','0.0.0.0'), (True,'http','0.0.0.0'), (False,'http','127.0.0.1')])
+def test_lan_overlay_is_independent_of_asset_transport(studio, lan, transport, host):
     app, _ = studio
     app.values.update(INFINI_MP_ASSET_TRANSPORT=transport, INFINI_HOST='0.0.0.0')
     app.lan_enabled = lan
@@ -409,3 +409,21 @@ def test_snapshot_caches_unchanged_files_but_observes_external_edits(studio, mon
     controller.snapshot()
     assert reads['defaults'] == before['defaults'] + 1
     assert reads['saved'] == before['saved']
+
+@pytest.mark.parametrize('transport', ['native', 'http'])
+def test_lan_save_preserves_generator_bind_independently_of_assets(studio, transport):
+    app, controller = studio
+    apply(controller, 'save', {'INFINI_HOST': '0.0.0.0', 'INFINI_MP_ASSET_TRANSPORT': transport}, {'lanEnabled': True})
+    assert parse_env(app.config_path)['INFINI_HOST'] == '0.0.0.0'
+    from infini_local.core.server_endpoint import resolve_server_endpoint
+    assert resolve_server_endpoint(app.collect()).bind_host == '0.0.0.0'
+
+
+def test_profile_save_excludes_composite_headers_and_apply_keeps_live_credentials(studio):
+    app, controller = studio
+    headers = '{"Authorization":"Bearer FAKE-CANARY","x-api-key":"FAKE-CANARY"}'
+    result = apply(controller, 'savePreset', {'INFINI_IMAGE_API_EXTRA_HEADERS_JSON': headers}, {'name': 'Headers'})
+    path = app.config_path.with_name('gui_user_presets.json')
+    assert 'FAKE-CANARY' not in path.read_text()
+    applied = apply(controller, 'applyPreset', {'INFINI_IMAGE_API_EXTRA_HEADERS_JSON': headers}, {'name': USER_PRESET_PREFIX + 'Headers'})
+    assert applied['values']['INFINI_IMAGE_API_EXTRA_HEADERS_JSON'] == headers

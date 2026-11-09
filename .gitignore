@@ -48,6 +48,7 @@ generator/sprites/
 generator/*trace*.ndjson
 generator/config.env
 generator/config.env.defaults.json
+generator/config.env.studio.json
 generator/gui_user_presets.json
 generator/data/Runtime_dumps/
 build_logs/
@@ -76,3 +77,6 @@ artifacts/
 codex-auth.json
 codex-auth.lock
 .codex-auth-*
+
+# Downloaded sd.cpp runtime beside the source checkout configuration.
+generator/sdcpp/

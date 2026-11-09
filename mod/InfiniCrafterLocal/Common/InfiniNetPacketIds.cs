@@ -32,4 +32,6 @@ public static class InfiniNetPacketIds
     public const byte GeneratedPlacedBodySnapshot = 27;
     public const byte RequestGeneratedUtilityRespawnSync = 28;
     public const byte GeneratedUtilityRespawnSync = 29;
+    public const byte RequestAirJumpPredictionFence = 30;
+    public const byte AirJumpPredictionFence = 31;
 }

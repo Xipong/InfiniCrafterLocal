@@ -149,7 +149,6 @@ def disabled_reasons(values, lan_enabled=False):
     provider = (value('INFINI_LLM_PROVIDER', 'local') or 'local').lower()
     llm_enabled = value('INFINI_USE_LLM', '1') == '1'
     backend = (value('INFINI_IMAGE_BACKEND', 'sdcpp') or 'sdcpp').lower()
-    visual_mode = (value('INFINI_VISUAL_ASSET_MODE', 'full') or 'full').lower()
     reasoning_mode = (value('INFINI_LLM_REASONING_MODE', 'off') or 'off').lower().replace('-', '_')
     remove_bg = value('INFINI_REMOVE_BG', '1') == '1'
     bg_mode = (value('INFINI_BG_REMOVE_MODE', 'sprite_keyer') or 'sprite_keyer').lower().replace('-', '_')
@@ -203,9 +202,8 @@ def disabled_reasons(values, lan_enabled=False):
     else:
         set_field_enabled('INFINI_ASSET_PUBLIC_BASE_URL', True, '')
     image_active = backend != 'off'
-    asset_pack_active = image_active and visual_mode == 'full'
     for key in ['INFINI_VISUAL_DIRECTOR_LLM', 'INFINI_VFX_LLM_DIRECTOR']:
-        set_field_enabled(key, asset_pack_active, 'Visual asset mode сейчас off или image backend выключен; director-pass не вызывается.')
+        set_field_enabled(key, image_active, 'Image backend выключен; генерация PNG недоступна.')
     set_field_enabled('INFINI_IMAGE_PARALLEL', image_active, 'Image backend=off; изображения не генерируются.')
     set_field_enabled('INFINI_IMAGE_MAX_CONCURRENCY', image_active and str(values.get('INFINI_IMAGE_PARALLEL', '1')) == '1',
                       'Параллельная генерация выключена или image backend=off; запросы идут по одному.')

@@ -36,6 +36,11 @@ def studio_fixture(*, omit=(), extra=None):
         'generator/server.py': b'fixture generator entrypoint',
         'generator/config.example.env': b'fixture configuration template',
         'generator/infini_local/desktop/web_studio.py': b'fixture web bridge',
+        'generator/infini_local/desktop/studio_onboarding.py': b'fixture onboarding',
+        'generator/infini_local/desktop/studio_sdcpp_install.py': b'fixture onboarding',
+        'generator/infini_local/desktop/webui/studio-onboarding.js': b'fixture onboarding',
+        'generator/infini_local/desktop/webui/studio-onboarding.css': b'fixture onboarding',
+
         'generator/infini_local/desktop/webui/index.html': b'fixture frontend',
         'generator/infini_local/desktop/webui/studio.js': b'fixture script',
         'generator/infini_local/desktop/webui/studio.css': b'fixture styles',
@@ -255,6 +260,7 @@ class StudioBundleTests(unittest.TestCase):
         for resources, error in (
             (studio_fixture(omit=(native,)), 'native dependency missing'),
             (studio_fixture(extra={'generator/config.env': b'private provider settings'}), 'Operator state'),
+            (studio_fixture(extra={'generator/config.env.studio.json': b'{"seen":true}'}), 'Operator state'),
             (studio_fixture(extra={'../outside.txt': b'escape'}), 'Unsafe Studio archive path'),
         ):
             with self.subTest(error=error), self.assertRaisesRegex(ValueError, error):
@@ -282,7 +288,7 @@ class StudioBundleTests(unittest.TestCase):
             selected.parent.mkdir(parents=True, exist_ok=True)
             selected.write_bytes(b'PNG bytes preserved without tML conversion')
             excluded = (
-                'generator/config.env', 'generator/cache/private.json',
+                'generator/config.env', 'generator/config.env.studio.json', 'generator/cache/private.json',
                 'tests/generator/fixture.py', 'generator/.venv/python.exe',
                 'generator/infini_local/__pycache__/module.pyc',
                 'generator/infini_local/.env',
