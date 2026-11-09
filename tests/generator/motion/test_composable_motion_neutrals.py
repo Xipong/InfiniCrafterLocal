@@ -44,10 +44,17 @@ def test_invalid_present_side_control_never_becomes_a_default(fn, core, neutrals
     for name in neutrals:
         doc = base_document()
         if fn == "attach":
+            next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
             add(doc, "set_aim", {"source": "initial", "turnOwner": False})
-        add(doc, fn, dict(core, **neutrals))
-        doc["runtimeProgram"]["calls"][-1]["params"][name] = None
-        assert not validate_runtime_program(doc)["ok"]
+        call = add(doc, fn, dict(core, **neutrals))
+        report = validate_runtime_program(doc)
+        assert report["ok"], report["errors"]
+        index = len(doc["runtimeProgram"]["calls"]) - 1
+        call["params"][name] = None
+        report = validate_runtime_program(doc)
+        assert not report["ok"]
+        assert any(error["code"] == "shape_type" and error["path"] ==
+                   f"$.runtimeProgram.calls[{index}].params.{name}" for error in report["errors"]), report["errors"]
 
 
 def test_optional_return_flags_do_not_make_an_empty_trigger_valid():

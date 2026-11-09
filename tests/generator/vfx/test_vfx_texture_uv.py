@@ -14,10 +14,17 @@ from tests.generator.vfx_material_fixtures import _data, _sprite, _path, _histor
 from prompt_packet_helpers import request_dossier
 
 
-@pytest.mark.parametrize("factory,payload", [(_sprite,"element"),(_path,"path"),(_history,"trail")])
-@pytest.mark.parametrize("turn", range(4))
-@pytest.mark.parametrize("mirrors", range(4))
+@pytest.mark.parametrize("factory,payload,turn,mirrors", [
+    pytest.param(_sprite, "element", 0, 0, id="sprite-identity"),
+    pytest.param(_path, "path", 0, 0, id="path-identity"),
+    pytest.param(_history, "trail", 0, 0, id="history-identity"),
+    pytest.param(_sprite, "element", 1, 1, id="sprite-quarter-turn-mirror-u"),
+    pytest.param(_path, "path", 2, 2, id="path-half-turn-mirror-v"),
+    pytest.param(_history, "trail", 3, 3, id="history-three-quarter-turn-mirror-both"),
+])
 def test_complete_uv_transform_roundtrips(factory,payload,turn,mirrors):
+    # This boundary copies literal UV metadata; it does not execute renderer
+    # geometry. Exercise each slot shape and every field value, not 3x4x4 copies.
     data=_data();raw=factory(data)
     transform={"quarterTurns":turn,"mirrorU":bool(mirrors&1),"mirrorV":bool(mirrors&2)}
     raw["slots"][0][payload]["texture"]["uv"]=transform

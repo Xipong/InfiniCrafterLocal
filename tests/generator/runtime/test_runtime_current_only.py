@@ -3,10 +3,8 @@ from copy import deepcopy
 
 import pytest
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.capability_witnesses import build_capability_witness
 
@@ -76,14 +74,3 @@ def test_predecessor_receipt_names_are_refused_without_source_or_mutation(mutati
     assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
     assert wire == before
-
-
-@pytest.mark.parametrize("name", sorted(name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible))
-def test_every_current_authorable_primitive_has_current_proof_and_stripped_wire(name):
-    source = build_capability_witness(name)
-    assert validate_runtime_program(source)["ok"]
-    wire = compile_runtime_program(source)
-    assert validate_runtime_wire(wire)["ok"]
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=source, final_document=wire)["ok"]
-    wire.pop("runtimeContract")
-    assert validate_runtime_wire(wire)["ok"]

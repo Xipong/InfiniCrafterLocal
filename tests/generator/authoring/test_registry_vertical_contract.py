@@ -61,7 +61,17 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     item = build_capability_witness(fn)
     before = deepcopy(item)
     assert Draft202012Validator(author_item_response_schema()).is_valid(item)
-    wire = json.loads(json.dumps(compile_runtime_program(item)))
+    report = validator.validate_runtime_program(item)
+    assert report["ok"], report["errors"]
+    raw_wire = compile_runtime_program(item)
+    # Validate the producer before JSON can normalize tuple arrays or object
+    # keys into valid transport shapes.
+    report = validate_runtime_wire(raw_wire)
+    assert report["ok"], report["errors"]
+    report = audit_compiler_receipts(raw_wire["runtimeContract"]["finalWireReceipts"],
+                                     authored_document=item, final_document=raw_wire)
+    assert report["ok"], report["violations"]
+    wire = json.loads(json.dumps(raw_wire))
     report = validate_runtime_wire(wire)
     assert report["ok"], report["errors"]
     # A shape-valid DTO alone does not prove that an optional authored effect
@@ -70,6 +80,12 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     report = audit_compiler_receipts(receipts, authored_document=item, final_document=wire)
     assert report["ok"], report["violations"]
     assert any(row.get("callId") == "witness_call" for row in receipts)
+    # Saved definitions may omit compiler proof, but still need strict wire
+    # admission. Keep that boundary in the same full-capability vertical pass.
+    stripped = deepcopy(raw_wire)
+    stripped.pop("runtimeContract")
+    report = validate_runtime_wire(stripped)
+    assert report["ok"], report["errors"]
     assert item == before
 
 

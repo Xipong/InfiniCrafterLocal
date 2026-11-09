@@ -61,11 +61,10 @@ def test_actual_author_briefs_precede_details_and_preserve_all_gameplay(monkeypa
 
 
 @pytest.mark.parametrize("stage", ["author", "visual", "vfx"])
-@pytest.mark.parametrize("as_list", [False, True])
 @pytest.mark.parametrize("mutation", ["future_layer", "null_view", "bool_version", "null_ordered_uses",
                                      "future_outer", "future_defaults", "future_ordered_row", "null_programs", "null_observations",
                                      "future_defaults_value", "future_layer_value"])
-def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_list, mutation):
+def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, mutation):
     source = raw_parent_card_for_llm(_native())
     attack = unpack_attack_tables(source["raw"]["directProjectile"]["attackReference"])
     program = attack["draw"]["programs"][0]
@@ -95,16 +94,41 @@ def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, as_l
         from infini_local.pipelines.context.presentation import presentation_attack_reference
         assert presentation_attack_reference(attack, stage=stage) == attack
     source["raw"]["directProjectile"]["attackReference"] = attack
-    parents = [{"packet": source}] if as_list else {"A": {"packet": source}}
+    parents = {"A": {"packet": source}}
     before = copy.deepcopy(parents)
     result = expand_native_source_references(parent_context_for_stage(parents, stage=stage))
-    output = result["parents"][0 if as_list else "A"]["packet"]
+    output = result["parents"]["A"]["packet"]
     _assert_only_native_unit_views_changed(output["raw"], source["raw"])
     renamed = copy.deepcopy(parents)
-    renamed[0 if as_list else "A"]["packet"]["name"] = "Unrelated unrelated"
+    renamed["A"]["packet"]["name"] = "Unrelated unrelated"
     other = expand_native_source_references(parent_context_for_stage(renamed, stage=stage))
-    assert other["parents"][0 if as_list else "A"]["packet"]["raw"] == output["raw"]
+    assert other["parents"]["A"]["packet"]["raw"] == output["raw"]
     assert parents == before
+
+
+@pytest.mark.parametrize("stage", ["author", "visual", "vfx"])
+def test_parent_list_adapter_preserves_order_duplicates_and_complete_context(stage):
+    first = {"packet": raw_parent_card_for_llm(_native())}
+    first["packet"]["name"] = "First parent"
+    # Unknown source remains literal through the common projection; the list
+    # adapter must preserve complete records, including an equal duplicate.
+    first["packet"]["raw"]["futureSource"] = {"literal": ["unchanged", "unchanged"]}
+    second = copy.deepcopy(first)
+    second["packet"]["name"] = "Second parent"
+    second["packet"]["raw"]["item"]["damage"] = 17
+    parents = [first, copy.deepcopy(first), second]
+    mapping = dict(enumerate(copy.deepcopy(parents)))
+    before = copy.deepcopy((parents, mapping))
+    actual = parent_context_for_stage(parents, stage=stage)
+    expected = parent_context_for_stage(mapping, stage=stage)
+    expected["parents"] = list(expected["parents"].values())
+    expected["parentBriefs"] = list(expected["parentBriefs"].values())
+    assert actual == expected
+    assert [row["packet"]["name"] for row in actual["parents"]] == [
+        "First parent", "First parent", "Second parent",
+    ]
+    assert actual["parents"][0] == actual["parents"][1]
+    assert (parents, mapping) == before
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

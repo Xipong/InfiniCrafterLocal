@@ -27,14 +27,25 @@ def test_literal_exclusion_precedes_foreign_mixed_key_serialization():
     assert share_exact_native_parent_facts(parents) == share_native_facts_reference(parents)
 
 
-@pytest.mark.parametrize("length", [125, 126, 127, 128, 129, 130])
+@pytest.mark.parametrize("encoded_length", [127, 128, 129])
 @pytest.mark.parametrize("text", ["x", "Призма", "\t\n\"\\", "🛰️", "\u0000"])
-def test_exact_escaped_character_thresholds_remain_legacy_equal(length, text):
-    value = text * length
-    parents = {"A": {"packet": {"raw": {"one": {"code": value}, "two": {"code": value}}}}}
+def test_exact_escaped_character_thresholds_remain_legacy_equal(encoded_length, text):
+    # The threshold counts canonical JSON characters, including quotes and
+    # escapes, not input characters or UTF-8 bytes.
+    prefix_length = len(json.dumps(text, ensure_ascii=False))
+    value = text + "x" * (encoded_length - prefix_length)
+    assert len(json.dumps(value, ensure_ascii=False)) == encoded_length
+    parents = {"A": {"packet": {"raw": {"one": value, "two": value}}}}
     actual = share_exact_native_parent_facts(parents)
     expected = share_native_facts_reference(parents)
     assert json.dumps(actual, ensure_ascii=False) == json.dumps(expected, ensure_ascii=False)
+    if encoded_length < 128:
+        assert "nativeSourceFacts" not in actual
+    else:
+        assert actual["nativeSourceFacts"] == [value]
+        assert actual["parents"]["A"]["packet"]["raw"] == {
+            "one": {"sourceSameAs": 0}, "two": {"sourceSameAs": 0},
+        }
 
 
 @pytest.mark.parametrize("value", [False, True, 0, 1, 0.0, -0.0, 1.0, float("inf"), float("-inf"), float("nan")])
