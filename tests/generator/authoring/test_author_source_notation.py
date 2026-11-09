@@ -140,3 +140,99 @@ def test_unsupported_il_offsets_stay_literal_and_break_runs(offset, position):
     if position:
         assert isinstance(rows[literal_index - 1], dict)
         assert isinstance(rows[literal_index + 1], dict)
+
+
+def expand_source_text(context):
+    """Independent reader; preserve every other field and all existing references."""
+    shared = context.get("nativeSourceText", [])
+
+    def visit(value):
+        if isinstance(value, list):
+            return [visit(child) for child in value]
+        if not isinstance(value, dict):
+            return value
+        result = {}
+        for key, child in value.items():
+            if key in {"generatedParent", "tooltipLines", "tooltipSource"}:
+                result[key] = copy.deepcopy(child)
+            elif key == "sourceTextParts":
+                result["code"] = "".join(shared[part["sourceText"]] if isinstance(part, dict) else part
+                                         for part in child)
+            else:
+                result[key] = visit(child)
+        return result
+
+    return {key: visit(child) for key, child in context.items()
+            if key not in {"nativeSourceText", "sourceTextNotation"}}
+
+
+def _source_text_context():
+    prefix = "using Terraria;\r\nprivate void NativeMethod()\r\n{\r\n" + "// начало\r\n" * 20
+    suffix = "DoSourceWork(unknownState);\r\n" * 150 + "}\r\n"
+    rows = [{"method": "Terraria.Projectile.NativeMethod", "coverage": "identity_specialized_method",
+             "code": prefix + middle + suffix, "projectiles": [identity],
+             "entryGuards": ["runtimeUnknown", "runtimeUnknown"],
+             "sourceMap": [{"startLine": 24, "endLine": 25}],
+             "futureMetadata": {"unresolved": ["unknown", "unknown"]}}
+            for identity, middle in [(7, ";\r\n"), (8, "if (unknownState) { ChangeState(); }\r\n")]]
+    return {"parents": {"A": {"packet": {"raw": {"source": rows,
+            "reused": {"sourceSameAs": 0}, "reusedAgain": {"sourceSameAs": 0}}}}},
+            "nativeSourceFacts": [copy.deepcopy(rows[0])]}
+
+
+def test_shared_code_roundtrip_metadata_maps_references_and_no_mutation():
+    source = _source_text_context()
+    before = copy.deepcopy(source)
+    projected = compact_author_parent_context(source)
+    assert source == before
+    assert expand_notation(expand_source_text(projected)) == source
+    assert len(json.dumps(projected, ensure_ascii=False)) < len(json.dumps(source, ensure_ascii=False))
+    assert compact_author_parent_context(projected) == projected
+    records = projected["parents"]["A"]["packet"]["raw"]["source"]
+    assert all(len(row["sourceTextParts"]) <= 3 for row in records)
+    assert records[0]["projectiles"] != records[1]["projectiles"]
+    assert projected["parents"]["A"]["packet"]["raw"]["reused"] == {"sourceSameAs": 0}
+    assert expand_source_text(projected)["nativeSourceFacts"] == source["nativeSourceFacts"]
+    # Mutation controls: losing one code byte or one repeated guard must fail.
+    broken = copy.deepcopy(projected)
+    broken["nativeSourceText"][0] = broken["nativeSourceText"][0][1:]
+    assert expand_source_text(broken) != source
+    broken = copy.deepcopy(projected)
+    broken["parents"]["A"]["packet"]["raw"]["source"][0]["entryGuards"].pop()
+    assert expand_source_text(broken) != source
+
+
+@pytest.mark.parametrize("key", ["sourceTextParts", "nativeSourceText", "sourceTextNotation", "sourceText"])
+def test_source_text_future_notation_collisions_stay_literal(key):
+    source = _source_text_context()
+    source["future"] = {key: "unrecognized existing literal"}
+    assert compact_author_parent_context(source) == source
+
+
+def test_source_text_literal_generated_packets_and_unknown_coverage_are_not_interpreted():
+    source = _source_text_context()
+    rows = source["parents"]["A"]["packet"]["raw"]["source"]
+    for key in ("tooltipLines", "tooltipSource", "generatedParent"):
+        source[key] = copy.deepcopy(rows)
+    source["future"] = [{**row, "coverage": "unknown_future_capture"} for row in rows]
+    projected = compact_author_parent_context(source)
+    assert expand_source_text(projected) == source
+    for key in ("tooltipLines", "tooltipSource", "generatedParent", "future"):
+        assert projected[key] == source[key]
+
+
+def test_source_text_short_or_unrelated_code_does_not_add_notation():
+    source = _source_text_context()
+    source.pop("nativeSourceFacts")
+    for row, code in zip(source["parents"]["A"]["packet"]["raw"]["source"], ["same\nA\n", "same\nB\n"]):
+        row["code"] = code
+    assert compact_author_parent_context(source) == source
+
+
+def test_source_text_and_location_notation_compose_without_changing_line_maps():
+    source = _context()
+    source.update(_source_text_context())
+    source["locations"] = _context()["parents"]["A"]["packet"]["raw"]["sourceLocation"]
+    projected = compact_author_parent_context(source)
+    assert "parentContextNotation" in projected and "nativeSourceText" in projected
+    assert expand_notation(expand_source_text(projected)) == source

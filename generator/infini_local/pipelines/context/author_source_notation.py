@@ -2,12 +2,15 @@
 
 This is a presentation-only normalization after the stage view is complete.
 Native captures, code, coverage decisions and the authored runtime are unchanged.
-Only two fully recognized shapes are projected; future shapes stay literal.
+Recognized diagnostics, source locations and repeated code blocks are projected.
+Every source record retains its metadata and its exact reconstructed code.
 """
 from __future__ import annotations
 
 import copy
 import json
+import os
+from collections import defaultdict
 import re
 from typing import Any
 
@@ -110,7 +113,8 @@ def compact_author_parent_context(context: dict[str, Any]) -> dict[str, Any]:
     """Keep all current-stage facts with a self-contained, reversible notation.
 
     No provider/runtime schema or additional model action is involved. Existing
-    source references retain their indices and scopes; no new references arise.
+    source references retain their indices and scopes. Shared code blocks have
+    a separate, explicitly named table and never change nativeSourceFacts indices.
     Literal/generated data and unrecognized rows are never interpreted.
     """
     def collision(value: Any) -> bool:
@@ -153,4 +157,88 @@ def compact_author_parent_context(context: dict[str, Any]) -> dict[str, Any]:
     guides = {"unresolvedDiagnostics": _DIAGNOSTIC_READING, "sourceLocations": _LOCATION_READING}
     if used:
         result = {"parentContextNotation": {key: text for key, text in guides.items() if key in used}, **result}
+    selected = result if _size(result) < _size(context) else context
+    return compact_author_source_text(selected)
+
+
+_SOURCE_TEXT_READING = (
+    "sourceTextParts concatenates literal strings and nativeSourceText[sourceText] entries in order "
+    "to recover the record's exact C# code, including all line endings. Source-line mappings refer to "
+    "that reconstructed code. Each record keeps its own identity, guards, coverage and provenance; "
+    "shared text does not make records or their execution equivalent."
+)
+_SOURCE_TEXT_KEYS = {"sourceTextParts", "nativeSourceText", "sourceTextNotation", "sourceText"}
+_SOURCE_CODE_COVERAGE = {
+    "approximate_identity_ast_regions", "approximate_identity_ast_method",
+    "conditional_ast_regions", "identity_specialized_method", "whole_method",
+}
+
+
+def compact_author_source_text(context: dict[str, Any]) -> dict[str, Any]:
+    """Share exact line-aligned source blocks, never infer equivalent records.
+
+    This declared read-only normalization uses at most three sequential pieces:
+    shared prefix, literal distinct middle, shared suffix. Method and coverage
+    only group comparisons; actual character equality establishes sharing.
+    No deltas, source offsets, graph pruning or source-reference renumbering.
+    """
+    def records(value: Any):
+        if isinstance(value, dict):
+            yield value
+            for key, child in value.items():
+                if key not in _LITERAL_KEYS:
+                    yield from records(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from records(child)
+
+    # Future literal fields must not become ambiguous with this notation.
+    if any(_SOURCE_TEXT_KEYS.intersection(row) for row in records(context)):
+        return copy.deepcopy(context)
+    result = copy.deepcopy(context)
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in records(result):
+        method, coverage = row.get("method"), row.get("coverage")
+        if (isinstance(method, str) and isinstance(coverage, str)
+                and coverage in _SOURCE_CODE_COVERAGE and isinstance(row.get("code"), str)):
+            groups[method, coverage].append(row)
+    shared: list[str] = []
+    for rows in groups.values():
+        if len(rows) < 2:
+            continue
+        codes = [row["code"] for row in rows]
+        prefix = os.path.commonprefix(codes)
+        prefix = prefix[:prefix.rfind("\n") + 1]
+        suffix = os.path.commonprefix([code[len(prefix):][::-1] for code in codes])[::-1]
+        suffix = suffix[suffix.find("\n") + 1:] if "\n" in suffix else ""
+        # Share substantial readable bodies, not boilerplate headers or short lines.
+        # This is an encoding threshold, never an evidence truncation/budget.
+        prefix = prefix if len(prefix) >= 1024 and prefix.count("\n") >= 2 else ""
+        suffix = suffix if len(suffix) >= 1024 and suffix.count("\n") >= 2 else ""
+        if not prefix and not suffix:
+            continue
+        index = len(shared)
+        blocks = [part for part in (prefix, suffix) if part]
+        replacements = []
+        for row, code in zip(rows, codes):
+            middle = code[len(prefix):len(code) - len(suffix)] if suffix else code[len(prefix):]
+            pieces: list[Any] = []
+            if prefix:
+                pieces.append({"sourceText": index})
+            if middle:
+                pieces.append(middle)
+            if suffix:
+                pieces.append({"sourceText": index + bool(prefix)})
+            replacements.append({("sourceTextParts" if key == "code" else key):
+                                 (pieces if key == "code" else value) for key, value in row.items()})
+        if _size(replacements) + _size(blocks) >= _size(rows):
+            continue
+        shared.extend(blocks)
+        for row, replacement in zip(rows, replacements):
+            row.clear()
+            row.update(replacement)
+    if not shared:
+        return copy.deepcopy(context)
+    result["nativeSourceText"] = shared
+    result["sourceTextNotation"] = _SOURCE_TEXT_READING
     return result if _size(result) < _size(context) else copy.deepcopy(context)
