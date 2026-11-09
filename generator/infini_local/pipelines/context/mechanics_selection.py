@@ -46,14 +46,14 @@ def _references(value: Any) -> tuple[set[str], set[str]]:
     return set(_DREF.findall(text)), set(_BREF.findall(text))
 
 
-def _include(row: dict[str, Any]) -> bool:
+def _include(row: dict[str, Any]) -> bool | None:
     kind = row.get("kind")
     if kind in _KEEP_KINDS:
         return True
     if kind == "state_write":
         expr = row.get("expression")
         if not isinstance(expr, str):
-            raise ValueError("unknown_state_write")
+            return None
         match = re.match(r"^set\(\(this\)\.(Entity\.[A-Za-z_]+|Projectile\.[A-Za-z_]+),", expr)
         if match and match[1] in _PHYSICAL:
             return True
@@ -63,7 +63,7 @@ def _include(row: dict[str, Any]) -> bool:
             return True
     if kind == "motion_call" and row.get("call") in _OMIT_CALLS:
         return False
-    raise ValueError("unrecognized_observation")
+    return None
 
 
 def select_gameplay_roots(program: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -78,7 +78,10 @@ def select_gameplay_roots(program: dict[str, Any]) -> tuple[dict[str, Any], dict
         predmap = {row["id"]: row for row in predicates}
         if len(predmap) != len(predicates):
             raise ValueError("ambiguous_predicate_ids")
-        selected = [row for row in obs if _include(row)]
+        decisions = [_include(row) for row in obs]
+        # Unknown rows may be gameplay. Keep them as roots without preventing
+        # independent, recognized presentation-only omissions elsewhere.
+        selected = [row for row, decision in zip(obs, decisions) if decision is not False]
         needed_d, needed_b = _references(selected)
         done_d: set[str] = set()
         done_b: set[str] = set()
@@ -101,10 +104,11 @@ def select_gameplay_roots(program: dict[str, Any]) -> tuple[dict[str, Any], dict
         out["observations"] = selected
         out["dependencies"] = {k: v for k, v in deps.items() if k in needed_d}
         out["predicates"] = [row for row in predicates if row["id"] in needed_b]
-        omitted = [row for row in obs if not _include(row)]
+        omitted = [row for row, decision in zip(obs, decisions) if decision is False]
         return out, {
             "mode": "gameplay_roots_with_source_closure",
             "omittedObservations": len(omitted),
+            **({"retainedUnclassifiedObservations": decisions.count(None)} if None in decisions else {}),
             "omittedByKind": dict(sorted(Counter(str(row.get("kind")) for row in omitted).items())),
             "omittedDependencies": len(deps) - len(out["dependencies"]),
             "omittedPredicates": len(predicates) - len(out["predicates"]),

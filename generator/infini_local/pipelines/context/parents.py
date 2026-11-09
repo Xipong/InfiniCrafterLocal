@@ -10,13 +10,15 @@ from infini_local.core.item_identity_tools import (
     item_field,
 )
 from infini_local.pipelines.context.attack_behavior import project_attack_behavior
-from infini_local.pipelines.context.attack_tables import pack_attack_tables
+from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.native_csharp_source import native_csharp_source_for_llm
 from infini_local.pipelines.context.mechanics_selection import (
     _gameplay_identity_program, _identity_unresolved, select_gameplay_roots,
 )
-from infini_local.pipelines.context.csharp_source_view import _records as _verified_csharp_records
+from infini_local.pipelines.context.csharp_source_view import (
+    _model_source_record, _records as _verified_csharp_records, _specialized_record,
+)
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
     LLM_INCLUDE_AISTYLE_RAW,
@@ -313,7 +315,7 @@ def _compact_attack_source(reference: dict[str, Any], references: Any, *,
 
     Keep JSON member order and scalar types in the key. Unsupported Python
     values bypass reuse. Cache entries and each delivery have separate ownership.
-    Verified/mechanics supplements are applied by the caller before this seam.
+    Verified mechanics supplements use this projection after the cache seam.
     """
     readable = references is None or known_projectile_references(references)
     calls = references["sourceCalls"] if readable and isinstance(references, dict) else None
@@ -359,6 +361,34 @@ def _compact_attack_source(reference: dict[str, Any], references: Any, *,
     return result
 
 
+def _verified_mechanics_supplements(reference: dict[str, Any], projected: dict[str, Any]) -> list[dict[str, Any]]:
+    """Do not reintroduce diagnostics or a source variant the owner replaced.
+
+    This is the existing declared source projection, not another selector. A
+    full original is replaced only by the exact certified specialization already
+    chosen by the canonical source owner. Other bodies and coverage stay distinct.
+    """
+    verified = _verified_csharp_records(reference)
+    if not verified:
+        return []
+    source = unpack_attack_tables(projected).get("nativeCSharpSource", {})
+    emitted = [{key: value for key, value in record.items() if key != "id"}
+               for record in source.get("records", [])] if isinstance(source, dict) else []
+    result = []
+    for record in verified.values():
+        specialized = _specialized_record(reference, record)
+        selected = (specialized if specialized is not None and _model_source_record(specialized) in emitted
+                    else record)
+        selected = copy.deepcopy(selected)
+        if specialized is not None:
+            # This validated proof is a producer receipt, not an unfamiliar
+            # gameplay field. Its body/limits are represented by the selected
+            # record; the full proof and original source remain in the capture.
+            selected.pop("identitySpecialized", None)
+        result.append(selected)
+    return result
+
+
 def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool = True,
                                prefer_readable_source: bool = True,
                                attack_source_memo: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -379,16 +409,17 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
             # A partial approximate view must not lose a certified dispatcher
             # region just because the strict source view prefers its IL graph.
             mechanics.pop("verifiedSourceRecords", None)
-            verified = _verified_csharp_records(reference)
-            if verified:
-                # Matching names do not prove matching bodies or coverage.
-                mechanics["verifiedSourceRecords"] = copy.deepcopy(list(verified.values()))
         attack, linked_calls, selected = _compact_attack_source(
             reference, proj.get("referencedProjectiles"), prefer_readable_source=prefer_readable_source,
             has_mechanics=isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
                 and type(mechanics.get("version")) is int and mechanics["version"] == 1,
             memo=attack_source_memo)
         out["attackReference"] = attack
+        if (isinstance(mechanics, dict) and mechanics.get("source") == "native_mechanics_source"
+                and type(mechanics.get("version")) is int and mechanics["version"] == 1):
+            verified = _verified_mechanics_supplements(reference, attack)
+            if verified:
+                mechanics["verifiedSourceRecords"] = verified
         if selected:
             out["strictIdentitySelections"] = selected
     # The native producer owns verification and scope. Never infer a trajectory

@@ -155,7 +155,7 @@ def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | Non
             return None
         if record["coverage"] == "identity_specialized_method":
             identity = record.get("identitySpecialization")
-            if not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"} or not _identity(identity["identityPredicates"]) or identity["scope"] != _IDENTITY_SCOPE:
+            if not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"} or not _identity(identity["identityPredicates"]) or identity["scope"] not in _IDENTITY_SCOPES:
                 return None
         elif "identitySpecialization" in record:
             return None
@@ -168,6 +168,14 @@ def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | Non
                 return None
         result[record["id"]] = record
     return result
+
+
+def _model_source_record(record: dict[str, Any]) -> dict[str, Any]:
+    """One declared gameplay projection of an already verified source record."""
+    return {**{key: copy.deepcopy(record[key]) for key in (
+        "method", "code", "coverage", "unresolved", "identitySpecialization") if key in record},
+        "entryGuards": [{key: copy.deepcopy(value) for key, value in guard.items() if key != "ilOffset"}
+                        for guard in record.get("entryGuards", [])]}
 
 
 def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] | None, selected_records: dict | None = None
@@ -190,10 +198,8 @@ def _compact_model_view(reference: dict[str, Any], calls: list[dict[str, Any]] |
     out = visit(out)
     out["nativeCSharpSource"] = {"source": _MODEL_SOURCE, "version": 1, "scope": _MODEL_SCOPE,
         "unresolved": copy.deepcopy(reference["nativeCSharpSource"]["unresolved"]),
-        "records": [{"id": ids[identity], **{key: copy.deepcopy(record[key]) for key in (
-            "method", "code", "coverage", "unresolved")}, **({"identitySpecialization": copy.deepcopy(record["identitySpecialization"])} if "identitySpecialization" in record else {}), "entryGuards": [{key: copy.deepcopy(value)
-                for key, value in guard.items() if key != "ilOffset"} for guard in record["entryGuards"]]}
-            for identity, record in records.items()]}
+        "records": [{"id": ids[identity], **_model_source_record(record)}
+                    for identity, record in records.items()]}
     if linked is not None:
         for call in linked:
             location = call.get("sourceLocation")
@@ -523,7 +529,12 @@ def _linked_calls(calls: list[dict[str, Any]] | None, records: dict[str, dict[st
 
 
 
-_IDENTITY_SCOPE = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage."
+_IDENTITY_SCOPE = "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours and hidden global effects remain outside capture coverage."
+# The producer kept the v1 proof schema when clarifying this limitation. Both
+# emitted wordings are recognized literally; unfamiliar scopes still refuse.
+_IDENTITY_SCOPES = (_IDENTITY_SCOPE,
+    "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage.")
+
 
 
 def _identity(value: Any) -> bool:
@@ -539,7 +550,7 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
     if (not isinstance(proof, dict) or set(proof) != {"version", "source", "originalCodeSha256", "identityPredicates", "scope", "selectedEdges", "removedGuards"}
             or type(proof["version"]) is not int or proof["version"] != 1 or proof["source"] != "certified_receiver_identity_ast"
             or proof["originalCodeSha256"] != record["codeSha256"] or not _identity(proof["identityPredicates"])
-            or proof["identityPredicates"] != reference.get("identityPredicates") or proof["scope"] != _IDENTITY_SCOPE
+            or proof["identityPredicates"] != reference.get("identityPredicates") or proof["scope"] not in _IDENTITY_SCOPES
             or view["coverage"] != "identity_specialized_method" or record["coverage"] != "whole_method"
             or not isinstance(view["code"], str) or not view["code"].strip()
             or hashlib.sha256(view["code"].encode()).hexdigest() != view["codeSha256"]):

@@ -41,7 +41,7 @@ def test_roots_and_transitive_cyclic_closure_remain_literal_and_ordered():
     assert "may affect" in scope["scope"] and original == before
 
 
-def test_unknown_kind_or_missing_dependency_keeps_allowlisted_roots_with_explicit_unknown():
+def test_missing_dependency_or_predicate_keeps_all_roots_with_explicit_unknown():
     for missing in ("dependency", "predicate"):
         program = _program()
         if missing == "dependency":
@@ -50,10 +50,27 @@ def test_unknown_kind_or_missing_dependency_keeps_allowlisted_roots_with_explici
             program["predicates"] = [row for row in program["predicates"] if row["id"] != "b2"]
         result, scope = select_gameplay_roots(program)
         assert result == program and scope["unresolved"] == "gameplay_selection_unavailable"
+
+
+def test_unknown_roots_and_their_closure_survive_independent_visual_omissions():
     p = _program()
-    p["observations"].append({"kind": "future_mod_specific_kind", "step": 8})
+    unknown = {"kind": "future_mod_specific_kind", "expression": "d3", "requiredPredicates": ["b3"], "step": 8}
+    malformed = {"kind": "state_write", "expression": {"future": "d4"}, "step": 9}
+    p["observations"].extend([unknown, malformed, copy.deepcopy(unknown)])
+    p["dependencies"]["d3"] = {"expression": "d4", "step": 3}
+    p["dependencies"]["d4"] = {"expression": "live_value", "requiredPredicates": ["b4"], "step": 4}
+    p["predicates"].append({"id": "b4", "inputs": ["d3"], "step": 4})
+    before = copy.deepcopy(p)
     result, scope = select_gameplay_roots(p)
-    assert result == p and scope["mode"] == "all_allowlisted_roots"
+    assert result["observations"] == [p["observations"][0], unknown, malformed, unknown]
+    assert result["dependencies"] == p["dependencies"]
+    assert result["predicates"] == p["predicates"]
+    assert scope["retainedUnclassifiedObservations"] == 3
+    assert scope["omittedObservations"] == 2 and "may affect" in scope["scope"]
+    assert p == before
+    p["dependencies"].pop("d4")
+    refused, refusal = select_gameplay_roots(p)
+    assert refused == p and refusal["unresolved"] == "gameplay_selection_unavailable"
 
 
 def test_program_allowlist_drops_diagnostics_and_marks_omission():
