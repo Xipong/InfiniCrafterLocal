@@ -258,24 +258,47 @@ def test_nonzero_retention_must_not_collapse_to_zero():
     assert not validate_runtime_program(doc)["ok"]
 
 
+def _disjoint_attachment_and_seek():
+    doc = base_document()
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
+    add(doc, "charge", {"duration": 1})
+    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
+    attachment = add(doc, "attach", {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
+        "window": window("charging")})
+    add(doc, "seek", seek_params("outbound"))
+    return doc, attachment
+
+
 @pytest.mark.parametrize("bad_phase", [[], {}, None, 1, False])
 def test_malformed_window_does_not_crash_cross_component_validation(bad_phase):
-    doc = base_document()
-    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
-    add(doc, "attach", {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
-        "window": dict(window("outbound"), phase=bad_phase)})
-    add(doc, "seek", seek_params("outbound"))
-    assert not validate_runtime_program(doc)["ok"]
+    doc, attachment = _disjoint_attachment_and_seek()
+    report = validate_runtime_program(doc)
+    assert report["ok"], report["errors"]
+    attachment["params"]["window"]["phase"] = bad_phase
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    path = f"$.runtimeProgram.calls[{doc['runtimeProgram']['calls'].index(attachment)}].params.window.phase"
+    assert not report["ok"]
+    assert any(error["path"] == path and error["code"] == "shape_type" for error in report["errors"]), report
+    assert doc == before
 
 
-@pytest.mark.parametrize("leaf,value", [("duration", 1e308), ("duration", float("inf")), ("startDelay", 10**1000)])
-def test_out_of_domain_window_numbers_refuse_without_arithmetic_crash(leaf, value):
-    doc = base_document()
-    add(doc, "set_aim", {"source": "initial", "turnOwner": False})
-    add(doc, "attach", {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
-        "window": dict(window("outbound"), **{leaf: value})})
-    add(doc, "seek", seek_params("outbound"))
-    assert not validate_runtime_program(doc)["ok"]
+@pytest.mark.parametrize("leaf,value,code", [
+    ("duration", 1e308, "shape_maximum"),
+    ("duration", float("inf"), "shape_type"),
+    ("startDelay", 10**1000, "shape_type"),
+])
+def test_out_of_domain_window_numbers_refuse_without_arithmetic_crash(leaf, value, code):
+    doc, attachment = _disjoint_attachment_and_seek()
+    report = validate_runtime_program(doc)
+    assert report["ok"], report["errors"]
+    attachment["params"]["window"][leaf] = value
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    path = f"$.runtimeProgram.calls[{doc['runtimeProgram']['calls'].index(attachment)}].params.window.{leaf}"
+    assert not report["ok"]
+    assert any(error["path"] == path and error["code"] == code for error in report["errors"]), report
+    assert doc == before
 
 
 def test_raw_invalid_binding_input_remains_a_refusal_not_a_motion_validator_crash():

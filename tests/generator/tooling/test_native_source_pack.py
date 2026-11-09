@@ -21,6 +21,11 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def test_committed_projection_pin_matches_current_source():
+    fingerprint, _ = checker.projection_fingerprint()
+    checker.check_pin(fingerprint)
+
+
 def test_projection_fingerprint_covers_shared_analysis_primitives(tmp_path, monkeypatch):
     mod = tmp_path / "mod/InfiniCrafterLocal"
     analysis = mod / "Common/Analysis"
