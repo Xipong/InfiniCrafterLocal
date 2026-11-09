@@ -258,3 +258,204 @@ def test_lookup_retains_its_snapshot_identity_when_another_is_installed(tmp_path
     assert old["timeLeft"] == 30 and old["runtimeDumpProvenance"]["snapshotId"] == "a" * 32
     assert current["timeLeft"] == 90 and current["runtimeDumpProvenance"]["snapshotId"] == "b" * 32
     assert old["runtimeDumpProvenance"]["compatibility"] == current["runtimeDumpProvenance"]["compatibility"] == "matched_available_identity"
+
+
+def _replace_payload(root, manifest_path, manifest, kind, data, *, rows=1, errors=0):
+    descriptor = manifest["files"][kind]
+    (root / descriptor["path"]).write_bytes(data)
+    descriptor.update(bytes=len(data), rows=rows, unavailableRows=errors, sha256=hashlib.sha256(data).hexdigest())
+    manifest_path.write_text(json.dumps(manifest))
+
+
+def test_disk_snapshot_retains_verified_bytes_after_source_and_lookup_mutation(tmp_path):
+    path, manifest = manifest_pair(tmp_path)
+    snapshot = dumps.load_runtime_dump_snapshot(path, path)
+    original = snapshot.projectiles[42]
+    original["timeLeft"] = 999
+    for descriptor in manifest["files"].values():
+        (tmp_path / descriptor["path"]).write_bytes(b"corrupted after admission\n")
+    path.unlink()
+    assert snapshot.projectiles[42]["timeLeft"] == 90
+    assert snapshot.lookup("projectile", 42)["timeLeft"] == 90
+    assert sorted(snapshot.projectiles) == [42, 43]
+    assert dict(snapshot.items) == {97: {"type": 97, "shoot": 42}}
+    with pytest.raises(TypeError):
+        snapshot.projectiles[42] = {"type": 42}
+
+
+@pytest.mark.parametrize("payload", [b'{"type":1,"type":2}\n', b'{"type":true}\n',
+                                      b'{"type":1,"value":NaN}\n', b'\xff\n', b'\n',
+                                      b'{"type":1}\n{"type":1}\n',
+                                      pytest.param(b'{"type":42,"nested":' + b"[" * 2000 + b"0" + b"]" * 2000 + b"}\n", id="deep-row"),
+                                      pytest.param(b'{"type":42,"nested":' + b"[" * 10000 + b"0" + b"]" * 10000 + b"}\n", id="parser-depth-overflow")])
+def test_stream_rejects_invalid_records_and_releases_private_index(tmp_path, monkeypatch, payload):
+    from infini_local.services import runtime_dump_index
+    cache = tmp_path / "private"
+    cache.mkdir()
+    monkeypatch.setattr(runtime_dump_index.tempfile, "tempdir", str(cache))
+    path, manifest = manifest_pair(tmp_path / "source")
+    _replace_payload(path.parent, path, manifest, "projectiles", payload, rows=payload.count(b"\n"))
+    for _ in range(3):
+        rejected = dumps.load_runtime_dump_snapshot(path, path)
+        assert rejected.provenance["status"] == "invalid_snapshot"
+        assert not rejected.items and not rejected.projectiles
+        assert list(cache.iterdir()) == []
+    _replace_payload(path.parent, path, manifest, "projectiles", b'{"type":42,"timeLeft":77}\n')
+    admitted = dumps.load_runtime_dump_snapshot(path, path)
+    assert admitted.lookup("projectile", 42)["timeLeft"] == 77
+    del admitted
+    import gc
+    gc.collect()
+    assert list(cache.iterdir()) == []
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b""])
+def test_record_limit_applies_to_actual_bytes_and_includes_line_ending(tmp_path, monkeypatch, newline):
+    path, manifest = manifest_pair(tmp_path, item_rows=[{"type": 1}])
+    data = b'{"type":42,"payload":"' + b"x" * 100 + b'"}' + newline
+    monkeypatch.setattr(dumps, "MAX_DUMP_ROW_BYTES", len(data))
+    _replace_payload(tmp_path, path, manifest, "projectiles", data)
+    assert dumps.load_runtime_dump_snapshot(path, path).projectiles[42]["payload"] == "x" * 100
+    monkeypatch.setattr(dumps, "MAX_DUMP_ROW_BYTES", len(data) - 1)
+    rejected = dumps.load_runtime_dump_snapshot(path, path)
+    assert rejected.provenance["status"] == "invalid_snapshot" and not rejected.items
+
+
+def test_incomplete_recovery_directory_does_not_override_published_manifest(tmp_path, monkeypatch):
+    root = tmp_path / "runtime_dumps"
+    incomplete = root / "runtime_dump_snapshots" / ("b" * 32)
+    incomplete.mkdir(parents=True)
+    (incomplete / "items_runtime_dump.jsonl").write_text('{"type":97,"shoot":999}\n')
+    items, projectiles = [root / f"{kind}_runtime_dump.jsonl" for kind in ("items", "projectiles")]
+    assert dumps.load_runtime_dump_snapshot(items, projectiles).provenance["status"] == "absent"
+    path, _ = manifest_pair(root)
+    snapshot = dumps.load_runtime_dump_snapshot(items, projectiles)
+    assert snapshot.items[97]["shoot"] == 42
+    assert snapshot.provenance["snapshotId"] == "a" * 32
+
+
+def test_replaced_payload_symlink_during_admission_is_rejected(tmp_path, monkeypatch):
+    import os
+    if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW"):
+        pytest.skip("openat no-follow admission is POSIX-specific")
+    path, manifest = manifest_pair(tmp_path / "source")
+    external = tmp_path / "outside.jsonl"
+    original = dumps._snapshot_file
+
+    def swapped(*args):
+        target = original(*args)
+        if target.name == "items_runtime_dump.jsonl":
+            target.rename(external)
+            target.symlink_to(external)
+        return target
+
+    monkeypatch.setattr(dumps, "_snapshot_file", swapped)
+    rejected = dumps.load_runtime_dump_snapshot(path, path)
+    assert rejected.provenance["status"] == "invalid_snapshot"
+    assert not rejected.items and not rejected.projectiles
+
+
+def test_catalog_over_512_mib_and_100k_rows_is_indexed_with_bounded_memory(tmp_path):
+    """Real byte boundary, not a patched limit or a giant in-memory fixture."""
+    import os
+    import subprocess
+    import sys
+    path, manifest = manifest_pair(tmp_path)
+    descriptor = manifest["files"]["projectiles"]
+    target = tmp_path / descriptor["path"]
+    count = 131_073
+    hasher = hashlib.sha256()
+    with target.open("wb") as stream:
+        for identity in range(1, count + 1):
+            prefix = ('{"type":%d,"timeLeft":90,"payload":"' % identity).encode()
+            line = prefix + b"x" * (4096 - len(prefix) - 3) + b'"}\n'
+            stream.write(line)
+            hasher.update(line)
+    descriptor.update(bytes=target.stat().st_size, rows=count, unavailableRows=0, sha256=hasher.hexdigest())
+    assert descriptor["bytes"] > 512 * 1024 * 1024
+    path.write_text(json.dumps(manifest))
+    script = '''
+import json, sys
+from pathlib import Path
+from infini_local.services import runtime_dump_service as dumps
+path = Path(sys.argv[1])
+snapshot = dumps.load_runtime_dump_snapshot(path, path)
+assert snapshot.provenance["status"] == "verified_snapshot", snapshot.provenance
+assert len(snapshot.projectiles) == 131073
+assert snapshot.lookup("projectile", 131073)["timeLeft"] == 90
+assert snapshot.items[97]["shoot"] == 42
+if sys.platform == "linux":
+    import resource
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    assert peak < 192 * 1024, peak
+    print(json.dumps({"peakRssKiB": peak, "rows": len(snapshot.projectiles)}))
+'''
+    result = subprocess.run([sys.executable, "-c", script, str(path)], env=os.environ.copy(),
+                            capture_output=True, text=True, timeout=180)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_disk_snapshot_supports_concurrent_detached_lookups(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    path, _ = manifest_pair(tmp_path)
+    snapshot = dumps.load_runtime_dump_snapshot(path, path)
+
+    def lookup(_):
+        row = snapshot.projectiles[42]
+        row["timeLeft"] = 0
+        return snapshot.lookup("projectile", 42)["timeLeft"], tuple(sorted(snapshot.projectiles))
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        assert list(workers.map(lookup, range(100))) == [(90, (42, 43))] * 100
+
+
+def test_same_length_corruption_rejects_pair_and_corrected_retry_succeeds(tmp_path):
+    path, manifest = manifest_pair(tmp_path)
+    payload = tmp_path / manifest["files"]["projectiles"]["path"]
+    original = payload.read_bytes()
+    corrupted = original.replace(b'"timeLeft": 90', b'"timeLeft": 99')
+    assert corrupted != original and len(corrupted) == len(original)
+    payload.write_bytes(corrupted)
+    rejected = dumps.load_runtime_dump_snapshot(path, path)
+    assert rejected.provenance["status"] == "invalid_snapshot"
+    assert not rejected.items and not rejected.projectiles
+    payload.write_bytes(original)
+    assert dumps.load_runtime_dump_snapshot(path, path).lookup("projectile", 42)["timeLeft"] == 90
+
+
+def test_private_index_disk_full_refuses_pair_and_can_retry(tmp_path, monkeypatch):
+    from infini_local.services import runtime_dump_index
+    cache = tmp_path / "private"
+    cache.mkdir()
+    monkeypatch.setattr(runtime_dump_index.tempfile, "tempdir", str(cache))
+    path, _ = manifest_pair(tmp_path / "source", projectile_rows=[{"type": 42, "payload": "x" * 20000}])
+    real_store = dumps.RuntimeDumpIndex
+
+    def storage_with_page_quota():
+        store = real_store()
+        # Exercise SQLite's real SQLITE_FULL path, without exhausting host disk.
+        pages = store._connection.execute("PRAGMA page_count").fetchone()[0]
+        store._connection.execute(f"PRAGMA max_page_count={pages}")
+        return store
+
+    with monkeypatch.context() as patch:
+        patch.setattr(dumps, "RuntimeDumpIndex", storage_with_page_quota)
+        rejected = dumps.load_runtime_dump_snapshot(path, path)
+        assert rejected.provenance["status"] == "invalid_snapshot"
+        assert not rejected.items and not rejected.projectiles
+        assert list(cache.iterdir()) == []
+    admitted = dumps.load_runtime_dump_snapshot(path, path)
+    assert admitted.projectiles[42]["payload"] == "x" * 20000
+
+
+@pytest.mark.parametrize("arrays, admitted", [(63, True), (64, False)])
+def test_record_depth_matches_exporter_limit_and_lookup_is_safe(tmp_path, arrays, admitted):
+    path, manifest = manifest_pair(tmp_path)
+    payload = b'{"type":42,"nested":' + b"[" * arrays + b"0" + b"]" * arrays + b"}\n"
+    _replace_payload(tmp_path, path, manifest, "projectiles", payload)
+    snapshot = dumps.load_runtime_dump_snapshot(path, path)
+    assert (snapshot.provenance["status"] == "verified_snapshot") is admitted
+    if admitted:
+        assert snapshot.lookup("projectile", 42)["type"] == 42
+    else:
+        assert not snapshot.items and not snapshot.projectiles

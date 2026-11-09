@@ -13,6 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import copy
 import hashlib
+from collections.abc import Mapping
+from contextlib import contextmanager
+import sqlite3
+import stat
 from pathlib import Path, PurePosixPath
 import re
 from typing import Any, Literal
@@ -20,6 +24,7 @@ from typing import Any, Literal
 from infini_local.core.config_bootstrap import DATA_DIR
 from infini_local.core import strict_json
 from infini_local.core.config_validation import reject_retired_config
+from infini_local.services.runtime_dump_index import RuntimeDumpIndex
 from infini_local.core.env_utils import env_str
 
 
@@ -66,14 +71,17 @@ def resolve_runtime_dump_path(data_dir: Path, filename: str, explicit_env: str) 
 MANIFEST_NAME = "runtime_dump_manifest.json"
 MANIFEST_SCHEMA = "infini.runtime-dump.v1"
 MAX_MANIFEST_BYTES = 1024 * 1024
-MAX_DUMP_BYTES = 512 * 1024 * 1024
-MAX_DUMP_ROWS = 100_000
+# File/count bounds are wire integer bounds, not memory allocation limits.
+MAX_DUMP_BYTES = (1 << 63) - 1
+MAX_DUMP_ROWS = (1 << 63) - 1
+MAX_DUMP_ROW_BYTES = 16 * 1024 * 1024  # UTF-8 JSON plus LF/CRLF, matching the exporter.
+MAX_DUMP_ROW_DEPTH = 64  # Same container-depth bound as the exporter JSON reader.
 
 
 @dataclass(frozen=True)
 class RuntimeDumpSnapshot:
-    items: dict[int, dict[str, Any]]
-    projectiles: dict[int, dict[str, Any]]
+    items: Mapping[int, dict[str, Any]]
+    projectiles: Mapping[int, dict[str, Any]]
     provenance: dict[str, Any]
     modules: dict[str, str]
 
@@ -138,7 +146,8 @@ class RuntimeDumpSnapshot:
 
 
 def _bounded_bytes(path: Path, limit: int) -> bytes:
-    with path.open("rb") as stream:
+    root = path.parent.resolve()
+    with _open_payload(root, root / path.name) as stream:
         data = stream.read(limit + 1)
     if len(data) > limit:
         raise ValueError("file_byte_bound")
@@ -164,7 +173,61 @@ def _snapshot_file(root: Path, relative: Any, snapshot_id: str, filename: str) -
     return target
 
 
-def _verified_rows(path: Path, descriptor: dict[str, Any]) -> dict[int, dict[str, Any]]:
+@contextmanager
+def _open_payload(root: Path, path: Path):
+    """Pin each directory while opening; never follow a swapped payload symlink."""
+    if os.open in os.supports_dir_fd and hasattr(os, "O_NOFOLLOW"):
+        descriptors = []
+        try:
+            current = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            descriptors.append(current)
+            parts = path.relative_to(root).parts
+            for component in parts[:-1]:
+                current = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=current)
+                descriptors.append(current)
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=current)
+            try:
+                stream = os.fdopen(fd, "rb")
+            except BaseException:
+                os.close(fd)
+                raise
+            with stream:
+                if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                    raise ValueError("snapshot_payload_not_regular")
+                yield stream
+        finally:
+            for descriptor in reversed(descriptors):
+                os.close(descriptor)
+    else:
+        # Windows lacks openat; validate the resolved path and regular-file
+        # identity around open. Facts are copied and hashed, never read later.
+        before = path.stat()
+        with path.open("rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(opened.st_mode) or not path.resolve().is_relative_to(root)
+                    or not os.path.samestat(before, opened) or not os.path.samestat(path.stat(), opened)):
+                raise ValueError("snapshot_payload_changed")
+            yield stream
+
+
+def _validate_row_depth(row: dict[str, Any]) -> None:
+    # Decoder recursion guards vary across Python versions. Limit admitted
+    # container depth explicitly, also protecting later deepcopy/context use.
+    stack = [iter(row.values())]
+    while stack:
+        try:
+            value = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            continue
+        if isinstance(value, (dict, list)):
+            if len(stack) >= MAX_DUMP_ROW_DEPTH:
+                raise ValueError("snapshot_record_depth_bound")
+            stack.append(iter(value.values()) if isinstance(value, dict) else iter(value))
+
+
+def _verified_rows(root: Path, path: Path, descriptor: dict[str, Any],
+                   store: RuntimeDumpIndex, kind: int) -> Mapping[int, dict[str, Any]]:
     size, count, errors = (descriptor.get(k) for k in ("bytes", "rows", "unavailableRows"))
     if type(size) is not int or type(count) is not int or type(errors) is not int:
         raise ValueError("snapshot_counts_invalid")
@@ -173,23 +236,33 @@ def _verified_rows(path: Path, descriptor: dict[str, Any]) -> dict[int, dict[str
     digest = descriptor.get("sha256")
     if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
         raise ValueError("snapshot_hash_invalid")
-    data = _bounded_bytes(path, size)
-    if len(data) != size or hashlib.sha256(data).hexdigest() != digest:
+    observed_bytes = observed_rows = observed_errors = 0
+    hasher = hashlib.sha256()
+    with _open_payload(root, path) as stream:
+        if os.fstat(stream.fileno()).st_size != size:
+            raise ValueError("snapshot_size_mismatch")
+        while True:
+            line = stream.readline(min(MAX_DUMP_ROW_BYTES, size - observed_bytes) + 1)
+            if not line:
+                break
+            if len(line) > MAX_DUMP_ROW_BYTES or observed_bytes + len(line) > size:
+                raise ValueError("snapshot_row_or_byte_bound")
+            if observed_rows >= count:
+                raise ValueError("snapshot_row_bound")
+            hasher.update(line)
+            row = strict_json.loads(line.decode("utf-8"))
+            if not isinstance(row, dict) or type(row.get("type")) is not int or row["type"] < 0:
+                raise ValueError("snapshot_record_invalid")
+            _validate_row_depth(row)
+            store.add(kind, row["type"], line)
+            observed_bytes += len(line)
+            observed_rows += 1
+            observed_errors += row.get("unavailable") is True
+    if observed_bytes != size or hasher.hexdigest() != digest:
         raise ValueError("snapshot_hash_mismatch")
-    index: dict[int, dict[str, Any]] = {}
-    for line in data.splitlines():
-        if len(index) >= MAX_DUMP_ROWS:
-            raise ValueError("snapshot_row_bound")
-        row = strict_json.loads(line.decode("utf-8"))
-        if not isinstance(row, dict) or type(row.get("type")) is not int or row["type"] < 0:
-            raise ValueError("snapshot_record_invalid")
-        if row["type"] in index:
-            raise ValueError("snapshot_duplicate_type")
-        index[row["type"]] = row
-    if len(index) != count or sum(row.get("unavailable") is True for row in index.values()) != errors:
+    if observed_rows != count or observed_errors != errors:
         raise ValueError("snapshot_counts_mismatch")
-    return index
-
+    return store.rows(kind, observed_rows)
 
 def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> RuntimeDumpSnapshot:
     manifests = [_manifest_for(path) for path in (items_path, projectiles_path)]
@@ -197,6 +270,8 @@ def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> Runt
         if any(path.exists() or path.is_symlink() for path in (items_path, projectiles_path)):
             return RuntimeDumpSnapshot({}, {}, {"status": "invalid_snapshot", "reason": "snapshot_manifest_required"}, {})
         return RuntimeDumpSnapshot({}, {}, {"status": "absent"}, {})
+    store = None
+    admitted = False
     try:
         if manifests[0].resolve() != manifests[1].resolve():
             raise ValueError("configured_pair_manifest_mismatch")
@@ -220,12 +295,13 @@ def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> Runt
         if not isinstance(files, dict) or set(files) != {"items", "projectiles"}:
             raise ValueError("snapshot_pair_invalid")
         loaded = {}
-        for kind in ("items", "projectiles"):
+        store = RuntimeDumpIndex()
+        for kind_id, kind in enumerate(("items", "projectiles")):
             descriptor = files[kind]
             if not isinstance(descriptor, dict):
                 raise ValueError("snapshot_descriptor_invalid")
             target = _snapshot_file(root, descriptor.get("path"), snapshot_id, f"{kind}_runtime_dump.jsonl")
-            loaded[kind] = _verified_rows(target, descriptor)
+            loaded[kind] = _verified_rows(root, target, descriptor, store, kind_id)
         environment = manifest.get("environment")
         if not isinstance(environment, dict) or not isinstance(environment.get("mods"), list):
             raise ValueError("snapshot_environment_invalid")
@@ -238,11 +314,17 @@ def load_runtime_dump_snapshot(items_path: Path, projectiles_path: Path) -> Runt
                 if name in modules and modules[name] != mvid:
                     raise ValueError("snapshot_module_identity_conflict")
                 modules[name] = mvid
+        store.seal()
+        admitted = True
         return RuntimeDumpSnapshot(loaded["items"], loaded["projectiles"],
             {"status": "verified_snapshot", "snapshotId": snapshot_id, "capturedAtUtc": captured}, modules)
-    except (OSError, ValueError, TypeError, KeyError, UnicodeError):
+    except (OSError, ValueError, TypeError, KeyError, UnicodeError, sqlite3.Error):
         # Admit the complete pair or neither file. Never mix captures or expose manifest content.
         return RuntimeDumpSnapshot({}, {}, {"status": "invalid_snapshot", "reason": "manifest_or_pair_validation_failed"}, {})
+
+    finally:
+        if store is not None and not admitted:
+            store.close()
 
 
 # One startup snapshot; a newly exported pair requires a generator restart.

@@ -151,7 +151,13 @@ internal static partial class EngineRuntimeChecks
             Equal(original, System.IO.File.ReadAllText(manifestPath), "failed second capture cannot replace the previous manifest");
             Equal(true, System.IO.File.Exists(oldItem) && System.IO.File.Exists(oldProjectile), "previous complete pair survives");
             Equal(1, System.IO.Directory.GetDirectories(System.IO.Path.Combine(root, "runtime_dump_snapshots")).Length,
-                "only unpublished failed attempt is removed");
+                "failed attempt remains outside the complete snapshot namespace");
+            string failedDirectory = System.IO.Directory.GetDirectories(System.IO.Path.Combine(root, InfiniDumpCommand.DumpIncompleteDirectory)).Single();
+            Equal(true, System.IO.File.Exists(System.IO.Path.Combine(failedDirectory, "items_runtime_dump.jsonl")), "failed attempt preserves completed items");
+            Equal(true, System.IO.File.Exists(System.IO.Path.Combine(failedDirectory, "projectiles_runtime_dump.jsonl")), "failed attempt preserves partial projectiles");
+            var incomplete = JsonNode.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(failedDirectory, InfiniDumpCommand.DumpIncompleteStateName)))!;
+            Equal(false, incomplete["complete"]!.GetValue<bool>(), "diagnostic attempt never claims completeness");
+            Equal("failed", incomplete["status"]!.GetValue<string>(), "failure status retained without exception contents");
             JsonObject second = Publish(false);
             Equal(false, first["snapshotId"]!.GetValue<string>() == second["snapshotId"]!.GetValue<string>(), "new snapshot has a separate immutable identity");
             Equal(true, System.IO.File.Exists(oldItem) && System.IO.File.Exists(oldProjectile), "successful publication also retains previous pair");
@@ -161,9 +167,10 @@ internal static partial class EngineRuntimeChecks
             {
                 InfiniDumpCommand.PublishSnapshot(root, writer =>
                 {
-                    for (int n = 0; n <= InfiniDumpCommand.DumpRowLimit; n++) writer.WriteLine("{\"type\":1}");
+                    writer.WriteLine("{\"type\":1}");
+                    writer.WriteLine("{\"value\":\"" + new string('x', InfiniDumpCommand.DumpRecordByteLimit) + "\"}");
                 }, _ => { }, environment);
-                throw new Exception("row bound did not refuse export");
+                throw new Exception("record allocation bound did not refuse export");
             }
             catch (System.IO.InvalidDataException) { }
             Equal(current, System.IO.File.ReadAllText(manifestPath), "bounded failure leaves accepted manifest unchanged");
