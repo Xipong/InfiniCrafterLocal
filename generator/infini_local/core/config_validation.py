@@ -18,6 +18,8 @@ RETIRED_CONFIG_REPLACEMENTS = {
     "INFINI_OPENAI_COMPAT_IMAGE_API_KEY": "INFINI_IMAGE_API_KEY",
     **{f"INFINI_PIXEL_{suffix}": f"INFINI_COMFYUI_{suffix}"
        for suffix in ("LORA_NAME", "LORA_WEIGHT", "TRIGGER")},
+    **{f"INFINI_{role}_ICON_TARGET_FILL": "current runtime-entity framing (remove this obsolete setting; no replacement)"
+       for role in ("PROJECTILE", "CHILD")},
     "INFINI_ITEMS_DUMP": "INFINI_ITEMS_RUNTIME_DUMP",
     "INFINI_PROJECTILES_DUMP": "INFINI_PROJECTILES_RUNTIME_DUMP",
 }

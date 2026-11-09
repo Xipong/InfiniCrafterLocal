@@ -308,7 +308,7 @@ def test_real_image_jobs_keep_independent_visual_curve_and_hitbox_ownership(monk
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
 
 
-@pytest.mark.parametrize("role", ["item", "vfx_strip", "projectile"])
+@pytest.mark.parametrize("role", ["item", "vfx_strip", "runtime:projectile"])
 def test_zimage_retry_preserves_long_diagnostics(monkeypatch, role):
     monkeypatch.setattr(post_retry, "image_backend_is_zimage", lambda: True)
     monkeypatch.setenv("INFINI_ZIMAGE_RETRY_PROMPT_LIMIT", "2200")
@@ -316,7 +316,6 @@ def test_zimage_retry_preserves_long_diagnostics(monkeypatch, role):
         "core_silhouette_too_small", "core_silhouette_too_large", "effect_extent_too_large",
         "object_touches_edges", "magenta_key_background_left", "almost_no_transparency_after_bg_removal",
         "too_few_opaque_pixels", "very_dense_opaque_area", "empty_alpha_bbox",
-        "projectile_forward_axis_misaligned",
     ]
     validation = {"reasons": reasons}
     notes = post_retry.validation_retry_notes(validation, role)

@@ -217,7 +217,6 @@ public sealed class VfxSlotSpec
     [JsonIgnore(Condition=JsonIgnoreCondition.WhenWritingNull)]
     public VfxHistoryTrailSpec? Trail { get=>_trail; set=>_trail=value??throw new InvalidDataException("trail cannot be null"); }
 
-    public void Normalize() => NormalizeAndValidate();
     public void NormalizeAndValidate()
     {
         Id = RuntimeId(Id, "slot id");

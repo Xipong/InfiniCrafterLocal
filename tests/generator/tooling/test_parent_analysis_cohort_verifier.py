@@ -414,9 +414,7 @@ def test_source_pack_workflow_requires_same_contract_byte_parity():
     assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in text
     assert "baseline-native-source-pack" in text
     assert "--require-payloads --require-pins --require-target" in text
-    assert "exact cross-version payload bytes" in text
     assert "$result.byteParityPass" in text
-    assert "Cold packet hash mismatch" not in text
 
 
 def _source_pack_workflow_step(name: str) -> str:

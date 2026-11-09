@@ -52,10 +52,6 @@ def validation_retry_notes(validation: dict[str, Any] | None, role: str = "item"
         ("too_few_opaque_pixels", "use a more solid readable silhouette with less emptiness"),
         ("very_dense_opaque_area", dense_area),
         ("empty_alpha_bbox", "draw the authored role asset, not an empty image"),
-        (
-            "projectile_forward_axis_misaligned",
-            "use canonical local +X: leading tip/nose screen-right and tail/trail screen-left; runtime rotates this axis to world velocity",
-        ),
     ]
     for raw, msg in mapping:
         if any(str(r).startswith(raw) for r in reasons):

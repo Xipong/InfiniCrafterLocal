@@ -326,7 +326,8 @@ def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(
     assert row["profileId"] == "llm_1"
     assert row["waitReason"] == "none" and row["networkStarted"] is None
     assert row["elapsedSeconds"] >= row["stageElapsedSeconds"] >= 0
-    assert isinstance(row["requestId"], str) and len(row["requestId"]) == 32
+    assert isinstance(row["requestId"], str) and row["requestId"]
+    assert endpoint.generation_activity_snapshot()["requests"][0]["requestId"] == row["requestId"]
     assert "PRIVATE" not in json.dumps(activity)
     row["stage"] = "modified-detached-copy"
     assert endpoint.generation_activity_snapshot()["requests"][0]["stage"] == "01_gameplay_author"

@@ -155,10 +155,6 @@ public sealed partial class InfiniCraftPlayer
                 ? slot.FunctionalItem : null;
     }
 
-    internal bool IsLiveAirJumpSource(GeneratedItemData source)
-        => TryGetLiveAirJumpSource(source.Id, out var live, out _)
-            && GeneratedItemRegistryService.DefinitionIdentity(source) == GeneratedItemRegistryService.DefinitionIdentity(live);
-
     private bool IsLiveAirJumpGrant(AirJumpGrant grant)
         => _airJumpGrants.Exists(live => live.Source.Id == grant.Source.Id
             && live.Definition == grant.Definition && live.Generation == grant.Generation && live.Component == grant.Component

@@ -124,12 +124,3 @@ def item_num(item: dict[str, Any], name: str, default: float = 0.0) -> float:
         return float(item_field(item, name, default) or 0)
     except Exception:
         return default
-
-
-def item_bool(item: dict[str, Any], name: str) -> bool:
-    v = item_field(item, name, False)
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.lower() in {"1", "true", "yes", "y"}
-    return bool(v)

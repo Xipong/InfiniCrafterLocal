@@ -11,7 +11,7 @@ from typing import Any
 
 from infini_local.core.config_bootstrap import APP_VERSION, SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.images.config import VISUAL_PIPELINE_PROFILE
-from infini_local.pipelines.images.prompts import sprite_contract_for
+from infini_local.core.images.contracts import chroma_rgb, final_sprite_canvas, uses_key_background
 from infini_local.services import asset_sync_service
 
 
@@ -43,7 +43,16 @@ def _asset_descriptor(value: Any, required: bool = False) -> dict[str, Any] | No
 
 def sprite_contract_for_asset(data: dict[str, Any], asset: dict[str, Any]) -> dict[str, Any]:
     del data
-    contract = sprite_contract_for(str(asset.get("processingRole") or asset.get("role") or "asset"), int(asset.get("canvas") or 32))
+    role = str(asset.get("processingRole") or asset.get("role") or "asset")
+    contract = {
+        "schema": "infini.sprite-contract.runtime-entity.v1",
+        "role": role,
+        "targetSizePx": final_sprite_canvas(int(asset.get("canvas") or 32)),
+        "background": "rgb(%s,%s,%s)" % chroma_rgb() if uses_key_background() else "transparent",
+        "singleSubject": True,
+        "transparentAfterPostprocess": True,
+        "noPlaceholder": True,
+    }
     if "layout" in asset:
         contract.update(layout=asset["layout"], preserveFullFrame=asset["layout"] == "strip", alphaMode="soft")
     return contract

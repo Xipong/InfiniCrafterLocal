@@ -16,7 +16,7 @@ from infini_local.core.image_dependencies import Image
 from infini_local.services.sdcpp_service import SDCPP_SERVER_STATE, cleanup_server_process
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.images.backends import ensure_sdcpp_server, sdcpp_debug_snapshot
-from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
+from infini_local.pipelines.images.prompts import asset_negative_prompt
 from infini_local.pipelines.images.stage import generate_visual_asset, maybe_generate_sprite
 from infini_local.pipelines.images.validation import alpha_stats
 from infini_local.services import asset_sync_service
@@ -209,13 +209,15 @@ def _dir_writable_check(path: Path) -> dict[str, Any]:
 
 def _visual_probe_payload(role: str = "item", prompt: str = "") -> dict[str, Any]:
     role = (role or "item").lower()
-    role = role if role in {"item", "projectile", "impact", "child", "field"} else "item"
+    if role not in {"item", "equip_overlay", "runtime:projectile", "runtime:child_projectile",
+                    "runtime:held_body", "runtime:deployed_entity", "runtime:helper", "runtime:field"}:
+        raise ValueError(f"Unsupported visual probe role: {role!r}; use an exact runtime processing role")
     test_id = f"doctor_{role}_{int(time.time())}"
     # Explicit diagnostic art, not an old authored-item packet whose prose
     # or name is expected to synthesize a missing prompt or gameplay.
     prompt = prompt or "One cyan crystal blade with a violet slime edge and white star-shaped circuit inlay."
     dummy = {"id": test_id, "visual": {"preferredCanvasSize": 32}, "debug": {}}
-    canvas = 32 if role == "item" else 48 if role == "projectile" else 32
+    canvas = 32 if role == "item" else 48 if role == "runtime:projectile" else 32
     if role == "item":
         dummy["visual"]["imagePrompt"] = prompt
         before = time.time()
@@ -226,7 +228,6 @@ def _visual_probe_payload(role: str = "item", prompt: str = "") -> dict[str, Any
         if path and Image is not None and Path(path).exists():
             alpha = alpha_stats(Image.open(path).convert("RGBA"))
         return {"ok": bool(path and Path(path).exists()), "role": role, "ms": int((time.time() - before) * 1000), "visual": visual, "alpha": alpha, "debug": dummy.get("debug")}
-    prompt = normalize_asset_prompt(dummy, role, prompt, canvas)
     before = time.time()
     sprite_path, url, score, status = generate_visual_asset(dummy, role, prompt, asset_negative_prompt(role), test_id, canvas)
     alpha = {}
@@ -327,7 +328,7 @@ def visual_doctor_html(handler: Any, path: str) -> None:
     <style>body{{font-family:Segoe UI,Arial,sans-serif;margin:24px;max-width:1200px}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ddd;padding:8px;vertical-align:top}}code,pre{{white-space:pre-wrap;background:#f6f6f6;padding:2px 4px}}.bar a{{margin-right:12px}}</style>
     <h1>Infini Visual Doctor</h1>
     <p>Status: <b>{escape(str(payload.get('summary')))}</b>. This checks the mandatory Z-Image/sprite delivery path before you burn ingredients.</p>
-    <p class='bar'><a href='/visual_doctor.json'>json</a><button data-post='/visual_doctor.json?probe=1&role=item'>live item probe</button><button data-post='/visual_doctor.json?probe=1&role=projectile'>live projectile probe</button><button data-post='/sdcpp_start'>start sd.cpp</button><a href='/trace'>trace</a></p>
+    <p class='bar'><a href='/visual_doctor.json'>json</a><button data-post='/visual_doctor.json?probe=1&role=item'>live item probe</button><button data-post='/visual_doctor.json?probe=1&role=runtime:projectile'>live projectile probe</button><button data-post='/sdcpp_start'>start sd.cpp</button><a href='/trace'>trace</a></p>
     <table><tr><th></th><th>check</th><th>meaning</th><th>details</th></tr>{''.join(rows)}</table>
     <h2>Raw payload</h2><pre>{escape(json.dumps(payload, ensure_ascii=False, indent=2))}</pre>
     <pre id='action-result' aria-live='polite'></pre>

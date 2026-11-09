@@ -29,7 +29,6 @@ from infini_local.pipelines.images.geometry import (
     bbox_expand,
     bbox_union,
     sprite_bbox_stats,
-    sprite_principal_axis_stats,
 )
 from infini_local.pipelines.images.keyer import (
     chroma_like_rgb,
@@ -369,63 +368,6 @@ def restore_downscaled_sprite_color(img: Any) -> Any:
     return scrub_transparent_rgb(restored)
 
 
-def canonicalize_projectile_forward_axis(img: Any, role: str = "projectile") -> tuple[Any, dict[str, Any]]:
-    """Normalize an elongated projectile's local forward axis before final downscale.
-
-    Local +X is only a texture-space convention. Terraria still rotates the sprite
-    toward any world-space velocity. Near-radial sprites remain untouched; head/tail
-    flipping is allowed only for a strongly tapered silhouette.
-    """
-    if Image is None:
-        return img, {"beforeAngleDegrees": 0.0, "afterAngleDegrees": 0.0, "anisotropy": 1.0, "rotated": False, "flipped": False}
-    normalized_role = str(role or "").strip().lower()
-    source = img.convert("RGBA")
-    before = sprite_principal_axis_stats(source, 8)
-    evidence: dict[str, Any] = {
-        "beforeAngleDegrees": float(before.get("angleDegrees") or 0.0),
-        "afterAngleDegrees": float(before.get("angleDegrees") or 0.0),
-        "anisotropy": float(before.get("anisotropy") or 1.0),
-        "rotated": False,
-        "flipped": False,
-        "leftEndpointPixels": 0,
-        "rightEndpointPixels": 0,
-    }
-    if normalized_role not in {"projectile", "child"} or evidence["anisotropy"] < 2.5:
-        return source, evidence
-
-    working = source
-    angle = evidence["beforeAngleDegrees"]
-    if abs(angle) > 3.0:
-        working = source.rotate(
-            angle,
-            resample=Image.Resampling.BICUBIC,
-            expand=True,
-            fillcolor=(0, 0, 0, 0),
-        )
-        working = scrub_transparent_rgb(working)
-        evidence["rotated"] = True
-
-    # PCA is undirected. Infer head/tail only for highly elongated, strongly
-    # tapered silhouettes (arrows/spears/shards), never coins or broad fire blobs.
-    if evidence["anisotropy"] >= 8.0:
-        alpha = working.getchannel("A")
-        bbox = alpha_bbox_threshold(working, 8)
-        if bbox is not None:
-            x0, y0, x1, y1 = bbox
-            edge_width = max(2, int(round((x1 - x0) * 0.24)))
-            left = sum(1 for y in range(y0, y1) for x in range(x0, min(x1, x0 + edge_width)) if int(alpha.getpixel((x, y))) >= 8)
-            right = sum(1 for y in range(y0, y1) for x in range(max(x0, x1 - edge_width), x1) if int(alpha.getpixel((x, y))) >= 8)
-            evidence["leftEndpointPixels"] = left
-            evidence["rightEndpointPixels"] = right
-            if left > 0 and right > 0 and left < right * 0.82:
-                working = working.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
-                evidence["flipped"] = True
-
-    after = sprite_principal_axis_stats(working, 8)
-    evidence["afterAngleDegrees"] = float(after.get("angleDegrees") or 0.0)
-    return working, evidence
-
-
 def palette_cleanup(img: Any, role: str = "item") -> Any:
     if Image is None or not PIXEL_POSTERIZE:
         return img
@@ -434,10 +376,7 @@ def palette_cleanup(img: Any, role: str = "item") -> Any:
         return img
     img = img.convert("RGBA")
     alpha = img.getchannel("A")
-    if normalized_role == "child":
-        colors = max(32, min(48, int(MAX_COLORS)))
-    else:
-        colors = max(24, min(40, int(MAX_COLORS)))
+    colors = max(24, min(40, int(MAX_COLORS)))
     try:
         # Quantize only the visible bbox.  Quantizing the whole transparent canvas lets
         # transparent black dominate the palette and wastes colors that should go to the

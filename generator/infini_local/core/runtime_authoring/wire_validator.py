@@ -1503,12 +1503,4 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def assert_valid_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
-    report = validate_runtime_wire(data)
-    if not report["ok"]:
-        messages = "; ".join(f"{row.get('path')}: {row.get('message')}" for row in report["errors"][:12])
-        raise ValueError("invalid compiled runtime wire: " + messages)
-    return report
-
-
-__all__ = ["assert_valid_runtime_wire", "validate_runtime_wire"]
+__all__ = ["validate_runtime_wire"]

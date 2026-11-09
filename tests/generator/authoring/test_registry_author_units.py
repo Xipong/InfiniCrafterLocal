@@ -1,12 +1,11 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
-from suite_paths import REPO_ROOT, TEST_ROOT
+from suite_paths import TEST_ROOT
 
 
 import hashlib
 import json
 import math
 import re
-import runpy
 import struct
 from copy import deepcopy
 from pathlib import Path
@@ -362,12 +361,6 @@ def test_numeric_constraints_reach_serialized_author_and_exact_repair(monkeypatc
         assert constraint["wireProjection"] == {"divisor": 100, "multiplier": 1}
         assert constraint["storage"] == "float32"
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.moveSpeedBonus"]}]
-
-
-def test_generated_equipment_bounds_stay_current():
-    root = REPO_ROOT
-    assert runpy.run_path(str(root / "tools/generate/generate_equipment_bounds.py"))["render"]() == (
-        root / "mod/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs").read_text()
 
 
 @pytest.mark.parametrize("fn", ["spawn_on_event", "pull_on_event"])

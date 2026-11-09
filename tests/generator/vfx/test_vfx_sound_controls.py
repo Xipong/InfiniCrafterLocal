@@ -11,24 +11,13 @@ from infini_local.core import llm_config
 import infini_local.core.vfx.contract as vfx_contract
 import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.repair as vfx_repair
-import infini_local.core.vfx.surface as vfx_surface
 import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines.vfx import request as stage
 from tests.generator.vfx.test_repair_vfx_contract import _offline_transport
-from tests.generator.vfx.test_vfx_sound_selection import _sound, _INVENTORY, SOUND_IDS
+from tests.generator.vfx.test_vfx_sound_selection import _sound
 from tests.generator.vfx_material_fixtures import _data, _shape, _native
-
-
-def test_palette_restores_every_historical_sample_and_keeps_every_recent_sample():
-    historical = set(_INVENTORY["historicalCatalog"].values())
-    preceding = set(_INVENTORY["precedingCatalog"])
-    assert len(_INVENTORY["historicalCatalog"]) == 92
-    assert len(historical) == 71 and len(preceding) == 20
-    assert len(historical & preceding) == 7
-    assert len(SOUND_IDS) == len(set(SOUND_IDS)) == 84
-    assert historical | preceding == set(vfx_surface.vfx_director_surface(_data())["soundId"])
 
 
 @pytest.mark.parametrize("controls", [

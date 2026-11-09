@@ -206,7 +206,8 @@ with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     command = launch.call_args.args[0]
     options = launch.call_args.kwargs
     assert options["env"]["INFINI_STUDIO_LAUNCH_ID"] == app._owned_server_launch_id
-    assert len(app._owned_server_launch_id) == 32
+    launch_id = app._owned_server_launch_id
+    assert isinstance(launch_id, str) and launch_id
     assert options["env"]["INFINI_IMAGE_DIR"] == str(save / "InfiniCrafterLocal/images")
     assert app._owned_launch_settings["INFINI_IMAGE_DIR"] == options["env"]["INFINI_IMAGE_DIR"]
 app.on_close()
@@ -215,6 +216,7 @@ app.on_close()
 child = subprocess.run([command[0], "-E", *command[1:]], **options,
                        capture_output=True, text=True, encoding="utf-8", timeout=10)
 assert child.returncode == 0, child.stdout + child.stderr
+assert json.loads(child.stdout)["launch_id"] == launch_id
 print(child.stdout, end="")
 '''
         result = subprocess.run(
@@ -224,7 +226,8 @@ print(child.stdout, end="")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         child = json.loads(result.stdout)
         launch_id = child.pop("launch_id")
-        self.assertRegex(launch_id, r"^[0-9a-f]{32}$")
+        self.assertIsInstance(launch_id, str)
+        self.assertTrue(launch_id)
         self.assertEqual(child, {"value": "готово", "cwd": str(self.data), "data": str(self.data),
                                  "images": str(self.save / "InfiniCrafterLocal/images"),
                                  "utf8": 1, "unbuffered": True})

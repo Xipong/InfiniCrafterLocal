@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 
 import infini_local.pipelines.images.pixels as post_pixels
@@ -10,6 +11,7 @@ import infini_local.pipelines.images.validation as post_validation
 import pytest
 from infini_local.core.images import contracts
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
+from infini_local.pipelines.images import manifest
 from infini_local.pipelines.images import postprocess as post
 from infini_local.pipelines.images import stage as generation
 from infini_local.pipelines.images.prompts import normalize_asset_prompt
@@ -141,7 +143,7 @@ def test_transparent_selects_native_alpha_without_a_chroma_fallback(monkeypatch,
         contracts.chroma_rgb()
     authored = "transparent glass with magenta crystal and white tip"
     for role in ("item", "runtime:projectile", "equip_overlay", "vfx_cutout", "vfx_strip"):
-        assert prompts.sprite_contract_for(role, 32)["background"] == "transparent"
+        assert manifest.sprite_contract_for_asset({}, {"role": role, "canvas": 32})["background"] == "transparent"
         text = prompts.normalize_asset_prompt({}, role, authored, 32)
         assert authored in text
     rule = prompts.visual_background_transport_rule()
@@ -290,12 +292,53 @@ def test_soft_policy_preserves_low_alpha_but_rejects_empty(tmp_path, role):
     assert "empty_alpha_bbox" in validation["reasons"]
     assert post_validation.sprite_validation_fatal(validation)
 
-def test_runtime_projectile_does_not_canonicalize_to_legacy_x():
-    image = Image.new("RGBA", (64, 64))
-    ImageDraw.Draw(image).rectangle((28, 8, 36, 56), fill=(200, 100, 30, 255))
-    output, evidence = post_pixels.canonicalize_projectile_forward_axis(image, "runtime:projectile")
-    assert output.tobytes() == image.tobytes()
-    assert not evidence["rotated"] and not evidence["flipped"]
+@pytest.mark.parametrize("role", ["runtime:projectile", "runtime:child_projectile"])
+def test_runtime_projectile_postprocess_preserves_authored_axis_and_ends(tmp_path, monkeypatch, role):
+    from infini_local.pipelines.images.geometry import sprite_principal_axis_stats
+    monkeypatch.setattr(post, "SPRITE_DIR", tmp_path)
+    image = Image.new("RGBA", (64, 64), (255, 0, 255, 255))
+    draw = ImageDraw.Draw(image)
+    draw.polygon(((14, 10), (23, 10), (51, 54), (42, 54)), fill=(200, 100, 30, 255))
+    draw.rectangle((14, 10, 23, 18), fill=(20, 80, 230, 255))
+    raw = tmp_path / "diagonal.png"
+    image.save(raw)
+    original = raw.read_bytes()
+    output = post.postprocess_sprite(str(raw), "authored", 32, role)
+    assert raw.read_bytes() == original
+    with Image.open(output).convert("RGBA") as baked:
+        axis = sprite_principal_axis_stats(baked)
+        assert 45 < axis["angleDegrees"] < 70
+        blue = [(x, y) for y in range(32) for x in range(32)
+                if (pixel := baked.getpixel((x, y)))[3] and pixel[2] > pixel[0] * 2]
+        assert blue and max(x for x, _ in blue) < 16 and max(y for _, y in blue) < 16
+    assert post_validation.validate_processed_sprite(output, role)["ok"]
+
+
+@pytest.mark.parametrize("role,canvas,layout,keyed", [
+    ("item", 24, None, False), ("equip_overlay", 32, None, True),
+    ("runtime:held_body", 48, None, False), ("runtime:projectile", 64, None, True),
+    ("runtime:child_projectile", 96, None, False), ("runtime:helper", 128, None, True),
+    ("runtime:deployed_entity", 32, None, True), ("runtime:field", 48, None, False),
+    ("vfx_cutout", 32, "cutout", True), ("vfx_strip", 64, "strip", False),
+])
+def test_persisted_manifest_keeps_exact_asset_contract(tmp_path, monkeypatch, role, canvas, layout, keyed):
+    from infini_local.core.images import config
+    from infini_local.storage import image_store
+    monkeypatch.setattr(config, "BG_COLOR", "cyan" if keyed else "transparent")
+    monkeypatch.setattr(config, "REMOVE_BG", True)
+    monkeypatch.setattr(config, "BG_REMOVE_MODE", "sprite_keyer")
+    monkeypatch.setattr(image_store, "item_directory", lambda *_: tmp_path)
+    asset = {"role": "entity:arbitrary_id", "processingRole": role, "canvas": canvas}
+    expected = {"schema": "infini.sprite-contract.runtime-entity.v1", "role": role,
+                "targetSizePx": canvas, "background": "rgb(0,255,255)" if keyed else "transparent",
+                "singleSubject": True, "transparentAfterPostprocess": True, "noPlaceholder": True}
+    if layout is not None:
+        asset["layout"] = layout
+        expected.update(layout=layout, preserveFullFrame=layout == "strip", alphaMode="soft")
+    manifest.write_visual_manifest({"id": "fixture"}, [asset])
+    written = json.loads((tmp_path / "manifest.json").read_text())
+    assert written["assets"][0]["contract"] == expected
+
 
 def test_mismatched_role_is_not_reinterpreted(tmp_path, monkeypatch):
     _, result, calls = run_plan(tmp_path, monkeypatch, "field_named_body", "free_projectile", "field")
@@ -387,7 +430,7 @@ def test_asset_plan_refuses_nonobject_root_visual_for_item_canvas(root):
 def test_canvas_boundary_refusal(entry, canvas):
     from infini_local.pipelines.images import prompts
     image = Image.new("RGBA", (32, 32))
-    consumer = prompts.sprite_contract_for if entry == "prompt" else getattr(post, entry)
+    consumer = prompts.role_contract_prompt_clause if entry == "prompt" else getattr(post, entry)
     args = ("item", canvas) if entry == "prompt" else (image, "test", canvas) if entry == "prepare_sprite_master" else (image, canvas)
     with pytest.raises(ValueError, match="canvas"):
         consumer(*args)

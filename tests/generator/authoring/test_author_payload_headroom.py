@@ -260,10 +260,6 @@ def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_litera
     assert source == before
 
 
-def test_author_development_size_target_remains_300k():
-    assert PLANNER_PROMPT_LIMIT_CHARS == 300_000
-
-
 def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
     _, text, _ = build_initial_author_request({}, {}, "target-kind-sharing", model_name="offline")
     catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]

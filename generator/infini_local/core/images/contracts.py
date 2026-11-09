@@ -6,11 +6,9 @@ from typing import Any, Mapping
 
 from infini_local.core.images import config as visual_config
 from infini_local.core.images.config import (
-    CHILD_ICON_TARGET_FILL,
     FIELD_ICON_TARGET_FILL,
     IMPACT_ICON_TARGET_FILL,
     ITEM_ICON_TARGET_FILL,
-    PROJECTILE_ICON_TARGET_FILL,
     SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
     SPRITE_ITEM_CORE_ALPHA_THRESHOLD,
 )
@@ -169,17 +167,6 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "promptFillWords": "the wearable layer should fit comfortably inside the canvas with transparent breathing room around its silhouette",
             "promptPoseWords": "compose one centered wearable equipment overlay only, isolated from any player body or inventory card",
         },
-        "projectile": {
-            "targetFill": PROJECTILE_ICON_TARGET_FILL,
-            "minFill": 0.68,
-            "maxFill": 0.96,
-            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
-            "marginPx": 1 if size <= 32 else 2,
-            "cropPadPx": 1,
-            "maxEdgeTouch": 0.10,
-            "promptFillWords": "the projectile body should span most of the canvas along its width or height while staying fully inside the frame",
-            "promptPoseWords": "compose one clean projectile in canonical local +X pose: leading tip or nose faces screen-right, tail or trail faces screen-left; this local texture is later rotated to any world-space travel direction",
-        },
         "impact": {
             "targetFill": IMPACT_ICON_TARGET_FILL,
             "minFill": 0.52,
@@ -190,17 +177,6 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
             "maxEdgeTouch": 0.18,
             "promptFillWords": "the burst shape should span most of the canvas along its width or height while staying fully inside the frame",
             "promptPoseWords": "single compact effect burst only, no item or weapon body",
-        },
-        "child": {
-            "targetFill": CHILD_ICON_TARGET_FILL,
-            "minFill": 0.48,
-            "maxFill": 0.90,
-            "coreAlphaThreshold": SPRITE_EFFECT_CORE_ALPHA_THRESHOLD,
-            "marginPx": 1 if size <= 32 else 2,
-            "cropPadPx": 1,
-            "maxEdgeTouch": 0.14,
-            "promptFillWords": "the child body should span a large visible portion of the canvas while staying fully inside the frame",
-            "promptPoseWords": "one tiny separate object only; if elongated, use canonical local +X with its leading tip screen-right because this local texture is later rotated to any world-space travel direction",
         },
         "field": {
             "targetFill": FIELD_ICON_TARGET_FILL,
@@ -227,8 +203,7 @@ def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
         "promptFillWords": "preserve the full authored frame and UV placement; the long axis may reach the frame edges",
         "promptPoseWords": "one VFX texture ingredient, no atlas; no rotation, crop, recentering or silhouette refit",
     }
-    # Runtime bodies retain their authored orientation. In particular do not route
-    # runtime:projectile through the legacy +X projectile contract/canonicalizer.
+    # Runtime bodies retain their authored orientation.
     runtime_roles = {"held_body", "projectile", "deployed_entity", "helper", "child_projectile"}
     if role.startswith("runtime:") and role.removeprefix("runtime:") in runtime_roles:
         spec = dict(table["equip_overlay"])

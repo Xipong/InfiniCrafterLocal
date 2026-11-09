@@ -23,6 +23,10 @@ Fresh Visual v2 item требует `prompt`, `negativePrompt`, `silhouette`, `v
 
 Processing role отделена от произвольного entity ID: identity вроде `entity_<id>` не является geometry role. Directional convention обязана соответствовать renderer: +X canonicalization нельзя применять поверх native +Y rotation; PCA/taper не semantic detector носа/рукояти. Authored design/palette/silhouette не переписываются name/category/regex heuristics.
 
+Visual Doctor использует те же `runtime:*` processing roles, что и генерация сущностей; старые bare `projectile`/`child` probes отвергаются до запроса изображения. Пиксельный pipeline не угадывает направление или головной конец по силуэту и не поворачивает/отражает PNG к +X. PCA остаётся только измерением в диагностике. Устаревшие `INFINI_PROJECTILE_ICON_TARGET_FILL` и `INFINI_CHILD_ICON_TARGET_FILL` нужно удалить из config.env: текущая геометрия runtime-сущностей их не использует, загрузчик сообщает об этих настройках явно.
+
+Serialized asset contract (`schema`, `role`, `targetSizePx`, background и обязательность прозрачного PNG) принадлежит image manifest. Отдельный geometry contract задаёт bounds/fill/alpha для обработки; это разные проекции, не взаимозаменяемые схемы.
+
 Item/equipment сохраняют hard pixel alpha, effect cutouts — soft alpha. Straight RGBA PNG premultiplies только при runtime upload, не вместо bake policy. Final PNG transparent; raw backend input может требовать solid chroma key по [sprite_contracts.py](../../../generator/infini_local/core/images/contracts.py). Prompt/keyer/retry используют один mapping (white/black/cyan и retained aliases); magenta-only spill не применяется к другому key, unknown key диагностируется. Нельзя путать raw solid-key background с непрозрачным final PNG или восстанавливать arbitrary alpha, уже сплющенную provider на opaque фон.
 
 <a id="size-axis"></a>

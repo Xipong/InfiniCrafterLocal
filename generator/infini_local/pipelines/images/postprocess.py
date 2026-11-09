@@ -51,7 +51,6 @@ from infini_local.core.images.contracts import (
 
 from infini_local.pipelines.images.pixels import (
     bake_sprite_from_master,
-    canonicalize_projectile_forward_axis,
     cleanup_alpha,
     defringe_chroma_edges,
     denoise_alpha_singletons,
@@ -287,12 +286,8 @@ def postprocess_sprite(
             # normalized grip coordinate. Never infer or relocate a contact.
             # Full-frame grip coordinates and UVs are authored data. Only key/alpha cleanup and uniform
             # full-frame resize are allowed; never crop, rotate, center or refit.
-            forward_axis = {"rotated": False, "flipped": False}
             master = bg_removed
         else:
-            bg_removed, forward_axis = canonicalize_projectile_forward_axis(bg_removed, role)
-            if forward_axis.get("rotated") or forward_axis.get("flipped"):
-                save_stage(bg_removed, sprite_id, "15_projectile_forward_axis", output_dir=output_dir)
             master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
         if key_profile is not None:
             master.info["infini.chroma-key"] = json.dumps({"schema": "infini.sampled-chroma-key.v1", **key_profile}, sort_keys=True)
@@ -332,7 +327,6 @@ def postprocess_sprite(
                 "pillowAvailable": Image is not None,
                 "bgMode": BG_REMOVE_MODE,
                 "alpha": stats,
-                "projectileForwardAxis": forward_axis,
                 "framePolicy": "preserve_authored_grip" if preserve_frame else "role_contract",
                 "validation": validation,
             },

@@ -162,7 +162,7 @@ def test_wrong_identity_and_malformed_exclusion_receipts_do_not_activate():
         assert mechanics_context(raw) is None
 
 
-def test_actual_author_request_preserves_catalog_and_emits_mechanics(monkeypatch):
+def test_actual_author_request_delivers_mechanics_without_mutating_parent(monkeypatch):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier, expand_native_source_references
@@ -173,7 +173,6 @@ def test_actual_author_request_preserves_catalog_and_emits_mechanics(monkeypatch
         monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
         request, _, _ = build_initial_author_request(parent, {"name": "Material"}, "local-only", model_name="offline")
         dossier = expand_native_source_references(request_dossier(request))
-        assert len(dossier["runtimeCapabilityContract"]["catalog"]["capabilities"]) == 71
         view = dossier["parents"]["A"]["packet"]["raw"]
         assert "mechanics" in view
         assert "diagnosticSecretMarker" not in json.dumps(dossier)

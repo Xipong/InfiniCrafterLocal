@@ -1020,3 +1020,41 @@ def test_private_diagnostics_reject_rebinding_host(monkeypatch, path):
     handler.headers["Host"] = "foreign.example:5055"
     handler.do_GET()
     assert capture.code == 403
+
+
+@pytest.mark.parametrize("role", ["runtime:projectile", "runtime:child_projectile", "runtime:field", "runtime:held_body", "runtime:deployed_entity", "runtime:helper", "equip_overlay"])
+def test_visual_doctor_uses_current_processing_roles(tmp_path, monkeypatch, role):
+    from infini_local.pipelines.images import stage
+    from PIL import Image, ImageDraw
+    raw = tmp_path / "raw.png"
+    image = Image.new("RGBA", (64, 64), (255, 0, 255, 255))
+    ImageDraw.Draw(image).rectangle((24, 8, 40, 56), fill=(200, 100, 30, 255))
+    image.save(raw)
+    calls = []
+    def backend(data, *, prompt, canvas, **kwargs):
+        calls.append((prompt, canvas))
+        return [str(raw)]
+    monkeypatch.setattr(stage, "IMAGE_BACKEND", "sdcpp")
+    monkeypatch.setattr(stage, "SPRITE_RETRIES", 0)
+    monkeypatch.setattr(stage, "SPRITE_DIR", tmp_path)
+    monkeypatch.setattr(stage, "_backend_configuration_error", lambda: "")
+    monkeypatch.setattr(stage, "_generate_backend_variants", backend)
+    result = server_utility_routes._visual_probe_payload(role, "vertical copper bar")
+    assert result["ok"], json.dumps(result, ensure_ascii=False)
+    assert result["role"] == role
+    assert len(calls) == 1 and "vertical copper bar" in calls[0][0]
+    assert calls[0][0].count("Terraria (tModLoader) game asset.") == 1
+    with Image.open(result["path"]) as baked:
+        box = baked.getchannel("A").getbbox()
+        assert box and box[3] - box[1] > box[2] - box[0]
+        assert baked.size == ((48, 48) if role == "runtime:projectile" else (32, 32))
+
+
+@pytest.mark.parametrize("role", ["projectile", "child", "unknown", "vfx_cutout", "vfx_strip"])
+def test_visual_doctor_rejects_retired_or_unknown_roles_before_image_request(monkeypatch, role):
+    calls = []
+    monkeypatch.setattr(server_utility_routes, "generate_visual_asset", lambda *_: calls.append("entity"))
+    monkeypatch.setattr(server_utility_routes, "maybe_generate_sprite", lambda *_: calls.append("item"))
+    with pytest.raises(ValueError, match="Unsupported visual probe role"):
+        server_utility_routes._visual_probe_payload(role)
+    assert not calls

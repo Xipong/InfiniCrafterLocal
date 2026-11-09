@@ -44,19 +44,6 @@ def compact_visual_words(value: Any, limit: int = 180) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())[:limit]
 
 
-def sprite_contract_for(role: str, target_size: int = 32) -> dict[str, Any]:
-    role_token = str(role or "asset")
-    return {
-        "schema": "infini.sprite-contract.runtime-entity.v1",
-        "role": role_token,
-        "targetSizePx": final_sprite_canvas(target_size),
-        "background": chroma_name() if uses_key_background() else "transparent",
-        "singleSubject": True,
-        "transparentAfterPostprocess": True,
-        "noPlaceholder": True,
-    }
-
-
 def visual_background_transport_rule() -> str:
     final = "Every baked_sprite and equipOverlay final PNG requires a transparent background, not an opaque background. "
     if uses_key_background():
@@ -306,7 +293,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
 
 __all__ = [
     "asset_negative_prompt", "chroma_rgb", "chroma_name", "image_backend_is_zimage",
-    "zimage_positive_only_enabled", "compact_visual_words", "sprite_contract_for",
+    "zimage_positive_only_enabled", "compact_visual_words",
     "role_contract_prompt_clause", "normalize_asset_prompt",
     "visual_background_transport_rule",
     "image_generation_prompt_suffix", "image_final_frame_prompt_clause",

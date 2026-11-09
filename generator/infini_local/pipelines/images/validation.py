@@ -187,14 +187,6 @@ def validate_processed_sprite(
         area_ratio = float(bb.get("core_area_ratio") or 0.0)
         if role == "item" and area_ratio < 0.18:
             warnings.append(f"item_diagonal_or_thin_core:{area_ratio:.3f}")
-        if role in {"projectile", "child"} and area_ratio < 0.08:
-            warnings.append(f"thin_projectile_core:{area_ratio:.3f}")
-        if (
-            role in {"projectile", "child"}
-            and float(principal_axis.get("anisotropy") or 1.0) >= 2.5
-            and float(principal_axis.get("horizontalErrorDegrees") or 0.0) > 12.0
-        ):
-            reasons.append(f"projectile_forward_axis_misaligned:{float(principal_axis.get('horizontalErrorDegrees') or 0.0):.1f}deg")
         if not sprite_uses_soft_alpha(role) and stats.get("partialPct", 0) > 0.25:
             warnings.append("many_partial_alpha_pixels")
         if not sprite_uses_soft_alpha(role) and stats.get("opaquePct", 0) < SPRITE_MIN_OPAQUE_PCT:
@@ -257,6 +249,5 @@ def sprite_validation_fatal(validation: dict[str, Any] | None) -> bool:
         "too_few_opaque_pixels",
         "very_dense_opaque_area",
         "pillow_unavailable_required",
-        "projectile_forward_axis_misaligned",
     )
     return any(any(tok in reason for tok in fatal_tokens) for reason in reasons)

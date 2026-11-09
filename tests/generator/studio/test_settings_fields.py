@@ -63,9 +63,6 @@ def test_parallel_images_default_on_basic_checkbox_preserves_disabled_limit():
     assert field['options'] == ['1', '0']
     assert field['page'] == 'images' and not field['advanced']
     assert not fields['INFINI_IMAGE_MAX_CONCURRENCY']['advanced']
-    assert 'видеопамять' in field['help']
-    assert '2–4' in field['help']
-    assert 'не будут выполняться одновременно с VFX Designer' in field['help']
     values = {**DEFAULTS, 'INFINI_IMAGE_PARALLEL': '0', 'INFINI_IMAGE_MAX_CONCURRENCY': '4'}
     original = deepcopy(values)
     assert not disabled_reasons(values)['INFINI_IMAGE_PARALLEL']

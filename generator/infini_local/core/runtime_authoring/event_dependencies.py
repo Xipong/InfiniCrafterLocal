@@ -54,29 +54,6 @@ class EventDependencyAlternative:
             ) for requirement in row["required_bindings"]),
         )
 
-    @classmethod
-    def required_call(
-        cls,
-        capability: str,
-        exact_params: Mapping[str, Any] | None = None,
-    ) -> EventDependencyAlternative:
-        return cls(required_calls=(EventCallRequirement.create(capability, exact_params),))
-
-    @classmethod
-    def any_binding_input(
-        cls,
-        inputs: Iterable[str],
-        actions: Iterable[str] = (),
-        *,
-        contact_damage: bool | None = None,
-    ) -> EventDependencyAlternative:
-        return cls(required_bindings=(EventBindingRequirement(
-            tuple(inputs),
-            tuple(actions),
-            contact_damage,
-        ),))
-
-
 def event_dependency_alternatives(event: str, kind: str) -> tuple[EventDependencyAlternative, ...]:
     """Project finite producer alternatives from registry data without choosing one."""
 

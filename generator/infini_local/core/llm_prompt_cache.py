@@ -199,22 +199,6 @@ def with_schema_instruction_definitions(
     return out
 
 
-def json_prefix_chars(payload: Mapping[str, Any], static_keys: Sequence[str]) -> int:
-    """Length of the exact compact JSON prefix through initial static fields.
-
-    With a dynamic tail the delimiter comma replaces the temporary closing
-    brace. The caller must serialize the complete payload with the same compact
-    separators and ensure_ascii=False; this routine does not reorder values.
-    """
-    keys = list(payload)
-    if (not static_keys or isinstance(static_keys, (str, bytes))
-            or list(static_keys) != keys[:len(static_keys)]):
-        raise ValueError("static keys must be the nonempty initial JSON fields")
-    encoded = json.dumps({key: payload[key] for key in static_keys},
-                         ensure_ascii=False, separators=(",", ":"))
-    return len(encoded) if len(static_keys) == len(keys) else len(encoded[:-1] + ",")
-
-
 def with_prompt_cache_prefix(
     payload: dict[str, Any], *, message_index: int, prefix_chars: int,
     static_instruction_prefix: bool = False,

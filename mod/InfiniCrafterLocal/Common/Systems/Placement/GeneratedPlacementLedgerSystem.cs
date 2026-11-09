@@ -938,12 +938,6 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 
     private static long Pack(int x, int y) => ((long)x << 32) | (uint)y;
 
-    private static void Unpack(long value, out int x, out int y)
-    {
-        x = (int)(value >> 32);
-        y = (int)value;
-    }
-
     private static void RecordPlacementReceipt(Player player,PlacementAuthorization authorization)
     {
         if (player.whoAmI >= 0 && player.whoAmI < Main.maxPlayers

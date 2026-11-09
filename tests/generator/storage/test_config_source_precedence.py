@@ -55,14 +55,22 @@ def test_unversioned_configuration_refused_by_runtime_and_editor_without_rewrite
     assert list(tmp_path.iterdir()) == [config]
 
 
-def test_retired_keys_are_refused_not_translated_or_persisted(tmp_path):
+@pytest.mark.parametrize("key,value,replacement", [
+    ("INFINI_LLM_FALLBACK_API_KEY", "retired-secret", "INFINI_LLM_POOL_2_API_KEY"),
+    ("INFINI_PROJECTILE_ICON_TARGET_FILL", "0.84", None),
+    ("INFINI_CHILD_ICON_TARGET_FILL", "0.72", None),
+])
+def test_retired_keys_are_refused_not_translated_or_persisted(tmp_path, key, value, replacement):
     config = tmp_path / "config.env"
-    config.write_text(FORMAT_HEADER + '\nINFINI_LLM_FALLBACK_API_KEY="retired-secret"\n')
+    config.write_text(FORMAT_HEADER + f'\n{key}="{value}"\n')
     original = config.read_bytes()
     load_env_file(config)
-    with pytest.raises(ValueError, match="INFINI_LLM_FALLBACK_API_KEY") as error:
+    with pytest.raises(ValueError, match=key) as error:
         reject_retired_config(os.environ)
-    assert "retired-secret" not in str(error.value)
-    assert "INFINI_LLM_POOL_2_API_KEY" not in os.environ
+    assert value not in str(error.value)
+    if replacement:
+        assert replacement not in os.environ
+    else:
+        assert "remove this obsolete setting; no replacement" in str(error.value)
     assert config.read_bytes() == original
     assert list(tmp_path.iterdir()) == [config]
