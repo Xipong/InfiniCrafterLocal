@@ -447,9 +447,10 @@ internal static class RuntimeProgramExecutor
     {
         // Lifesteal follows owner-local projectile proc authority. Running it on both
         // the server and owning client applies one authored hit heal twice in multiplayer.
-        if (damageDone <= 0)
+        if (!owner.active || owner.dead || owner.statLife <= 0 || damageDone <= 0)
             return;
-        int heal = Math.Clamp((int)MathF.Round(damageDone * action.DamageFraction), 0, action.MaxHeal);
+        int heal = Math.Min(Math.Max(0, owner.statLifeMax2 - owner.statLife),
+            Math.Clamp((int)MathF.Round(damageDone * action.DamageFraction), 0, action.MaxHeal));
         if (heal <= 0)
             return;
         if (owner.statLife < owner.statLifeMax2)
@@ -458,7 +459,8 @@ internal static class RuntimeProgramExecutor
 
     private static void MoveOwner(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition)
     {
-        if (!float.IsFinite(eventPosition.X) || !float.IsFinite(eventPosition.Y)) return;
+        if (!owner.active || owner.dead || owner.statLife <= 0
+            || !float.IsFinite(eventPosition.X) || !float.IsFinite(eventPosition.Y)) return;
         Vector2 delta = eventPosition - owner.Center;
         float maxDistance = Math.Max(16f, action.RangeTiles * 16f);
         if (delta.LengthSquared() > maxDistance * maxDistance)

@@ -44,9 +44,6 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     private const int MaxCells = 32768;
     private const int MaxCellsPerGroup = 256;
     private const int AuthorizationRadiusTiles = 16;
-    // Commit detection stays in the immediate neighborhood of the announced
-    // target; it must never widen to every cell captured in the before snapshot.
-    private const int CommitScanRadiusTiles = 3;
     private const int AuthorizationLifetimeTicks = 30;
     private const int RemoteIntentLifetimeTicks = 120;
     private const int PlacementReceiptLifetimeTicks = 8;
@@ -645,9 +642,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             return false;
 
         if (IsNativeChestPlacement(authorization.ExactPlacement) && !HasNativeChestOutcome(authorization)) return false;
-        List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.HasPlacedFootprint == true
-            || IsNativeChestPlacement(authorization.ExactPlacement)
-            ? FindExactPlacedBodyCells(authorization) : FindCommittedCells(authorization);
+        List<GeneratedPlacementKey> committedCells = FindCommittedCells(authorization);
         if (committedCells.Count == 0 || committedCells.Count > MaxCellsPerGroup)
             return false;
         if (!Guid.TryParseExact(authorization.GroupId, "N", out _)
@@ -696,72 +691,10 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             return new List<GeneratedPlacementKey>();
         }
 
-        // Scan the placed object's actual footprint.  The wide authorization
-        // snapshot exists to prove "something appeared", but committing cells
-        // from the full radius would absorb same-type tiles a different player
-        // placed nearby during the 30-tick window.  The footprint comes from
-        // TileObjectData when the tile type declares one (multi-tile objects are
-        // larger than any fixed neighborhood window); otherwise it falls back to
-        // the immediate 7x7 neighborhood.
-        var changed = new HashSet<long>();
-        int scanMinX = Math.Max(1, authorization.TargetX - CommitScanRadiusTiles);
-        int scanMaxX = Math.Min(Main.maxTilesX - 2, authorization.TargetX + CommitScanRadiusTiles);
-        int scanMinY = Math.Max(1, authorization.TargetY - CommitScanRadiusTiles);
-        int scanMaxY = Math.Min(Main.maxTilesY - 2, authorization.TargetY + CommitScanRadiusTiles);
-        var objectData = Terraria.ObjectData.TileObjectData.GetTileData(authorization.ExpectedType, 0);
-        if (objectData is not null)
-        {
-            // The announced target may be any cell of the object; cover every
-            // origin candidate that could place ExpectedType overlapping target.
-            scanMinX = Math.Max(1, scanMinX - objectData.Width + 1);
-            scanMaxX = Math.Min(Main.maxTilesX - 2, scanMaxX + objectData.Width - 1);
-            scanMinY = Math.Max(1, scanMinY - objectData.Height + 1);
-            scanMaxY = Math.Min(Main.maxTilesY - 2, scanMaxY + objectData.Height - 1);
-        }
-        for (int x = scanMinX; x <= scanMaxX; x++)
-        {
-            for (int y = scanMinY; y <= scanMaxY; y++)
-            {
-                Tile cell = Main.tile[x, y];
-                long packed = Pack(x, y);
-                if (cell.HasTile && cell.TileType == authorization.ExpectedType && !authorization.BeforeExpectedTiles.Contains(packed))
-                    changed.Add(packed);
-            }
-        }
-        if (changed.Count == 0)
-            return new List<GeneratedPlacementKey>();
-        // Deterministic seed: closest to the target, ties broken by coordinates.
-        // HashSet order must never influence which connected component commits,
-        // otherwise server and client ledgers diverge.  Distance and coordinates
-        // are separate tuple keys: a packed-coordinate term inside one integer
-        // would outweigh the distance weight (a 1-tile coordinate change moves
-        // the packed term by 2^20 while the distance penalty is only 10^6).
-        long seed = changed
-            .OrderBy(value =>
-            {
-                Unpack(value, out int ux, out int uy);
-                return (Math.Abs((long)ux - authorization.TargetX) + Math.Abs((long)uy - authorization.TargetY),
-                    (long)(uint)ux,
-                    (long)(uint)uy);
-            })
-            .First();
-        var component = new List<GeneratedPlacementKey>();
-        var queue = new Queue<long>();
-        queue.Enqueue(seed);
-        changed.Remove(seed);
-        while (queue.Count > 0 && component.Count < MaxCellsPerGroup)
-        {
-            long current = queue.Dequeue();
-            Unpack(current, out int x, out int y);
-            component.Add(new GeneratedPlacementKey(GeneratedPlacementLayer.Tile, x, y));
-            foreach ((int dx, int dy) in new[] { (-1, 0), (1, 0), (0, -1), (0, 1) })
-            {
-                long neighbor = Pack(x + dx, y + dy);
-                if (changed.Remove(neighbor))
-                    queue.Enqueue(neighbor);
-            }
-        }
-        return component;
+        // Material ownership is independent of optional body/light/VFX. Native
+        // geometry and this authorization's exact target must prove every cell;
+        // connected neighbors can belong to another concurrent placement.
+        return FindExactTileCells(authorization);
     }
 
     private static void SendPlacementToServer(ulong sequence, GeneratedPlacementLayer layer, int x, int y)

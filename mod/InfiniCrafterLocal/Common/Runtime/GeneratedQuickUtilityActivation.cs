@@ -262,6 +262,17 @@ internal static class GeneratedQuickUtilityActivation
             foreach (ulong key in remove) state.Pending.Remove(key);
         }
     }
+    internal static void RetireOwnerLife(Player player)
+    {
+        // Keep each ordered-stream high-water cursor. Revocation must not make
+        // a replayed Prepare eligible for a fresh ticket after respawn.
+        if (player.whoAmI >= 0 && player.whoAmI < owners.Length
+            && owners[player.whoAmI] is { } state && ReferenceEquals(state.Owner, player))
+            state.Pending.Clear();
+        foreach (var row in new List<KeyValuePair<ulong, Local>>(local))
+            if (ReferenceEquals(row.Value.Owner, player)) local.Remove(row.Key);
+    }
+
     internal static void Clear()
     {
         Array.Clear(owners); local.Clear();

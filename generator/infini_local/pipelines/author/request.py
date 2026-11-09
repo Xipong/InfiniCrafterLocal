@@ -27,7 +27,10 @@ from infini_local.core.runtime_authoring.capability_registry import (
     STACK_COST_RULE,
 )
 from infini_local.core.runtime_authoring.program_schema import (
+    GENERATED_ITEM_ROOT_FIELDS,
     PRIMARY_ENTITY_SELECTION_FIELD,
+    author_item_response_schema,
+    strict_author_shape_report,
     apply_repair_patch,
     assert_bounded_author_input,
     strict_repair_structure_report,
@@ -97,6 +100,16 @@ def _prepare_parsed_author_item(
     canonical = project_provider_author_item_to_local(dict(parsed), response_format=response_format)
     if not isinstance(canonical, dict):
         raise PlannerUnavailable("Gameplay Author returned a non-object after provider projection")
+    # Only engine code may introduce the generated-item envelope. Its later
+    # Author projection deliberately omits metadata, so reject provider-owned
+    # versions here, before assigning identity or trusting debug/accounting.
+    reserved = canonical.keys() & (GENERATED_ITEM_ROOT_FIELDS - author_item_response_schema()["properties"].keys())
+    if reserved:
+        report = strict_author_shape_report(canonical, authored_only=False)
+        raise PlannerUnavailable(
+            "Gameplay Author supplied engine-owned fields: " + ", ".join(sorted(reserved))
+            + "; raw Author shape rejected: " + bounded_json_dumps(report, max_chars=2000)
+        )
     return copy.deepcopy(canonical)
 
 
@@ -186,13 +199,13 @@ def try_llm_plan(
         item = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
         if syntax_fix:
             trace_event("fix", "LLM:gameplay_author", "Author JSON syntax recovered locally", syntax_fix)
-        item.setdefault("id", "g_" + stable_hash(key, content, length=16))
-        item.setdefault("recipeKey", key)
-        item.setdefault("schemaVersion", 5)
-        item.setdefault("parentA", name_of(a))
-        item.setdefault("parentB", name_of(b))
-        item.setdefault("sourceMode", "generated")
-        debug = item.setdefault("debug", {})
+        item["id"] = "g_" + stable_hash(key, content, length=16)
+        item["recipeKey"] = key
+        item["schemaVersion"] = 5
+        item["parentA"] = name_of(a)
+        item["parentB"] = name_of(b)
+        item["sourceMode"] = "generated"
+        debug = item["debug"] = {}
         debug.update({
             "planner": "llm_low_level_runtime_author",
             "model": model_name,

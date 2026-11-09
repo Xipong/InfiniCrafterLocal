@@ -444,12 +444,12 @@ def assert_bounded_author_input(
     return candidate, max_nodes * weight
 
 
-def strict_author_shape_report(value: Any) -> dict[str, Any]:
-    # The provider response is strict, while pipeline metadata (id/debug/parents) is
-    # attached after the LLM call. Validate only the authored contract surface here;
-    # this is a projection boundary, not permission for unknown authored fields.
+def strict_author_shape_report(value: Any, *, authored_only: bool = True) -> dict[str, Any]:
+    # Pipeline metadata (id/debug/parents) is attached after the LLM call.
+    # Raw provider admission passes authored_only=False: it cannot hide its
+    # own fields behind the projection reserved for trusted pipeline metadata.
     schema = author_item_response_schema()
-    candidate, limit = assert_bounded_author_input(value, schema=schema)
+    candidate, limit = assert_bounded_author_input(value, schema=schema, authored_only=authored_only)
     errors = strict_schema_errors(candidate, schema, limit=limit)
     return {"schema": "infini.author-item-shape-report.v1", "ok": not errors, "errors": errors}
 

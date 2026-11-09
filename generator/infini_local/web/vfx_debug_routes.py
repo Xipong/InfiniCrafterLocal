@@ -15,6 +15,9 @@ from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.storage.world_recipe_runtime import normalize_world_id_from_payload, read_world_recipe_cache, write_world_recipe_cache
 
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
+from infini_local.core.runtime_authoring.validator import (
+    MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
+)
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.vfx.contract import VFX_MANIFEST_SCHEMA
 from infini_local.pipelines.vfx.stage import attach_vfx_manifest
@@ -35,7 +38,8 @@ def _sample_data() -> dict[str, Any]:
             "itemEntityId": "item",
             "primaryEntityId": "orb",
             "primaryOwner": "projectile",
-            "limits": {"maxEntityCount": 12, "maxChildDepth": 4, "maxEventSpawnsPerActivation": 32},
+            "limits": {"maxEntityCount": MAX_RUNTIME_ENTITIES, "maxChildDepth": MAX_CHILD_DEPTH,
+                       "maxEventSpawnsPerActivation": MAX_EVENT_SPAWNS_PER_ACTIVATION},
             "itemUse": {
                 "configured": True,
                 "useStyle": "shoot",

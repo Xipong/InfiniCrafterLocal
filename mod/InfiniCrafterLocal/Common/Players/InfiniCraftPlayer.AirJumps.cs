@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
@@ -27,6 +28,8 @@ public sealed partial class InfiniCraftPlayer
 
     internal void ResetAirJumpGrants()
     {
+        foreach (var expired in _finalTickAirJumpSources) RetireAirJumpPrediction(expired);
+        _finalTickAirJumpSources.Clear();
         // A source snapshot/event can arrive before the first equipment pass.
         // Initializing the world marker must not retire that new attachment.
         if (!Player.active || Player.dead || (_airJumpWorld.Length > 0
@@ -82,11 +85,16 @@ public sealed partial class InfiniCraftPlayer
         out object lifetime, long? expectedGeneration = null)
     {
         data = null!; generation = 0; lifetime = null!;
-        if (!Player.active || Player.dead) return false;
-        foreach (var active in _activeGeneratedUtilityBuffs)
+        if (!Player.active || Player.dead
+            || Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient && !IsCurrentAirJumpAuthority) return false;
+        foreach (var active in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
         {
-            if (active.Ticks <= 0 || active.SourceGeneration >= 0 || active.SourceItemId != itemId
+            if ((active.Ticks <= 0 && active.SourceFinalTick != Main.GameUpdateCount)
+                || active.SourceGeneration >= 0 || active.SourceItemId != itemId
                 || expectedGeneration.HasValue && active.SourceGeneration != expectedGeneration.Value
+                    && !(Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient && Player.whoAmI == Main.myPlayer
+                        && active.SourcePredictionGeneration < 0
+                        && active.SourcePredictionGeneration == expectedGeneration.Value)
                 || active.ResolveSource() is not { } source || !ValidAirJumpSource(source)
                 || AuthoredAirJumpComponent(source, active.SourceComponent) is not { AirJump: not null } authored
                 || !PlayerEffectSpec.SameEffect(authored, active.PlayerEffect) || !authored.IsActive(Player)) continue;
@@ -105,6 +113,26 @@ public sealed partial class InfiniCraftPlayer
             lifetime = generated.PresentationGeneration; return true;
         }
         return false;
+    }
+
+    internal bool TryGetAirJumpNetworkGeneration(string itemId, long localGeneration, out long generation)
+    {
+        generation = 0;
+        if (!TryResolveAirJumpSource(itemId, out _, out long current, out var lifetime, localGeneration)) return false;
+        if (current > 0) { generation = current; return true; }
+        foreach (var active in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
+            if (ReferenceEquals(active.SourceLifetime, lifetime) && active.SourceAuthorityConfirmed)
+            { generation = current; return true; }
+        return false;
+    }
+
+    private void ConfirmAirJumpSourceGeneration(long predicted, long authoritative)
+    {
+        for (int index = 0; index < _airJumpGrants.Count; index++)
+            if (_airJumpGrants[index].Generation == predicted)
+                _airJumpGrants[index] = _airJumpGrants[index] with { Generation = authoritative };
+        if (_activeAirJump?.Generation == predicted)
+            _activeAirJump = _activeAirJump with { Generation = authoritative };
     }
 
     private IEnumerable<(Item Item, string Component)> FunctionalAirJumpEquipment()
@@ -231,6 +259,9 @@ public sealed partial class InfiniCraftPlayer
         // A retained short buff or the same equipped item can return after
         // death/world exit. Its old presentation binding must not revive.
         AirJumpLifetime = new();
+        foreach (var active in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
+            RetireAirJumpPrediction(active);
+        _finalTickAirJumpSources.Clear();
         _airJumpGrants.Clear();
         _airJumpRemaining.Clear();
         if (ModContent.GetInstance<GeneratedAirJump>() is { } jump && jump.Type < Player.ExtraJumps.Length)
@@ -255,7 +286,7 @@ public sealed class GeneratedAirJumpLifecycleSystem : ModSystem
     private static void ClearPlayers()
     {
         foreach (var player in Main.player)
-            if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var owner)) owner.ClearAirJumpState();
+            if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var owner)) owner.RetireAirJumpAuthority();
     }
     public override void OnWorldUnload() => ClearPlayers();
     public override void Unload()

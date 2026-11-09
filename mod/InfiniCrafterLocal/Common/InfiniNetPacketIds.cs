@@ -30,4 +30,6 @@ public static class InfiniNetPacketIds
     public const byte GeneratedQuickUtilityActivation = 25;
     public const byte EquipmentEnemyKill = 26;
     public const byte GeneratedPlacedBodySnapshot = 27;
+    public const byte RequestGeneratedUtilityRespawnSync = 28;
+    public const byte GeneratedUtilityRespawnSync = 29;
 }

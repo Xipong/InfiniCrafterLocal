@@ -72,7 +72,8 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
     monkeypatch.setattr(llm_authoring_pipeline, "trace_stage_request", lambda *args, **kwargs: None)
     current = _fixture("empty-checks")
     before = copy.deepcopy(current)
-    responses = [current]
+    # Provider output has no engine envelope; keep the diagnostic report intact.
+    responses = [{key: value for key, value in current.items() if key != "id"}]
     if runtime_repair:
         stats = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
         correction = copy.deepcopy(stats)
@@ -87,6 +88,8 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
 
     monkeypatch.setattr(llm_authoring_pipeline, "llm_chat_json", provider)
     planned = llm_authoring_pipeline.try_llm_plan({}, {}, "plan-report-serialization")
+    accepted_id = planned["id"]
+    assert accepted_id != before["id"]
     result = gameplay_stage.compile_and_validate_authored_runtime(
         planned, {}, {}, "plan-report-serialization", run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs),
     )
@@ -101,6 +104,8 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
     assert report["ok"] and not report["shape"]["ok"]
     assert report["shape"]["errors"] and all(program_schema.is_advisory_path(row["path"]) for row in report["shape"]["errors"])
     expected = compile_runtime_program(before)
+    assert result["id"] == accepted_id
+    expected["id"] = accepted_id
     for field in ("runtimeProgram", "gameplay", "accessory", "armor"):
         assert result[field] == expected[field]
     assert generated_parent_summary_from_data(result) == generated_parent_summary_from_data(expected)

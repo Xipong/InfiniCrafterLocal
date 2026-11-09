@@ -73,7 +73,9 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     compiled_before = compile_runtime_program(item)
     item["realization"][field] = ("Ж🌟\r\n" * maximum)[:maximum]
     before = copy.deepcopy(item)
-    prepared = pipeline._prepare_parsed_author_item(item)
+    provider_item = {key: value for key, value in item.items() if key != "id"}
+    prepared = pipeline._prepare_parsed_author_item(provider_item)
+    assert "id" not in prepared
     report = validate_runtime_program(prepared)
     assert report["ok"], report["errors"]
     assert strict_author_shape_report(prepared)["ok"]
@@ -85,7 +87,9 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     repaired = apply_repair_patch(build_runtime_fixture("workbench_blade"), patch)
     assert repaired["realization"] == before["realization"]
     assert repaired["runtimeProgram"] == before["runtimeProgram"]
-    compiled = compile_runtime_program(prepared)
+    # The accepted fixture receives trusted identity only after provider admission.
+    compiled = compile_runtime_program({**prepared, "id": item["id"]})
+    assert compiled["id"] == before["id"]
     assert validate_runtime_wire(compiled)["ok"]
     for key in ("runtimeProgram", "gameplay", "accessory", "armor"):
         assert compiled[key] == compiled_before[key]

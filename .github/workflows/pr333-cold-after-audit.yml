@@ -38,7 +38,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 120
     env:
-      BASELINE_SHA: 0f766496538ec11f0788445e700bc3c91bf2bdc8
+      BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75
       INFINI_PARENT_ANALYSIS_PROFILE: 1
     steps:
       - name: Preserve Git bytes
@@ -255,7 +255,7 @@ jobs:
         shell: pwsh
         run: |
           # The baseline has the same graph/output contract as the candidate.
-          # Every source evidence byte must survive both pack optimizations.
+          # Every source evidence byte must survive the audit fixes.
           python candidate/tools/testing/verify_parent_analysis_cohort.py verify profile-evidence --comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000 --out profile-evidence/strict-verification.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $result = Get-Content profile-evidence/strict-verification.json -Raw | ConvertFrom-Json

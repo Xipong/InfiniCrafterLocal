@@ -147,6 +147,7 @@ internal static partial class EngineRuntimeChecks
             Equal(0, AirJumpBuffRows(players[2].Effects).Count, "remote held definition alone cannot activate a utility buff");
             peers.Receive(snapshot);
             var binding = VfxSourceBinding.CaptureAirJump(players[2].Player, data.Id, generation);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
             bool spent = false;
             for (uint tick = 101; tick <= 131; tick++) {
                 MaterialClock(tick);
@@ -200,7 +201,6 @@ internal static partial class EngineRuntimeChecks
             var ownerItem = MobilityConsumptionHost(data); players[0].Player.inventory[0] = ownerItem.Item;
             ownerItem.UseItem(players[0].Player);
             ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
-            byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
             // The server's own accepted activation is live, but its equip hook
             // has not run. Client snapshots are never gameplay activation.
             AirJumpPeerMode(peers, players[1], 1);
@@ -209,6 +209,9 @@ internal static partial class EngineRuntimeChecks
                 serverItem.Data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: serverItem.Data), "server accepts canonical buff activation");
             peers.Sent.Clear();
             byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
+            byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
+            AirJumpPeerMode(peers, players[1], 1);
             byte[] beforeServer = ExhaustionSnapshot(players[1].Effects);
             peers.Receive(claim, 0); byte[] relay = AirJumpTakeEvent(peers);
             Equal(true, beforeServer.SequenceEqual(ExhaustionSnapshot(players[1].Effects)), "server VFX claim cannot alter buff state");
@@ -283,6 +286,7 @@ internal static partial class EngineRuntimeChecks
                 ResetNativeAirJumpTick(players[2].Player, players[2].Effects); players[2].Effects.PostUpdateEquips();
             }
             Equal(0, AirJumpBuffRows(players[2].Effects).Count, "switching away restores exact ordinary countdown");
+            ResetNativeAirJumpTick(players[2].Player, players[2].Effects);
             peers.Receive(snapshot);
             Equal(false, binding.IsLive, "reappearing same wire generation after actual expiry cannot revive old VFX");
             var newBinding = VfxSourceBinding.CaptureAirJump(players[2].Player, data.Id, generation);
@@ -305,6 +309,7 @@ internal static partial class EngineRuntimeChecks
                 players[1].Effects.PostUpdateEquips(); tiredItem.HoldItem(players[1].Player);
             }
             Equal(0, AirJumpBuffRows(players[1].Effects).Count, "held source cannot pin an exhausted buff");
+            ResetNativeAirJumpTick(players[1].Player, players[1].Effects);
             Equal(false, players[1].Effects.TryGetLiveAirJumpSource(exhausted.Id, out _, out _), "exhausted expired source cannot admit presentation");
 
             var ordinary = new GeneratedBuffSpec { DurationTicks = 2, JumpBoost = 1 };
@@ -351,6 +356,7 @@ internal static partial class EngineRuntimeChecks
                 ((GeneratedItem)players[2].Player.HeldItem.ModItem!).HoldItem(players[2].Player);
             }
             Equal(0, AirJumpBuffRows(players[2].Effects).Count, "held continuation refuses mismatched " + mismatch);
+            ResetNativeAirJumpTick(players[2].Player, players[2].Effects);
             Equal(false, players[2].Effects.TryGetLiveAirJumpSource(data.Id, out _, out _), "no stale-grant admission after " + mismatch + " expiry");
         });
     }
@@ -377,19 +383,29 @@ internal static partial class EngineRuntimeChecks
             AirJumpPeerMode(peers, players[0], 0);
             var item = MobilityConsumptionHost(data); players[0].Player.inventory[0] = item.Item; item.UseItem(players[0].Player);
             ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            AirJumpPeerMode(peers, players[1], 1);
+            var serverItem = AirJumpCopyItem(item); players[1].Player.inventory[0] = serverItem.Item;
+            players[1].Effects.ApplyGeneratedUtilityBuff(serverItem.Data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: serverItem.Data);
+            byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
             byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
-            byte[] snapshot = AirJumpUtilitySnapshot(players[0].Effects);
-            AirJumpPeerMode(peers, players[1], 1); peers.Receive(snapshot, 0); peers.Sent.Clear();
+            AirJumpPeerMode(peers, players[1], 1); players[1].Effects.ClearGeneratedUtilityState();
+            peers.Receive(snapshot, 0); peers.Sent.Clear();
             Equal(0, AirJumpBuffRows(players[1].Effects).Count, "client snapshot cannot create a server buff");
             peers.Receive(claim, 0);
             Equal(0, peers.Sent.Count, "unowned jump event cannot create its own source");
             AirJumpPeerMode(peers, players[2], 2); peers.Receive(snapshot, 0);
             Equal(0, AirJumpBuffRows(players[2].Effects).Count, "observer accepts utility state only from server");
             AirJumpPeerMode(peers, players[1], 1);
-            var serverItem = AirJumpCopyItem(item); players[1].Player.inventory[0] = serverItem.Item;
             Equal(true, players[1].Effects.ApplyGeneratedUtilityBuff(
                 serverItem.Data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: serverItem.Data), "server starts its own canonical buff");
             snapshot = AirJumpUtilitySnapshot(players[1].Effects); peers.Sent.Clear();
+            peers.Receive(claim, 0);
+            Equal(0, peers.Sent.Count, "old exact generation cannot bind to a replacement authority lifetime");
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            claim = AirJumpNativeClaim(peers, jumps, players[0]);
+            AirJumpPeerMode(peers, players[1], 1);
             byte[] stateBefore = ExhaustionSnapshot(players[1].Effects);
             peers.Receive(claim, 1);
             peers.Receive(AirJumpRewriteClaim(claim, generation: -123), 0);
@@ -423,4 +439,230 @@ internal static partial class EngineRuntimeChecks
             Equal(true, stateBefore.SequenceEqual(ExhaustionSnapshot(players[1].Effects)), "even budget pressure cannot refresh buff duration or charges");
         });
     }
+
+    private static void AirJumpLastBuffTickKeepsMovementPresentation()
+    {
+        foreach (int duration in new[] { 1, 2, 10 })
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_final_tick_" + duration, duration, held: false); peers.Register(data);
+            for (int role = 0; role < 2; role++) {
+                AirJumpPeerMode(peers, players[role], role);
+                Equal(true, players[role].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff,
+                    source: data), "owner predicts and authority activates final-tick source");
+            }
+            byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            long generation = AirJumpBuffRows(players[1].Effects).Single().Generation;
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(snapshot);
+            AirJumpPeerMode(peers, players[2], 2); peers.Receive(snapshot);
+            var binding = VfxSourceBinding.CaptureAirJump(players[2].Player, data.Id, generation);
+            for (uint tick = 101; tick < 101 + duration; tick++) {
+                MaterialClock(tick);
+                for (int role = 0; role < 3; role++) {
+                    AirJumpPeerMode(peers, players[role], role);
+                    ResetNativeAirJumpTick(players[role].Player, players[role].Effects);
+                    players[role].Effects.PostUpdateEquips();
+                }
+            }
+            Equal(0, AirJumpBuffRows(players[0].Effects).Count, "final stat tick removes the active buff row");
+            int before = emission.Emitted.Count;
+            byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
+            Equal(before + 1, emission.Emitted.Count, "final-tick native jump emits locally exactly once");
+            AirJumpPeerMode(peers, players[2], 2);
+            Equal(true, binding.IsLive, "final-tick attachment stays live through native movement");
+            AirJumpPeerMode(peers, players[1], 1); peers.Receive(claim, 0);
+            byte[] relay = AirJumpTakeEvent(peers);
+            AirJumpPeerMode(peers, players[2], 2); before = emission.Emitted.Count;
+            peers.Receive(relay); peers.Receive(relay);
+            Equal(before + 1, emission.Emitted.Count, "final-tick relay emits once on the observer");
+            MaterialClock((uint)(102 + duration));
+            for (int role = 0; role < 3; role++) {
+                AirJumpPeerMode(peers, players[role], role);
+                ResetNativeAirJumpTick(players[role].Player, players[role].Effects);
+                Equal(false, players[role].Effects.CanStartGeneratedAirJump(), "next update cannot reuse final-tick grants");
+                Equal(false, players[role].Effects.TryGetLiveAirJumpSource(data.Id, out _, out _, generation),
+                    "next update retires exact final-tick presentation source");
+            }
+            Equal(false, binding.IsLive, "final-tick attachment retires without a new buff");
+            AirJumpPeerMode(peers, players[1], 1); peers.Sent.Clear();
+            peers.Receive(AirJumpRewriteClaim(claim, occurrence: 1234), 0);
+            Equal(0, peers.Sent.Count, "new occurrence cannot revive expired final-tick source");
+        });
+    }
+
+    private static void AirJumpPredictionReconcilesIndependentComponents()
+    {
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_prediction_components", 10, held: false);
+            data.RuntimeProgram.EffectGroups![1] = new RuntimeItemEffectGroupSpec { Id = "alternate_effects",
+                GeneratedBuff = new GeneratedBuffSpec { DurationTicks = 10,
+                    PlayerEffect = new PlayerEffectSpec { AirJump = new PlayerAirJumpSpec {
+                        Count = 1, LaunchSpeedPxPerTick = 12, HoldDurationTicks = 3 } } } };
+            data = GeneratedItemData.FromJson(data.ToNetworkJson())!; peers.Register(data);
+            AirJumpPeerMode(peers, players[0], 0);
+            // A refused/expired owner-only prediction advances only the local counter.
+            var abandoned = AirJumpNetworkBuff("jump_abandoned_prediction", 10, held: false); peers.Register(abandoned);
+            players[0].Effects.ApplyGeneratedUtilityBuff(abandoned.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: abandoned);
+            players[0].Effects.ClearGeneratedUtilityState();
+            foreach (var group in data.RuntimeProgram.EffectGroups!)
+                players[0].Effects.ApplyGeneratedUtilityBuff(group.GeneratedBuff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            var predicted = AirJumpBuffRows(players[0].Effects);
+            var firstBinding = VfxSourceBinding.CaptureAirJump(players[0].Player, data.Id, predicted[0].Generation);
+            var secondBinding = VfxSourceBinding.CaptureAirJump(players[0].Player, data.Id, predicted[1].Generation);
+            peers.Sent.Clear(); players[0].Player.RefreshExtraJumps();
+            bool sound = true;
+            for (int index = 0; index < 3; index++) jumps.Jump.OnStarted(players[0].Player, ref sound);
+            Equal(-12f, players[0].Player.velocity.Y, "independent companion charge uses its authored movement");
+            Equal(false, jumps.Jump.CanStart(players[0].Player), "both component ledgers are spent before confirmation");
+            Equal(0, peers.Sent.Count, "unconfirmed source tokens are not sent as server identities");
+            // A confirmed equipment event can overtake pending buff events on
+            // the shared transport. Allocate their wire order when actually sent.
+            var equipment = AirJumpSource("jump_prediction_equipment"); equipment.SourceMode = "test_fixture";
+            equipment.VfxManifest = LightManifest(equipment.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnJump);
+            equipment.Normalize(); peers.Register(equipment);
+            var equipped = MobilityConsumptionHost(equipment); players[0].Player.armor[3] = equipped.Item;
+            InfiniItemVfxRuntime.EmitAndSyncJump(players[0].Player, equipment, players[0].Player.Center, equipped.PresentationToken);
+            byte[] equipmentClaim = AirJumpTakeEvent(peers);
+            AirJumpPeerMode(peers, players[1], 1);
+            players[1].Player.armor[3] = AirJumpCopyItem(equipped).Item;
+            peers.Receive(equipmentClaim, 0); AirJumpTakeEvent(peers);
+            int localEmissions = emission.Emitted.Count;
+            Vector2 originalPoint = players[0].Player.Center;
+            players[0].Player.Center += new Vector2(200, 300);
+            // Deliberately reverse authority allocation order as well as count.
+            foreach (var group in data.RuntimeProgram.EffectGroups.Reverse())
+                players[1].Effects.ApplyGeneratedUtilityBuff(group.GeneratedBuff, source: data);
+            byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            var authoritative = AirJumpBuffRows(players[1].Effects);
+            Equal(false, predicted.Select(p => p.Generation).SequenceEqual(authoritative.Select(p => p.Generation)),
+                "fixture genuinely diverges peer generation counters");
+            AirJumpPeerMode(peers, players[0], 0); peers.Sent.Clear(); peers.Receive(snapshot);
+            byte[][] claims = peers.Sent.Where(p => p[0] == InfiniNetPacketIds.SyncGeneratedItemVfxEvent).ToArray();
+            Equal(3, claims.Length, "confirmation sends every independent pending occurrence once");
+            Equal(localEmissions, emission.Emitted.Count, "authority correction does not replay owner presentation");
+            Equal(true, firstBinding.IsLive && secondBinding.IsLive, "same live predicted attachments survive exact component confirmation");
+            Equal(false, jumps.Jump.CanStart(players[0].Player), "confirmation never refills either component ledger");
+            peers.Sent.Clear(); peers.Receive(snapshot);
+            Equal(0, peers.Sent.Count, "repeated snapshot cannot retransmit consumed occurrences");
+            AirJumpPeerMode(peers, players[1], 1);
+            foreach (byte[] claim in claims) peers.Receive(claim, 0);
+            byte[][] relays = peers.Sent.ToArray(); peers.Sent.Clear();
+            Equal(3, relays.Length, "server accepts corrected exact generations for both components");
+            AirJumpPeerMode(peers, players[2], 2); peers.Receive(snapshot);
+            int before = emission.Emitted.Count;
+            foreach (byte[] relay in relays) { peers.Receive(relay); peers.Receive(relay); }
+            Equal(before + 3, emission.Emitted.Count, "observer receives multiplicity without replay duplication");
+            Equal(true, emission.Emitted.Skip(before).All(point => point == originalPoint),
+                "queued events retain their original jump frame, not confirmation-time position");
+        });
+    }
+
+    private static void AirJumpPredictionCannotRebindRetiredLifetime()
+    {
+        foreach (string retirement in new[] { "expiry", "death", "correction", "world" })
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_prediction_retirement", 1, held: false); peers.Register(data);
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            players[0].Player.RefreshExtraJumps(); peers.Sent.Clear(); bool sound = true;
+            jumps.Jump.OnStarted(players[0].Player, ref sound);
+            Equal(0, peers.Sent.Count, "prediction waits for authority before its source is confirmed");
+            if (retirement == "expiry") {
+                MaterialClock(101); ResetNativeAirJumpTick(players[0].Player, players[0].Effects);
+            } else if (retirement == "death") {
+                players[0].Player.dead = true; players[0].Effects.UpdateDead(); players[0].Player.dead = false;
+            } else if (retirement == "world") new GeneratedAirJumpLifecycleSystem().OnWorldUnload();
+            else {
+                AirJumpPeerMode(peers, players[1], 1); byte[] empty = AirJumpUtilitySnapshot(players[1].Effects);
+                AirJumpPeerMode(peers, players[0], 0); peers.Receive(empty);
+            }
+            // A fresh equal-looking prediction/authority row must never inherit
+            // the old pending event, including when IsLive was not polled at expiry.
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            AirJumpPeerMode(peers, players[1], 1);
+            players[1].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            byte[] snapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Sent.Clear(); peers.Receive(snapshot);
+            Equal(0, peers.Sent.Count, "old pending event cannot rebind after " + retirement);
+        });
+    }
+
+
+    private static void AirJumpPredictionRejectsAmbiguousOldConfirmation()
+    {
+        foreach (string retirement in new[] { "expiry", "same-tick", "eviction", "correction" })
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var data = AirJumpNetworkBuff("jump_ambiguous_prediction", retirement == "eviction" ? 10 : 1, held: false); peers.Register(data);
+            AirJumpPeerMode(peers, players[1], 1);
+            byte[] earlierEmptySnapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            players[1].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            byte[] oldSnapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0);
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            if (retirement == "expiry") { MaterialClock(101); ResetNativeAirJumpTick(players[0].Player, players[0].Effects); }
+            if (retirement == "correction") peers.Receive(earlierEmptySnapshot);
+            if (retirement == "eviction")
+                for (int index = 1; index <= 32; index++)
+                    players[0].Effects.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 20, MovementSpeed = index / 100f });
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            players[0].Player.RefreshExtraJumps(); bool sound = true; peers.Sent.Clear();
+            jumps.Jump.OnStarted(players[0].Player, ref sound);
+            Equal(0, peers.Sent.Count, "new prediction waits independently of its retired predecessor");
+            peers.Receive(oldSnapshot);
+            Equal(0, peers.Sent.Count, "first unseen old authority cannot confirm a replacement prediction");
+            Equal(false, players[0].Effects.TryGetLiveAirJumpSource(data.Id, out _, out _, 0),
+                "unassigned zero alias cannot resolve a confirmed source");
+            AirJumpPeerMode(peers, players[1], 1); players[1].Effects.ClearGeneratedUtilityState();
+            players[1].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            byte[] latestSnapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(latestSnapshot);
+            Equal(0, peers.Sent.Count, "later exact authority also cannot revive discarded ambiguous event");
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            byte[] claim = AirJumpNativeClaim(peers, jumps, players[0]);
+            AirJumpPeerMode(peers, players[1], 1); peers.Receive(claim, 0); AirJumpTakeEvent(peers);
+        });
+    }
+
+    private static void AirJumpPredictionNewWorldResetsAuthorityHistory()
+    {
+        foreach (bool reconnect in new[] { false, true })
+        WithAirJumpNetwork((peers, jumps, emission, players) => {
+            var connection = Netplay.Connection; var oldSocket = connection.Socket;
+            try {
+            var data = AirJumpNetworkBuff("jump_new_authority", 10, held: false); peers.Register(data);
+            AirJumpPeerMode(peers, players[1], 1);
+            for (int index = 0; index < 4; index++) {
+                players[1].Effects.ClearGeneratedUtilityState();
+                players[1].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            }
+            byte[] oldSnapshot = AirJumpUtilitySnapshot(players[1].Effects);
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(oldSnapshot);
+            long oldAuthority = AirJumpBuffRows(players[0].Effects).Single().Generation;
+            if (reconnect)
+                connection.Socket = (Terraria.Net.Sockets.ISocket)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Terraria.Net.Sockets.TcpSocket));
+            else new GeneratedAirJumpLifecycleSystem().OnWorldUnload();
+            Equal(false, players[0].Effects.TryGetLiveAirJumpSource(data.Id, out _, out _, oldAuthority),
+                "old source is retired immediately at world/connection boundary");
+            players[0].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            ResetNativeAirJumpTick(players[0].Player, players[0].Effects); players[0].Effects.PostUpdateEquips();
+            players[0].Player.RefreshExtraJumps(); bool sound = true; peers.Sent.Clear();
+            jumps.Jump.OnStarted(players[0].Player, ref sound);
+            Equal(0, peers.Sent.Count, "new world prediction cannot borrow an old confirmed source");
+            // The unused third independent peer stands in for a fresh server.
+            AirJumpPeerMode(peers, players[2], 1);
+            players[2].Effects.ApplyGeneratedUtilityBuff(data.RuntimeProgram.EffectGroups![0].GeneratedBuff, source: data);
+            byte[] newSnapshot = AirJumpUtilitySnapshot(players[2].Effects);
+            Equal(true, AirJumpBuffRows(players[2].Effects).Single().Generation > oldAuthority,
+                "new authority really has a shorter generation history");
+            AirJumpPeerMode(peers, players[0], 0); peers.Receive(newSnapshot);
+            byte[] claim = AirJumpTakeEvent(peers);
+            AirJumpPeerMode(peers, players[2], 1); peers.Receive(claim, 0); AirJumpTakeEvent(peers);
+            } finally { connection.Socket = oldSocket; }
+        });
+    }
+
 }

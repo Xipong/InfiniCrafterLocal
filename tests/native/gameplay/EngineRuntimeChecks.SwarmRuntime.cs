@@ -286,7 +286,11 @@ internal static partial class EngineRuntimeChecks
                 foreach (var role in SwarmRoles.OrderByDescending(Expected))
                 {
                     using var scope = new SwarmRuntimeScope(role.Mode, role.Local);
-                    var owner = Terraria.Main.player[0]; owner.Center = new Vector2(0, 1600);
+                    // Delayed owner effects consult the same real ModPlayer life
+                    // fence as utility actions, including when authority changes.
+                    WithPlayer((owner, _) => {
+                    owner.whoAmI = 0; owner.active = true; Terraria.Main.player[0] = owner;
+                    owner.Center = new Vector2(0, 1600);
                     owner.statLifeMax2 = 100; owner.statLife = 50;
                     ref float armorPenetration = ref owner.GetArmorPenetration(Terraria.ModLoader.DamageClass.Magic);
                     armorPenetration += 40f;
@@ -377,6 +381,7 @@ internal static partial class EngineRuntimeChecks
                         }
                     }
                     cases++;
+                    });
                 }
             }
             // Preserve the original real spawn-reservation transition/refund check.

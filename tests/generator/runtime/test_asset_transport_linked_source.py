@@ -1,7 +1,7 @@
 """Run the complete C# asset owner against test-only packet/DTO boundaries.
 
 This is a linked-source CPU check, not a native tML or live Steam match.
-The fixture never starts the game, calls a model, or opens a network listener.
+The fixture never starts the game or calls a model; its HTTP timeout case uses a loopback listener.
 """
 from __future__ import annotations
 from suite_paths import REPO_ROOT
@@ -43,4 +43,4 @@ def test_asset_transport_linked_source(tmp_path: Path) -> None:
     )
     output = result.stdout + result.stderr
     assert result.returncode == 0, build_output + output
-    assert "Asset transport checks: 14/14 passed" in output, output
+    assert "Asset transport checks: 17/17 passed" in output, output

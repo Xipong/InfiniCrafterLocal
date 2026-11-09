@@ -391,7 +391,7 @@ def test_missing_readable_caller_keeps_connected_slice_not_just_its_helper():
     assert raw == before
     raw["directProjectile"]["mechanicsSource"]["records"].append({
         "method": "Terraria.Projectile.Colliding", "code": "bool Colliding() { return ConeHelper(90 * scale); }"})
-    assert "sourceSlices" not in mechanics_context(raw)["mechanics"]
+    assert mechanics_context(raw)["mechanics"]["sourceSlices"][0]["program"] == program
 
 
 def test_slice_source_refs_bind_to_emitted_indices_with_profile_local_ids():
@@ -582,8 +582,8 @@ def test_production_requests_keep_owned_refusals_and_unfamiliar_conditions(monke
             assert len(owned) == 1
             assert owned[0]["sourcePath"].startswith("directProjectile.")
             if variant == "child_refusal":
-                assert owned[0]["sourcePath"] == "directProjectile.referencedProjectiles.references[0]"
-                assert owned[0]["value"] == profile["referencedProjectiles"]["references"][0]
+                assert owned[0]["sourcePath"] == "directProjectile.referencedProjectiles"
+                assert owned[0]["value"]["references"] == profile["referencedProjectiles"]["references"]
             elif variant == "graph_refusal":
                 assert owned[0]["sourcePath"] == "directProjectile.attackReference.motion.programs[0].graphCapture"
                 assert owned[0]["value"]["identitySelectionUnavailable"] == marker
@@ -637,7 +637,7 @@ def test_production_requests_keep_partial_source_and_readable_caller_controls(mo
             "code": "bool Colliding() { return wet && ConeHelper(90 * scale); }"})
     for raw in _request_parent_views(monkeypatch, parent, "json_object"):
         if variant == "readable_caller":
-            assert "sourceSlices" not in raw["mechanics"]
+            assert raw["mechanics"]["sourceSlices"][0]["program"]["unresolved"] == ["opaque runtime predicate"]
         else:
             assert "mechanics" not in raw
         assert "ConeHelper" in json.dumps(raw)

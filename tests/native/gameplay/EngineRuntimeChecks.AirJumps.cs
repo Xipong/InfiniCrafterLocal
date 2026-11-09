@@ -302,6 +302,8 @@ internal static partial class EngineRuntimeChecks
             ExtraJumpLoader.ProcessJumps(player);
             Equal(false, player.GetJumpState(scope.Jump).Available, "all component counts are consumed exactly");
             ResetNativeAirJumpTick(player, owner); owner.PostUpdateEquips();
+            Equal(true, firstBinding.IsLive, "first component retains its final movement tick");
+            ResetNativeAirJumpTick(player, owner);
             Equal(false, firstBinding.IsLive, "expired component cannot retain VFX through another same-item buff");
             Equal(true, secondBinding.IsLive, "the exact remaining component lifetime keeps its VFX");
             Equal(true, owner.ApplyGeneratedUtilityBuff(firstBuff, source: source), "expired component starts a new actual lifetime");

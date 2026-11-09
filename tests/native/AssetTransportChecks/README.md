@@ -21,6 +21,10 @@ validator, descriptor/SHA checks, and atomic file writer execute. Tests cover:
 - A lost initial request and all 32 missing files retried in one item-level request.
 - Newly discovered sibling files and replaced manifests.
 - World-reset/disposal retirement without deleting verified disk cache files.
+- Real loopback HTTP: stalled and continuously slow-dripping bodies release all
+  four slots at the retained absolute deadline; the next PNG remains byte-exact.
+- Disposal during four live HTTP body reads plus a queued fifth cancels sockets
+  and waiters, permits all four slots to be reacquired, and publishes no retired bytes.
 - Per-item retry-state reset that preserves other items' in-flight native requests.
 - Corrupt, impossible, repeated and reordered chunks; successful recovery.
 - Descriptor mismatch and explicit HTTP mode refusing native payloads.
@@ -30,7 +34,9 @@ The test-only types in `TmlBoundary.cs` replace the surrounding DTO registry,
 packet sink, and clock. They do **not** replace or copy the transport algorithm.
 They do not test production packet-ID assignments, definition hydration, crafting
 transactions, the renderer, tML sockets, Steam authentication or Steam relays.
-No game, model, socket listener, or external service is started.
+No game, model, or external service is started. HTTP deadline/disposal checks
+start a temporary loopback-only socket listener; they retain the real production
+12-second deadline and do not replace the HTTP downloader or its shared slots.
 
 ## Live Steam acceptance (separate, not established by these checks)
 

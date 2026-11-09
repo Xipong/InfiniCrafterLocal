@@ -89,6 +89,16 @@ public sealed class InfiniCrafterLocalMod : Mod
             Common.Runtime.GeneratedQuickUtilityActivation.HandlePacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.RequestGeneratedUtilityRespawnSync)
+        {
+            InfiniCraftPlayer.HandleGeneratedUtilityRespawnRequest(reader, whoAmI);
+            return;
+        }
+        if (packetType == InfiniNetPacketIds.GeneratedUtilityRespawnSync)
+        {
+            InfiniCraftPlayer.HandleGeneratedUtilityRespawnSync(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.SyncGeneratedUtilityBuff)
         {
             InfiniCraftPlayer.HandleGeneratedUtilityBuffSyncPacket(reader, whoAmI);

@@ -530,14 +530,12 @@ def _wire_updates(entity: Mapping[str, Any]) -> int | None:
     return extra + 1 if type(extra) is int and 0 <= extra <= 5 else None
 
 
-def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[Mapping[str, Any]],
-                                     errors: list[dict[str, Any]]) -> None:
-    """Validate new emission graphs through their explicit current references."""
+def _validate_entity_graph(runtime: Mapping[str, Any], entities: list[Mapping[str, Any]],
+                           errors: list[dict[str, Any]]) -> None:
+    """Match native graph admission for every event/controller, including item roots."""
     actions = [(entity, event) for entity in entities
                for event in (entity.get("events") if isinstance(entity.get("events"), list) else [])
                if isinstance(event, Mapping)]
-    if not any(event.get("actionCode") == EVENT_ACTION_OPCODE[_TARGET_EMISSION] for _, event in actions):
-        return
     limit_defaults = {"maxEntityCount": MAX_RUNTIME_ENTITIES, "maxChildDepth": MAX_CHILD_DEPTH,
                       "maxEventSpawnsPerActivation": MAX_EVENT_SPAWNS_PER_ACTIVATION}
     raw_limits = runtime.get("limits")
@@ -547,12 +545,12 @@ def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[M
         minimum = 1 if key == "maxEntityCount" else 0
         if type(value) is not int or not minimum <= value <= ceiling:
             errors.append({"path": f"$.runtimeProgram.limits.{key}", "code": "invalid_runtime_limit",
-                           "message": "Target emission requires a bounded integer runtime limit without coercion."})
+                           "message": "Entity graphs require bounded integer runtime limits without coercion."})
             return
         limits[key] = value
     if len(entities) > limits["maxEntityCount"]:
         errors.append({"path": "$.runtimeProgram.entities", "code": "entity_limit_exceeded",
-                       "message": "Target emission graph exceeds the explicit entity limit."})
+                       "message": "Runtime entity graph exceeds the explicit entity limit."})
         return
     graph = {str(entity.get("id") or ""): set() for entity in entities}
     total = 0
@@ -1029,7 +1027,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if child and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].entityId", "code": "missing_entity_reference", "message": f"Unknown event target entity {child!r}."})
 
-    _validate_target_emission_graph(runtime, entities, errors)
+    _validate_entity_graph(runtime, entities, errors)
     item_bodies = [row for row in entities if row.get("kind") == "item_body"]
     if len(item_bodies) != 1:
         errors.append({"path": "$.runtimeProgram.entities", "code": "item_body_count", "message": f"Exactly one item_body is required; found {len(item_bodies)}."})

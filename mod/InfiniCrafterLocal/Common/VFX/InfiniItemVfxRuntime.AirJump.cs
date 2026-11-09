@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using InfiniCrafterLocal.Common.Models;
@@ -15,10 +16,40 @@ namespace InfiniCrafterLocal.Common.VFX;
 public static partial class InfiniItemVfxRuntime
 {
     // A buff can outlive its item. Its synchronized live row (or real functional
-    // equipment), never a previous-tick grant, witnesses this cosmetic event.
+    // equipment), including the final movement tick, witnesses this event.
     private const byte AirJumpPacketVersion=6;
     private sealed record AirJumpEvent(int Owner,long Generation,ulong Occurrence,string ItemId,
         string Definition,string EntityId,Vector2 Point,InfiniItemVfxSnapshot Snapshot);
+
+    private sealed record PendingAirJumpEvent(AirJumpEvent Event, Player Player, object? Socket,
+        VfxSourceBinding Source, ulong Tick);
+    private static readonly List<PendingAirJumpEvent> PendingAirJumpEvents = new();
+
+    internal static void FlushPendingAirJumpEvents(Player? owner = null)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient) return;
+        for (int index = 0; index < PendingAirJumpEvents.Count;)
+        {
+            var pending = PendingAirJumpEvents[index];
+            if (owner is not null && !ReferenceEquals(owner, pending.Player)) { index++; continue; }
+            if (!ReferenceEquals(Netplay.Connection?.Socket, pending.Socket) || !pending.Source.IsLive
+                || Main.GameUpdateCount < pending.Tick || Main.GameUpdateCount - pending.Tick > PendingItemEventLifetimeTicks)
+            { PendingAirJumpEvents.RemoveAt(index); continue; }
+            if (!pending.Player.GetModPlayer<InfiniCraftPlayer>().TryGetAirJumpNetworkGeneration(
+                pending.Event.ItemId, pending.Event.Generation, out long generation)) { index++; continue; }
+            PendingAirJumpEvents.RemoveAt(index);
+            SendAirJumpEvent(pending.Event with { Generation = generation });
+        }
+    }
+
+    private static void SendAirJumpEvent(AirJumpEvent payload)
+    {
+        var packet=InfiniCrafterLocalMod.Instance?.GetPacket();if(packet is null)return;
+        // Allocate the ordered transport sequence only when sending. A queued
+        // prediction must not arrive behind newer equipment/material packets.
+        payload=payload with { Occurrence=MaterialItemEventStream.NewOwnerOccurrence() };
+        packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteAirJumpEvent(packet,payload);packet.Send();
+    }
 
     public static void EmitAndSyncJump(Player player,GeneratedItemData source,Vector2 point,long sourceGeneration)
     {
@@ -34,10 +65,18 @@ public static partial class InfiniItemVfxRuntime
             sourceBinding:VfxSourceBinding.CaptureAirJump(player,live.Id,generation),capturedSnapshot:snapshot);
         if(player.whoAmI!=Main.myPlayer||Main.netMode!=NetmodeID.MultiplayerClient
             ||InfiniCrafterLocalMod.Instance is null)return;
-        var payload=new AirJumpEvent(player.whoAmI,generation,MaterialItemEventStream.NewOwnerOccurrence(),
+        var payload=new AirJumpEvent(player.whoAmI,generation,0,
             live.Id,GeneratedItemRegistryService.DefinitionIdentity(live),entityId,point,snapshot);
-        var packet=InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteAirJumpEvent(packet,payload);packet.Send();
+        var effects=player.GetModPlayer<InfiniCraftPlayer>();
+        if(effects.TryGetAirJumpNetworkGeneration(live.Id,generation,out long authoritative))
+            SendAirJumpEvent(payload with { Generation=authoritative });
+        else
+        {
+            FlushPendingAirJumpEvents();
+            if(PendingAirJumpEvents.Count<MaxPendingItemEventsPerOwner)
+                PendingAirJumpEvents.Add(new(payload,player,Netplay.Connection?.Socket,
+                    VfxSourceBinding.CaptureAirJump(player,live.Id,generation),Main.GameUpdateCount));
+        }
     }
 
     private static void WriteAirJumpEvent(BinaryWriter writer,AirJumpEvent p)

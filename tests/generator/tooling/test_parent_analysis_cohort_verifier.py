@@ -411,7 +411,7 @@ def test_contract_mode_retains_evidence_provenance_stability_and_target_gates(tm
 def test_source_pack_workflow_requires_same_contract_byte_parity():
     text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
     assert "--comparison-mode exact-bytes" in text
-    assert "BASELINE_SHA: 0f766496538ec11f0788445e700bc3c91bf2bdc8" in text
+    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in text
     assert "baseline-native-source-pack" in text
     assert "--require-payloads --require-pins --require-target" in text
     assert "exact cross-version payload bytes" in text
@@ -443,3 +443,18 @@ def test_source_pack_workflow_rebuilds_inside_each_variant_and_restores_location
     builds = re.findall(r"^\s*dotnet build (\S+)", scope["body"], re.MULTILINE)
     assert builds == ["tests/native/EngineRuntimeChecks.csproj"]
     assert len(re.findall(r"^\s*dotnet build\b", step, re.MULTILINE)) == len(builds)
+
+
+def test_pr333_benchmark_uses_the_same_populated_contract_and_strict_pipeline():
+    # Historical baseline had empty catalogs and uncompilable legacy Reverse
+    # calls. Do not patch its semantics or compare it to populated data.
+    old = (ROOT / ".github/workflows/pr333-parent-analysis-benchmark.yml").read_text()
+    current = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
+    assert old.split("jobs:\n", 1)[1] == current.split("jobs:\n", 1)[1]
+    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in old
+    assert "tests/native/EngineRuntimeChecks.csproj" in old
+    assert "baseline/tools/native" not in old
+    assert "scenarios.Reverse()" not in old
+    assert "--comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000" in old
+    assert "--roll-forward Disable" in old
+    assert "PopulatedParentProfiling.cs" in old

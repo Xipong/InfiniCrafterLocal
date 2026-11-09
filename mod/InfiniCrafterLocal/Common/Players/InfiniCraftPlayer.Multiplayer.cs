@@ -532,6 +532,9 @@ public sealed partial class InfiniCraftPlayer
     private uint _generatedBuffSnapshotRevision;
 
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
+        => ReadGeneratedBuffStateCore(reader, acceptsRespawn: false);
+
+    private void ReadGeneratedBuffStateCore(System.IO.BinaryReader reader, bool acceptsRespawn)
     {
         byte version = reader.ReadByte();
         if (version != 10)
@@ -549,6 +552,13 @@ public sealed partial class InfiniCraftPlayer
         var buffs = new List<ActiveGeneratedUtilityBuff>(count);
         for (int i = 0; i < count; i++) buffs.Add(ReadGeneratedUtilityBuffEntry(reader));
         var exhaustion = ReadGeneratedItemExhaustion(reader);
+        // Ordinary snapshots cannot identify the new life, even when their
+        // bytes match a valid fresh activation. Keep current short survivors
+        // and fresh local predictions ticking normally until the correlated
+        // authority reply; do not merge two independently bounded row tables.
+        EnsureGeneratedUtilityRespawnScope();
+        if (_generatedUtilityAwaitingRespawnSync && !acceptsRespawn) return;
+        EnsureAirJumpAuthorityScope();
         _generatedBuffTicks = ticks; _generatedMiningSpeedMultiplier = mining;
         _generatedLightStrength = light; _generatedLightColorName = color;
         _generatedOreSenseRadiusTiles = ore; _generatedMovementSpeed = movement;
@@ -557,19 +567,47 @@ public sealed partial class InfiniCraftPlayer
         ClampGeneratedBuffState();
         foreach (var buff in buffs)
         {
-            var previous = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.Ticks > 0
-                && active.SourceGeneration != 0 && active.SourceGeneration == buff.SourceGeneration
+            var previous = _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources).FirstOrDefault(active =>
+                (active.Ticks > 0 || active.SourceFinalTick == Main.GameUpdateCount)
+                && active.SourceGeneration != 0
+                && (active.SourceAuthorityConfirmed ? active.SourceGeneration == buff.SourceGeneration
+                    : Player.whoAmI == Main.myPlayer && buff.SourceGeneration < _lastAuthoritativeBuffGeneration
+                        && !_airJumpPredictionHistoryOverflow
+                        && !_retiredAirJumpPredictions.Contains(AirJumpPredictionKey(active)))
                 && active.SourceItemId == buff.SourceItemId && active.SourceDefinitionIdentity == buff.SourceDefinitionIdentity
                 && active.SourceComponent == buff.SourceComponent && active.InitialDurationTicks == buff.InitialDurationTicks
                 && active.SameEffect(buff));
-            if (previous is not null) buff.SourceLifetime = previous.SourceLifetime;
+            buff.SourceAuthorityConfirmed = buff.SourceGeneration < 0;
+            if (previous is not null)
+            {
+                buff.SourceLifetime = previous.SourceLifetime;
+                buff.SourcePredictionGeneration = previous.SourceAuthorityConfirmed
+                    ? previous.SourcePredictionGeneration : previous.SourceGeneration;
+                ConfirmAirJumpSourceGeneration(previous.SourceGeneration, buff.SourceGeneration);
+            }
         }
+        // Even an earlier empty correction can precede a delayed activation.
+        // No snapshot acknowledges a particular prediction, so retain bounded
+        // ambiguity for this authority scope instead of letting a replacement
+        // prediction borrow the old activation's first unseen generation.
+        foreach (var previous in _activeGeneratedUtilityBuffs.Concat(_finalTickAirJumpSources))
+            if (!buffs.Any(buff => ReferenceEquals(buff.SourceLifetime, previous.SourceLifetime)))
+                RetireAirJumpPrediction(previous);
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
-        foreach (var buff in buffs) _nextGeneratedBuffSourceGeneration = Math.Min(_nextGeneratedBuffSourceGeneration, buff.SourceGeneration);
+        _finalTickAirJumpSources.Clear();
+        foreach (var buff in buffs)
+            _lastAuthoritativeBuffGeneration = Math.Min(_lastAuthoritativeBuffGeneration, buff.SourceGeneration);
         RebuildGeneratedUtilityBuffAggregate();
         _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
         if (Player.dead) RetireGeneratedUtilityOnDeath();
+        if (acceptsRespawn)
+        {
+            _generatedUtilityAwaitingRespawnSync = false;
+            _generatedUtilityRespawnRequest = Guid.Empty;
+            _generatedUtilityRespawnRetryTicks = 0;
+        }
         _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
+        Common.VFX.InfiniItemVfxRuntime.FlushPendingAirJumpEvents(Player);
     }
 
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)

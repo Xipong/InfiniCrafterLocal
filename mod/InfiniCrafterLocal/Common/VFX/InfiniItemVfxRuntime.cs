@@ -143,6 +143,7 @@ public static partial class InfiniItemVfxRuntime
         MaterialItemEventStream.Clear();
         Array.Clear(ItemHistories);
         Array.Clear(PendingItemEvents);
+        PendingAirJumpEvents.Clear();
         Array.Clear(HeldEventWitnesses);
         Array.Clear(ServerEvents);
         Array.Clear(ClientEvents);

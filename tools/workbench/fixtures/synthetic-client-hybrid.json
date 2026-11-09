@@ -120,11 +120,7 @@
         "aim": { "source": "cursor", "turnOwner": true },
         "attachment": { "anchor": "owner_mounted", "axisOffsetPx": 18, "normalOffsetPx": 0 },
         "reach": { "durationTicks": 24, "startOffsetPx": 0, "peakOffsetPx": 96, "endOffsetPx": 0, "peakProgress": 0.5 },
-        "rotation": { "mode": "axis", "offsetRadians": 0, "radiansPerUpdate": 0 },
-        "ownerControl": {
-          "requireHeldItem": false, "requireChannel": false, "requireItemAnimation": false,
-          "claimHeldProjectile": true, "animation": "none", "lifetime": "authored"
-        }
+        "rotation": { "mode": "axis", "offsetRadians": 0, "radiansPerUpdate": 0 }
       },
       {
         "id": "nail",

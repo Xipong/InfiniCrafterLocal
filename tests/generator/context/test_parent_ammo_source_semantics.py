@@ -553,6 +553,8 @@ def _assert_eventide_state(mechanics, native):
         assert reference["method"] == stages[index]["method"]
         assert reference["sourceFact"] == native["projectileSemanticsReference"]["stages"][index]["rules"][0]
         assert reference["sourceFact"]["sourceStoreIlOffset"] == (396, 10873)[index]
+        assert reference["conditionStatus"] == "source_conditions_not_evaluated"
+        assert reference["dispatchStatus"] == "source_site_only_not_guaranteed_execution"
         assert stages[index]["rules"][0]["outputProjectileId"] == reference["sourceFact"]["outputProjectileId"]
     profiles = [row for row in mechanics["projectiles"] if row["defaults"].get("type") == 932]
     assert len(profiles) == 1
@@ -560,8 +562,11 @@ def _assert_eventide_state(mechanics, native):
     assert tuple(profile["defaults"][key] for key in ("penetrate", "timeLeft", "extraUpdates")) == (5, 120, 0)
     original = native["nativeReplacementProjectileRaw"][0]
     captures = [row for row in profile["captures"] if row["sourcePath"] == "ammo.nativeReplacementProjectileRaw[0]"]
+    # Tagged native source facts stay literal at their own capture: compare the
+    # original records, including certificates, condition/dispatch unknowns and
+    # source-site order. Do not derive this oracle with the production renderer.
     assert captures == [{"sourcePath": "ammo.nativeReplacementProjectileRaw[0]",
-                         **{key: original[key] for key in ("source", "inventorySlot", "profileScope")}}]
+                         **{key: original[key] for key in ("source", "inventorySlot", "profileScope", "sourceReferences")}}]
 
 
 def _assert_spawn_mechanics(mechanics, native, name):
@@ -1074,6 +1079,10 @@ def actual_ammo_observer_inputs():
     "spawn_site", "spawn_duplicate", "spawn_input", "spawn_owner", "spawn_guard", "spawn_coverage",
     "conditional_damage", "ai_remainder", "expression_unknowns", "stage_call_site",
     "stage_method", "hook_order", "hook_duplicate", "category_selector",
+    "replacement_references_missing", "replacement_reference_lost", "replacement_reference_reordered",
+    "replacement_reference_duplicate", "replacement_reference_owner", "replacement_reference_source_path",
+    "replacement_reference_fact", "replacement_reference_condition", "replacement_reference_dispatch",
+    "replacement_reference_certificate", "replacement_reference_kind", "replacement_capture_extra_field",
 ])
 def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
     packet, original, _ = actual_ammo_observer_inputs["eventide"]
@@ -1086,7 +1095,21 @@ def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observ
     state_key = re.fullmatch(r"not\(bne\((snapshot[0-9]+), 2\)\)", state["whenSourceCondition"])[1]
     sites = stages[1]["spawnSites"]
     profile = next(row for row in mechanics["projectiles"] if row["defaults"].get("type") == 932)
+    capture = next(row for row in profile["captures"] if row["sourcePath"] == "ammo.nativeReplacementProjectileRaw[0]")
+    references = capture["sourceReferences"]
     changes = {
+        "replacement_references_missing": lambda: capture.pop("sourceReferences"),
+        "replacement_reference_lost": lambda: references.pop(),
+        "replacement_reference_reordered": lambda: references.reverse(),
+        "replacement_reference_duplicate": lambda: references.append(copy.deepcopy(references[0])),
+        "replacement_reference_owner": lambda: references[1].update(method="Player.PickAmmo"),
+        "replacement_reference_source_path": lambda: references[1].update(sourcePath=references[0]["sourcePath"]),
+        "replacement_reference_fact": lambda: references[1]["sourceFact"].update(outputProjectileId=1),
+        "replacement_reference_condition": lambda: references[1].update(conditionStatus="evaluated_true"),
+        "replacement_reference_dispatch": lambda: references[1].update(dispatchStatus="guaranteed_execution"),
+        "replacement_reference_certificate": lambda: references[1].update(sourceMethodSha256="0" * 64),
+        "replacement_reference_kind": lambda: references[1].update(kind="executed_projectile_replacement"),
+        "replacement_capture_extra_field": lambda: capture.update(finalShot=True),
         "stage_call_site": lambda: stages[0]["sourceStageCallSites"].clear(),
         "stage_method": lambda: stages[1].update(method="Player.PickAmmo"),
         "hook_order": lambda: stages[0]["hookDispatchTrace"][0]["directHookCalls"].reverse(),

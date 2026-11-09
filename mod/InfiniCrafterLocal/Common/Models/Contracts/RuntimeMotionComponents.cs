@@ -1047,6 +1047,10 @@ internal static class RuntimeMotionAdmission
         int poseOwners = program.Entities.Count(e => e.ArmPose is not null);
         if (poseOwners > 1) throw new InvalidDataException("native front arm pose has one primary writer, not one body reader");
         foreach (var entity in program.Entities) {
+            if (entity.OwnerControl is { } ownerControl
+                && (ownerControl.ClaimHeldProjectile || ownerControl.Animation != "none")
+                && (entity.Id != program.PrimaryEntityId || program.PrimaryOwner != RuntimeProgramSpec.ProjectileOwner))
+                throw new InvalidDataException("held projectile and owner animation overrides require the primary projectile entity");
             bool activeSpawn = program.Bindings.Any(b => b is not null
                 && b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse
                 && b.UsePolicy?.Action?.Kind == RuntimeBindingAction.SpawnEntity && b.UsePolicy.Action.TargetId == entity.Id);

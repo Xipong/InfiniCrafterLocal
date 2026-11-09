@@ -613,6 +613,7 @@ public sealed partial class InfiniCraftPlayer
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickGeneratedUtilityCooldowns();
+        TickGeneratedUtilityRespawnSync();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();

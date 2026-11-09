@@ -46,8 +46,9 @@ _GET_LOOPBACK_REQUIRED_PREFIX_ROUTES = (
     "/debug/",
     "/visual_doctor",
 )
-_CONTROL_ROUTES = {"/shutdown", "/trace_clear"}
-_POST_LOOPBACK_REQUIRED_EXACT_ROUTES = {"/combine", *_CONTROL_ROUTES}
+_CONTROL_ROUTES = {"/shutdown", "/trace_clear", "/sdcpp_start"}
+_VISUAL_DOCTOR_ROUTES = {"/visual_doctor", "/visual_doctor.json"}
+_POST_LOOPBACK_REQUIRED_EXACT_ROUTES = {"/combine", *_CONTROL_ROUTES, *_VISUAL_DOCTOR_ROUTES}
 _POST_LOOPBACK_REQUIRED_PREFIX_ROUTES = ("/debug/vfx",)
 
 
@@ -87,6 +88,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_error(403, "loopback_only", "This endpoint is only available on loopback")
                 return
 
+            if self._route_requires_loopback(request_path, is_post=False) and not self._is_trusted_control_request():
+                self.json_error(403, "untrusted_control_origin", "Private diagnostics require a local host and same origin")
+                return
+
             if request_path in _CONTROL_ROUTES:
                 self.json_error(405, "method_not_allowed", "Use POST for control endpoints")
                 return
@@ -115,14 +120,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.json_error(403, "untrusted_control_origin", "Local mutation requests require a local host and same origin")
                 return
 
-            if request_path not in {"/combine", *_CONTROL_ROUTES} and not request_path.startswith("/debug/vfx"):
+            if request_path not in {"/combine", *_CONTROL_ROUTES, *_VISUAL_DOCTOR_ROUTES} and not request_path.startswith("/debug/vfx"):
                 self.send_error(404)
                 return
 
             length = self._content_length_bytes()
             payload = self._read_json_payload(length)
 
-            if request_path in _CONTROL_ROUTES:
+            if request_path in _CONTROL_ROUTES or request_path in _VISUAL_DOCTOR_ROUTES:
                 utility_routes.handle_post(self, self.path, payload)
                 return
             if request_path.startswith("/debug/vfx"):

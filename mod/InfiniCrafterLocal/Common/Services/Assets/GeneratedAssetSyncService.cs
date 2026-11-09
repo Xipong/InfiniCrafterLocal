@@ -1370,6 +1370,11 @@ public sealed class GeneratedAssetSyncService : IDisposable
 
     private async Task<byte[]> DownloadAssetBytesWithBoundedStreamAsync(string url, CancellationToken cancellationToken)
     {
+        // ResponseHeadersRead ends HttpClient.Timeout at the headers. Keep the same
+        // bounded deadline alive through every body read so stalled peers release slots.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(Http.Timeout);
+        cancellationToken = deadline.Token;
         using HttpResponseMessage response = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         long? contentLength = response.Content.Headers.ContentLength;

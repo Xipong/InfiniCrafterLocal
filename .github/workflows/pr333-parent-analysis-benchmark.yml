@@ -10,6 +10,9 @@ on:
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraphCache.cs'
       - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.NativeCSharpSource.cs'
       - 'tests/native/context/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
+      - 'tests/native/context/EngineRuntimeChecks.PopulatedParentProfiling.cs'
+      - 'tests/native/context/EngineRuntimeChecks.ParentContextCapture.cs'
+      - 'tools/testing/verify_parent_analysis_cohort.py'
       - 'tests/native/EngineRuntimeChecks.csproj'
       - 'tests/native/EngineRuntimeChecks.cs'
       - 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj'
@@ -23,13 +26,15 @@ concurrency:
   group: pr333-parent-analysis-benchmark
   cancel-in-progress: true
 
+# The populated-catalog observer contract starts at this immutable baseline.
+# Use the same exact runtime/pack/byte verifier as the post-audit benchmark.
 jobs:
   compare:
     name: Baseline vs candidate cold analysis
     runs-on: windows-latest
     timeout-minutes: 120
     env:
-      BASELINE_SHA: 3c092e34403eefceea47665123be888a261cd820
+      BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75
       INFINI_PARENT_ANALYSIS_PROFILE: 1
     steps:
       - name: Preserve Git bytes
@@ -39,9 +44,10 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: candidate
 
-      - name: Checkout pre-audit baseline
+      - name: Checkout same-contract source-pack baseline
         uses: actions/checkout@v4
         with:
           ref: ${{ env.BASELINE_SHA }}
@@ -114,12 +120,13 @@ jobs:
 
       - name: Restore and locate tModLoader references
         shell: pwsh
+        working-directory: candidate
         run: |
-          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet restore candidate/mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = Get-Content candidate/mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $assets = Get-Content mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
           $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
           if ($tml.Count -ne 1) { throw 'Expected exactly one tModLoader package.' }
           $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
@@ -128,91 +135,133 @@ jobs:
           })
           if ($references.Count -ne 1) { throw 'Could not locate tModLoader references.' }
           "INFINI_TML_REFERENCE_DIR=$($references[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "INFINI_TML_VERSION=$($tml[0].Name.Split('/')[1])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Build baseline and candidate harnesses
+      - name: Prepare the official exact tML runtime
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # Build with the SDK, but collect and profile with the runtime selected
+          # by the real tML launcher. A servicing runtime changes dependency pins.
+          $execution = & candidate/tools/build/prepare_tml_runtime.ps1 -TmlVersion $env:INFINI_TML_VERSION -Destination (Join-Path $env:RUNNER_TEMP 'ifc-profile-runtime')
+          if ((Get-FileHash (Join-Path $execution.TmlRuntime 'tModLoader.dll') -Algorithm SHA256).Hash -ne
+              (Get-FileHash (Join-Path $env:INFINI_TML_REFERENCE_DIR 'tModLoader.dll') -Algorithm SHA256).Hash) {
+            throw 'The official release runtime differs from the build references.'
+          }
+          "PROFILE_RUNTIME_DOTNET=$($execution.RuntimeDotnet)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PROFILE_RUNTIME_CONFIG=$($execution.RuntimeConfig)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PROFILE_TML_RUNTIME=$($execution.TmlRuntime)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $primaryReferences = Join-Path $env:RUNNER_TEMP 'ifc-profile-primary-references'
+          python candidate/tools/build/stage_tml_references.py --runtime $execution.TmlRuntime --rid win-x64 --destination $primaryReferences
+          if ($LASTEXITCODE -ne 0) { throw 'Official primary runtime asset staging failed.' }
+          "INFINI_TML_REFERENCE_DIR=$primaryReferences" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          Copy-Item $execution.RuntimeConfig (Join-Path $evidence 'tModLoader.runtimeconfig.json')
+          @{
+            runtimeVersion = $execution.RuntimeVersion
+            runtimeDotnetSha256 = (Get-FileHash $execution.RuntimeDotnet -Algorithm SHA256).Hash.ToLowerInvariant()
+            runtimeconfigSha256 = (Get-FileHash $execution.RuntimeConfig -Algorithm SHA256).Hash.ToLowerInvariant()
+            rollForward = 'Disable'
+          } | ConvertTo-Json | Set-Content (Join-Path $evidence 'runtime-launch.json') -Encoding utf8
+
+      - name: Build complete source packs for both revisions
         shell: pwsh
         run: |
-          # Compile-only correction for the pinned historical baseline fixture;
-          # current candidate already calls Enumerable.Reverse explicitly.
-          # Neither change is part of the measured source-analysis code.
-          $fixture = Join-Path $env:GITHUB_WORKSPACE 'baseline/tools/native/EngineRuntimeChecks.GeneratedItemReforge.cs'
-          $text = [System.IO.File]::ReadAllText($fixture)
-          $before = 'scenarios.Concat(scenarios.Reverse())'
-          $after = 'scenarios.Concat(scenarios.AsEnumerable().Reverse())'
-          if ([regex]::Matches($text, [regex]::Escape($before)).Count -ne 1) { throw 'Pinned baseline reforge fixture did not match its expected source.' }
-          [System.IO.File]::WriteAllText($fixture, $text.Replace($before, $after), [System.Text.UTF8Encoding]::new($false))
+          # The candidate's archive is generated on this target from all native
+          # identities. Its build process is separate from every cold process.
+          # Both revisions use their own complete pack, generated from their
+          # exact committed sources against the same target/runtime dependencies.
           $baselineOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-baseline'
           $candidateOut = Join-Path $env:RUNNER_TEMP 'ifc-profile-candidate'
-          dotnet build baseline/tools/native/EngineRuntimeChecks.csproj --configuration Release --output $baselineOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build candidate/tests/native/EngineRuntimeChecks.csproj --configuration Release --output $candidateOut "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          foreach ($variant in @('baseline', 'candidate')) {
+            $output = if ($variant -eq 'baseline') { $baselineOut } else { $candidateOut }
+            $packName = if ($variant -eq 'baseline') { 'baseline-native-source-pack' } else { 'native-source-pack' }
+            python "$variant/tools/generate/build_native_source_pack.py" --refresh-pin
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git -C $variant diff --exit-code -- mod/InfiniCrafterLocal/Common/Services/Generation/NativeSourcePackBuild.g.cs
+            if ($LASTEXITCODE -ne 0) { throw "Commit the current projection fingerprint before profiling $variant." }
+            python "$variant/tools/generate/build_native_source_pack.py" --build --tml-references "$env:INFINI_TML_REFERENCE_DIR" --external-deps "$env:INFINI_TML_DEPS_SRC" --harness-output $output --runtime-dotnet "$env:PROFILE_RUNTIME_DOTNET" --runtimeconfig "$env:PROFILE_RUNTIME_CONFIG" --target-rid win-x64 2>&1 | Tee-Object -FilePath (Join-Path $evidence "$packName-build.log")
+            if ($LASTEXITCODE -ne 0) { throw "Complete native source pack generation failed for ${variant}: $LASTEXITCODE" }
+            Copy-Item "$variant/mod/InfiniCrafterLocal/Data/native-source-pack.zip.report.json" (Join-Path $evidence "$packName-build.json")
+            Copy-Item "$variant/mod/InfiniCrafterLocal/Data/native-source-pack.zip" (Join-Path $evidence "$packName.zip")
+            # Reevaluate Content only after generation, then restore the exact
+            # runtime graph after MSBuild CopyLocal. Profiles use fresh processes.
+            # SDK selection starts from cwd, not the project path: honor this
+            # revision's global.json rather than the runner's newest SDK.
+            Push-Location $variant
+            try {
+              dotnet build tests/native/EngineRuntimeChecks.csproj --configuration Release --output $output "-p:InfiniTmlReferenceDir=$env:INFINI_TML_REFERENCE_DIR" "-p:InfiniExternalDepsRoot=$env:INFINI_TML_DEPS_SRC"
+              if ($LASTEXITCODE -ne 0) { throw "Native harness rebuild failed for ${variant}: $LASTEXITCODE" }
+            }
+            finally { Pop-Location }
+            python candidate/tools/build/stage_tml_references.py --runtime "$env:PROFILE_TML_RUNTIME" --rid win-x64 --destination "$env:INFINI_TML_REFERENCE_DIR" --harness (Join-Path $output 'EngineRuntimeChecks.dll')
+            if ($LASTEXITCODE -ne 0) { throw "Host dependency staging failed for $variant." }
+            & $env:PROFILE_RUNTIME_DOTNET exec --runtimeconfig $env:PROFILE_RUNTIME_CONFIG --roll-forward Disable (Join-Path $output 'EngineRuntimeChecks.dll') --verify-native-target (Join-Path $output 'native-target-staging.json')
+            if ($LASTEXITCODE -ne 0) { throw "CLR runtime assets differ from the official target for $variant." }
+            python "$variant/tools/generate/build_native_source_pack.py" --check --output (Join-Path $output 'Data/native-source-pack.zip') --tml-references "$env:INFINI_TML_REFERENCE_DIR"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if ((Get-FileHash (Join-Path $baselineOut 'EngineRuntimeChecks.deps.json')).Hash -ne (Get-FileHash (Join-Path $candidateOut 'EngineRuntimeChecks.deps.json')).Hash) {
+            throw 'Baseline and candidate CLR host dependency graphs differ.'
+          }
+          Copy-Item (Join-Path $candidateOut 'native-target-staging.json') (Join-Path $evidence 'native-target-staging.json')
+          Copy-Item (Join-Path $candidateOut 'EngineRuntimeChecks.deps.json') (Join-Path $evidence 'EngineRuntimeChecks.deps.json')
           "BASELINE_HARNESS=$baselineOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "CANDIDATE_HARNESS=$candidateOut\EngineRuntimeChecks.dll" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Pin exact source commits and runtime dependency bytes
+        shell: pwsh
+        run: |
+          python candidate/tools/testing/verify_parent_analysis_cohort.py pin --baseline-repo baseline --candidate-repo candidate --baseline-harness "$env:BASELINE_HARNESS" --candidate-harness "$env:CANDIDATE_HARNESS" --out profile-evidence/input-pins.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run matched fresh-process profiles
         shell: pwsh
         run: |
           $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
           New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          $env:DOTNET_ROOT = Split-Path $env:PROFILE_RUNTIME_DOTNET -Parent
+          $env:DOTNET_ROOT_X64 = $env:DOTNET_ROOT
+          $env:DOTNET_MULTILEVEL_LOOKUP = '0'
+          $env:DOTNET_ROLL_FORWARD = 'Disable'
           foreach ($variant in @('baseline', 'candidate')) {
             $root = Join-Path $env:GITHUB_WORKSPACE $variant
             $harness = if ($variant -eq 'baseline') { $env:BASELINE_HARNESS } else { $env:CANDIDATE_HARNESS }
             foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
               Push-Location $root
               try {
-                dotnet $harness --profile-parent-craft $scenario
+                & $env:PROFILE_RUNTIME_DOTNET exec --runtimeconfig $env:PROFILE_RUNTIME_CONFIG --roll-forward Disable $harness --profile-parent-craft $scenario 2>&1 | Tee-Object -FilePath (Join-Path $evidence "$variant-$scenario.log")
                 if ($LASTEXITCODE -ne 0) { throw "$variant/$scenario failed with exit $LASTEXITCODE" }
                 $report = Get-ChildItem artifacts/parent-profiling -Filter report.json -Recurse |
                   Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
                 if ($null -eq $report) { throw "Missing report for $variant/$scenario" }
-                Copy-Item $report.FullName (Join-Path $evidence "$variant-$scenario.json")
+                $checker = Join-Path $env:GITHUB_WORKSPACE 'candidate/tools/testing/verify_parent_analysis_cohort.py'
+                python $checker collect --report $report.FullName --capture-root (Join-Path $root 'artifacts/parent-profiling') --destination $evidence --variant $variant --scenario $scenario
+                if ($LASTEXITCODE -ne 0) { throw "Cannot retain exact payload evidence: $variant/$scenario" }
               }
               finally { Pop-Location }
             }
           }
 
-      - name: Verify packet parity and summarize
+      - name: Verify exact payload bytes and enforce cold target
         shell: pwsh
         run: |
-          $evidence = Join-Path $env:GITHUB_WORKSPACE 'profile-evidence'
-          $rows = @()
-          foreach ($scenario in @('plain', 'mixed', 'nebula-prism', 'eventide')) {
-            $baseline = Get-Content (Join-Path $evidence "baseline-$scenario.json") -Raw | ConvertFrom-Json
-            $candidate = Get-Content (Join-Path $evidence "candidate-$scenario.json") -Raw | ConvertFrom-Json
-            $baselineCold = @($baseline.measurements | Where-Object { $_.case -eq 'cold-first-request' })
-            $candidateCold = @($candidate.measurements | Where-Object { $_.case -eq 'cold-first-request' })
-            if ($baselineCold.Count -ne 1 -or $candidateCold.Count -ne 1) { throw "Expected one cold measurement per variant for $scenario" }
-            $b = $baselineCold[0]
-            $c = $candidateCold[0]
-            if ($b.sha256 -ne $c.sha256) { throw "Cold packet hash mismatch for ${scenario}: $($b.sha256) != $($c.sha256)" }
-            # Cold compares with itself; inspect each later phase instead of
-            # accidentally accepting a warm/reset mismatch through that row.
-            foreach ($phase in @('cold-first-request', 'warm-1', 'warm-2', 'source-cache-reset')) {
-              $measurements = @($candidate.measurements | Where-Object { $_.case -eq $phase })
-              if ($measurements.Count -ne 1) { throw "Expected one candidate $phase measurement for $scenario" }
-              if ($measurements[0].equalToFirstRequest -isnot [bool] -or -not $measurements[0].equalToFirstRequest) {
-                throw "Candidate $phase parity failed for $scenario"
-              }
-            }
-            $rows += [pscustomobject]@{
-              scenario = $scenario
-              packetSha256 = [string]$c.sha256
-              baselineWallMs = [double]$b.wallMs
-              candidateWallMs = [double]$c.wallMs
-              speedup = [double]$b.wallMs / [double]$c.wallMs
-              baselineAllocatedBytes = [long]$b.totalAllocatedBytes
-              candidateAllocatedBytes = [long]$c.totalAllocatedBytes
-              allocationRatio = [double]$c.totalAllocatedBytes / [double]$b.totalAllocatedBytes
-              underFiveSeconds = [double]$c.wallMs -lt 5000.0
-            }
-          }
-          $rows | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $evidence 'summary.json') -Encoding utf8
-          Add-Content $env:GITHUB_STEP_SUMMARY '### PR #333 parent-analysis A/B'
-          Add-Content $env:GITHUB_STEP_SUMMARY '| Scenario | Baseline ms | Candidate ms | Speedup | Baseline alloc | Candidate alloc | <5 s |'
-          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | ---: | ---: | ---: | ---: | ---: | :---: |'
-          foreach ($row in $rows) {
-            Add-Content $env:GITHUB_STEP_SUMMARY ("| {0} | {1:N1} | {2:N1} | {3:N2}x | {4:N0} | {5:N0} | {6} |" -f $row.scenario, $row.baselineWallMs, $row.candidateWallMs, $row.speedup, $row.baselineAllocatedBytes, $row.candidateAllocatedBytes, $(if ($row.underFiveSeconds) { 'yes' } else { 'no' }))
+          # The baseline has the same graph/output contract as the candidate.
+          # Every source evidence byte must survive the audit fixes.
+          python candidate/tools/testing/verify_parent_analysis_cohort.py verify profile-evidence --comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000 --out profile-evidence/strict-verification.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $result = Get-Content profile-evidence/strict-verification.json -Raw | ConvertFrom-Json
+          Add-Content $env:GITHUB_STEP_SUMMARY '### Same-contract source-pack A/B'
+          Add-Content $env:GITHUB_STEP_SUMMARY 'Comparison: exact cross-version payload bytes for cold, two warm phases, and source-cache-reset. Each version uses its own complete source pack.'
+          Add-Content $env:GITHUB_STEP_SUMMARY ("Exact byte parity: {0}; payload pairs checked: {1}/16." -f $result.byteParityPass, $result.payloadPairsVerified)
+          Add-Content $env:GITHUB_STEP_SUMMARY '| Scenario | Baseline ms | Candidate ms | Baseline alloc | Candidate alloc | <5 s |'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | ---: | ---: | ---: | ---: | :---: |'
+          foreach ($row in $result.scenarios) {
+            Add-Content $env:GITHUB_STEP_SUMMARY ("| {0} | {1:N1} | {2:N1} | {3:N0} | {4:N0} | {5} |" -f $row.scenario, $row.baselineWallMs, $row.candidateWallMs, $row.baselineAllocatedBytes, $row.candidateAllocatedBytes, $(if ($row.underTarget) { 'yes' } else { 'no' }))
           }
 
       - name: Upload profiling evidence

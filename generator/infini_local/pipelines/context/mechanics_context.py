@@ -16,7 +16,6 @@ from infini_local.pipelines.context.mechanics_expression import MechanicsRendere
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import _REFERENCE_FIELDS
-from infini_local.pipelines.context.attack_namespaces import _identifier
 from infini_local.pipelines.context.mechanics_selection import _gameplay_identity_program, _identity_unresolved
 
 _ROOTS = ("nativeShootReference", "nativeContactHitStatusReference", "nativeEquipmentReference",
@@ -24,8 +23,8 @@ _ROOTS = ("nativeShootReference", "nativeContactHitStatusReference", "nativeEqui
 _PROFILE_FIELDS = ("directProjectile", "effectiveProjectile")
 _AMMO_PROFILES = ("projectileRaw", "weaponShootFieldProjectileRaw", "nativeReplacementProjectileRaw",
                   "playerInventoryProjectileRaw", "fallbackProjectileRaw")
-_DIAGNOSTICS = {"attackReference", "referencedProjectiles", "mechanicsSource", "sourceReferences",
-                "runtimeDumpProvenance", "spriteReference", "engineMetrics", "textureMetrics", "strictIdentitySelections"}
+_DIAGNOSTICS = {"attackReference", "referencedProjectiles", "mechanicsSource", "spriteReference",
+                "engineMetrics", "textureMetrics", "strictIdentitySelections"}
 
 _GRAPH_FIELDS = {"source", "version", "roots", "nodes", "members", "modules", "edges", "unresolved", "scope", "limits",
                  "omittedNodeCount", "omittedRootCount", "omittedBodyCount", "omittedEdgeCount", "completeness",
@@ -137,11 +136,15 @@ _READING = (
     "source retains movement gates and exceptions. Expression opcodes retain native arithmetic types; snapshots identify values at stores "
     "within a captured method, not execution counts or independent evaluations, "
     "and path_value alternatives follow source paths, not independent random rolls. "
-    "sourceSlices retain connected symbolic caller facts when readable methods are unavailable, not full execution proofs. "
+    "sourceSlices retain connected symbolic facts alongside readable source; partial C# regions do not cover whole methods. "
+    "Projectile reference envelopes retain call indices, guards, candidate types and unresolved alternatives; "
+    "profileSourcePath names the original capture; referenceExclusion applies to that candidate edge, "
+    "while another admitted edge may retain the shared profile body. "
+    "sourceReferences and runtimeDumpProvenance qualify individual captures, not shared defaults or executed spawns. "
     "mechanicsSourceIndex is a zero-based index into source; unresolvedNativeCSharpSourceRef preserves an unbound capture-local reference. "
     "uncertainty.sourceFacts retains literal refusals or unprojected source subtrees at their original sourcePath. "
     "sourceFields retains unfamiliar literal fields belonging to its source record. "
-    "Full source graphs and provenance remain in diagnostic captures; no consumer size truncation."
+    "Full diagnostic graphs and source certificates remain in captures; no consumer size truncation."
 )
 
 
@@ -416,16 +419,12 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                     add_code({**record, "entryScope": lifecycle.get("scope", "source_entry_unknown")}, profile.get("type"))
             for gap in lifecycle.get("unresolved", []) if isinstance(lifecycle.get("unresolved"), list) else []:
                 gaps.add("lifecycle:" + str(gap))
-        # A readable helper is not a replacement for its missing caller. Keep
-        # connected symbolic programs when that method has no readable record;
-        # do not infer the caller's arguments, branch choice or final outcome.
-        def method_name(value: Any, native_names: bool = False) -> Any:
-            if native_names and isinstance(value, str):
-                value = _identifier(value, restore=True)
+        # A same-named readable record can be only a conditional region. Keep
+        # connected symbolic programs unless the upstream verified projection
+        # has already replaced that exact slice with a source reference.
+        def method_name(value: Any) -> Any:
             return "Terraria." + value[2:] if isinstance(value, str) and value.startswith("T.") else value
 
-        available_methods = {method_name(row.get("method")) for row in code
-                             if profile.get("type") in row["projectiles"]}
         def bind_source_refs(value: Any) -> Any:
             if isinstance(value, list):
                 return [bind_source_refs(child) for child in value]
@@ -459,8 +458,6 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             programs += [("motion", row) for row in _rows(motion.get("programs"))]
         for role, program in programs:
             if (not isinstance(program, dict) or not isinstance(program.get("method"), str)
-                    or (method_name(program["method"], program.get("nativeNames") == 1) in available_methods
-                        and "identitySelected" not in program and "identitySelection" not in program)
                     or not any(key in program for key in ("observations", "dependencies", "predicates", "operations",
                                                           "identitySelected", "identitySelection"))):
                 continue
@@ -492,27 +489,48 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 seen_slices[key]["projectiles"].append(profile.get("type"))
         links = profile.get("referencedProjectiles")
         if not isinstance(links, dict):
+            if "referencedProjectiles" in profile:
+                retain_source(path + ".referencedProjectiles", links)
             return
+        # Preserve the call-to-candidate graph literally, including unknown-only
+        # calls. Move only profile bodies to their existing capture locations;
+        # this avoids recursively duplicating all descendant profiles.
+        link_view = copy.deepcopy({key: value for key, value in links.items() if key != "references"})
         calls = links.get("sourceCalls", [])
+        if known_projectile_references(links):
+            for call in _rows(link_view.get("sourceCalls")):
+                location = call.get("sourceLocation")
+                if (isinstance(location, dict) and isinstance(location.get("sourceRecord"), str)
+                        and set(location) <= {"sourceRecord", "statement", "predicates"}):
+                    # Upstream line mappings name the profile-local verified
+                    # source table. An approximate same-named body is not it.
+                    call["sourceLocation"] = bind_source_refs({
+                        **{key: value for key, value in location.items() if key != "sourceRecord"},
+                        "nativeCSharpSourceRef": location["sourceRecord"]})
         references = links.get("references")
+        if "references" in links:
+            link_view["references"] = [] if isinstance(references, list) else copy.deepcopy(references)
         for index, child in enumerate(references if isinstance(references, list) else []):
             if not isinstance(child, dict):
+                link_view["references"].append(copy.deepcopy(child))
                 gaps.add("malformed_child_reference:" + path + ":" + str(index))
                 continue
             indices = child.get("sourceCallIndices")
             child_path = f"{path}.referencedProjectiles.references[{index}].profile"
-            if not isinstance(child.get("profile"), dict):
-                retain_source(child_path.removesuffix(".profile"), child)
-            elif set(child) - {"type", "sourceCallIndices", "profile"}:
-                retain_source(child_path.removesuffix(".profile"), {k: v for k, v in child.items() if k != "profile"})
+            child_view = copy.deepcopy({key: value for key, value in child.items()
+                                        if key != "profile" or not isinstance(value, dict)})
+            link_view["references"].append(child_view)
+            if isinstance(child.get("profile"), dict):
+                child_view["profileSourcePath"] = child_path
             alias_target = any(target == child_path or target.startswith(child_path + ".") for target in alias_targets)
             if (not alias_target and source is not None and isinstance(calls, list) and isinstance(indices, list) and indices
                     and all(type(i) is int and 0 <= i < len(calls) and isinstance(calls[i], dict)
                             and excluded(calls[i], source, child.get("type")) for i in indices)):
-                omitted.append({"parentPath": path, "child": child.get("type"),
-                                "reason": ("all_indexed_calls_in_identity_excluded_arms"
-                                           if all(excluded(calls[i], source) for i in indices) else
-                                           "all_indexed_calls_exclude_child_type_under_identity_assumption")})
+                reason = ("all_indexed_calls_in_identity_excluded_arms"
+                          if all(excluded(calls[i], source) for i in indices) else
+                          "all_indexed_calls_exclude_child_type_under_identity_assumption")
+                omitted.append({"parentPath": path, "child": child.get("type"), "reason": reason})
+                child_view["referenceExclusion"] = reason
                 continue
             if isinstance(child.get("profile"), dict):
                 visit(child_path, child["profile"], graph_profiles)
@@ -524,7 +542,9 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 # A valid edge can keep a shared profile whose first edge was
                 # excluded; visited paths terminate self/cross-reference cycles.
                 target_path, target = graph_profiles[child["profileRefType"]]
+                child_view["profileSourcePath"] = target_path
                 visit(target_path, target, graph_profiles)
+        retain_source(path + ".referencedProjectiles", link_view if known_projectile_references(links) else links)
 
     for path, profile in roots:
         visit(path, profile)
@@ -549,7 +569,8 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     defaults_index: dict[str, dict[str, Any]] = {}
     for row in profiles:
         defaults = row["defaults"]
-        capture = {key: defaults.pop(key) for key in ("source", "inventorySlot", "profileScope", "itemShootSpeed") if key in defaults}
+        capture = {key: defaults.pop(key) for key in ("source", "inventorySlot", "profileScope", "itemShootSpeed",
+                                                   "sourceReferences", "runtimeDumpProvenance") if key in defaults}
         key = json.dumps(defaults, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         observation = {"sourcePath": row["sourcePath"], **capture}
         if key not in defaults_index:

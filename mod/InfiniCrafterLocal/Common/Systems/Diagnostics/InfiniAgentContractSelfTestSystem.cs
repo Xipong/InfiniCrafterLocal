@@ -136,10 +136,15 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath) ?? Main.SavePath);
         var report = new
         {
-            schema = "infini.tml-runtime-selftest.v2",
+            schema = "infini.tml-runtime-selftest.v3",
             runtimeApi = RuntimeProgramSpec.CurrentApiVersion,
             ok = failures.Count == 0,
             generatedAt = DateTimeOffset.UtcNow,
+            assemblies = new
+            {
+                mod = new { moduleVersionId = typeof(InfiniAgentContractSelfTestSystem).Module.ModuleVersionId.ToString() },
+                tml = new { moduleVersionId = typeof(ModSystem).Module.ModuleVersionId.ToString() },
+            },
             checks,
             failures,
         };

@@ -150,7 +150,11 @@ public static partial class InfiniItemVfxRuntime
             if(queue.Count==0)PendingItemEvents[ownerIndex]=null;
         }
     }
-    internal static void UpdatePendingItemEvents() => DrainPendingItemEvents();
+    internal static void UpdatePendingItemEvents()
+    {
+        DrainPendingItemEvents();
+        FlushPendingAirJumpEvents();
+    }
     private static void HandleMaterialItemEvent(BinaryReader reader,int sender)
     {
         MaterialItemEvent p;try{p=ReadMaterialItemEvent(reader);}catch{return;}

@@ -3,6 +3,7 @@ from __future__ import annotations
 from infini_local.core import asset_files
 
 import json
+from html import escape
 import os
 import threading
 import time
@@ -51,12 +52,15 @@ def handle_get(handler: Any, path: str) -> bool:
         return True
     if request_path.startswith("/sdcpp"):
         if request_path == "/sdcpp_start":
-            sdcpp_start_endpoint(handler)
+            handler.json_error(405, "method_not_allowed", "Use POST to start sd.cpp")
             return True
         if request_path == "/sdcpp_debug":
             handler.json(sdcpp_debug_snapshot(include_log_tail=True))
             return True
         return False
+    if request_path in {"/visual_doctor", "/visual_doctor.json"} and _requests_visual_probe(path):
+        handler.json_error(405, "method_not_allowed", "Use POST for a live sprite probe")
+        return True
     if request_path == "/visual_doctor.json":
         handler.json(visual_doctor_payload(path))
         return True
@@ -97,6 +101,15 @@ def handle_post(handler: Any, path: str, payload: dict[str, Any]) -> bool:
         return True
     if request_path == "/trace_clear":
         trace_clear(handler)
+        return True
+    if request_path == "/sdcpp_start":
+        sdcpp_start_endpoint(handler)
+        return True
+    if request_path == "/visual_doctor.json":
+        handler.json(visual_doctor_payload(path))
+        return True
+    if request_path == "/visual_doctor":
+        visual_doctor_html(handler, path)
         return True
     return False
 
@@ -222,9 +235,13 @@ def _visual_probe_payload(role: str = "item", prompt: str = "") -> dict[str, Any
     return {"ok": bool(sprite_path and Path(sprite_path).exists()), "role": role, "ms": int((time.time() - before) * 1000), "status": status, "path": sprite_path, "url": url, "score": score, "alpha": alpha, "debug": dummy.get("debug")}
 
 
+def _requests_visual_probe(path: str) -> bool:
+    return parse_qs(urlparse(path).query).get("probe", ["0"])[0].strip().lower() in {"1", "true", "yes", "on"}
+
+
 def visual_doctor_payload(path: str) -> dict[str, Any]:
     q = parse_qs(urlparse(path).query)
-    probe = str(q.get("probe", ["0"])[0]).strip().lower() in {"1", "true", "yes", "on"}
+    probe = _requests_visual_probe(path)
     role = q.get("role", ["item"])[0]
     health = health_payload()
     backend = str(health.get("imageBackend") or "").lower()
@@ -304,15 +321,24 @@ def visual_doctor_html(handler: Any, path: str) -> None:
     rows = []
     for c in payload.get("checks", []):
         mark = "✅" if c.get("ok") else "⚠️" if c.get("level") == "warn" else "❌"
-        rows.append(f"<tr><td>{mark}</td><td><b>{c.get('name')}</b></td><td>{c.get('message')}</td><td><code>{json.dumps({k:v for k,v in c.items() if k not in {'name','ok','level','message'}}, ensure_ascii=False)[:800]}</code></td></tr>")
+        rows.append(f"<tr><td>{mark}</td><td><b>{escape(str(c.get('name')))}</b></td><td>{escape(str(c.get('message')))}</td><td><code>{escape(json.dumps({k:v for k,v in c.items() if k not in {'name','ok','level','message'}}, ensure_ascii=False)[:800])}</code></td></tr>")
     html = f"""
     <!doctype html><meta charset='utf-8'><title>Infini Visual Doctor</title>
     <style>body{{font-family:Segoe UI,Arial,sans-serif;margin:24px;max-width:1200px}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ddd;padding:8px;vertical-align:top}}code,pre{{white-space:pre-wrap;background:#f6f6f6;padding:2px 4px}}.bar a{{margin-right:12px}}</style>
     <h1>Infini Visual Doctor</h1>
-    <p>Status: <b>{payload.get('summary')}</b>. This checks the mandatory Z-Image/sprite delivery path before you burn ingredients.</p>
-    <p class='bar'><a href='/visual_doctor.json'>json</a><a href='/visual_doctor.json?probe=1&role=item'>live item probe</a><a href='/visual_doctor.json?probe=1&role=projectile'>live projectile probe</a><a href='/sdcpp_start'>start sd.cpp</a><a href='/trace'>trace</a></p>
+    <p>Status: <b>{escape(str(payload.get('summary')))}</b>. This checks the mandatory Z-Image/sprite delivery path before you burn ingredients.</p>
+    <p class='bar'><a href='/visual_doctor.json'>json</a><button data-post='/visual_doctor.json?probe=1&role=item'>live item probe</button><button data-post='/visual_doctor.json?probe=1&role=projectile'>live projectile probe</button><button data-post='/sdcpp_start'>start sd.cpp</button><a href='/trace'>trace</a></p>
     <table><tr><th></th><th>check</th><th>meaning</th><th>details</th></tr>{''.join(rows)}</table>
-    <h2>Raw payload</h2><pre>{json.dumps(payload, ensure_ascii=False, indent=2)}</pre>
+    <h2>Raw payload</h2><pre>{escape(json.dumps(payload, ensure_ascii=False, indent=2))}</pre>
+    <pre id='action-result' aria-live='polite'></pre>
+    <script>document.querySelectorAll('[data-post]').forEach(button => button.addEventListener('click', async () => {{
+      button.disabled = true;
+      try {{
+        const response = await fetch(button.dataset.post, {{method:'POST', headers:{{'Content-Type':'application/json'}}, body:'{{}}'}});
+        document.getElementById('action-result').textContent = await response.text();
+      }} catch (error) {{ document.getElementById('action-result').textContent = String(error); }}
+      finally {{ button.disabled = false; }}
+    }}));</script>
     """
     write_html(handler, html)
 

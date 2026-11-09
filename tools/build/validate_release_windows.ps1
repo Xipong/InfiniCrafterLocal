@@ -5,6 +5,8 @@ param(
     [string]$Project,
     [string]$ExternalDepsRoot,
     [string]$RuntimeSelfTestReport,
+    [string]$RuntimeSelfTestModDll,
+    [string]$RuntimeSelfTestTmlDll,
     [string]$Report,
     [string]$Group = "full"
 )
@@ -16,6 +18,8 @@ if ($SkipBuild) { $Arguments += "--skip-build" }
 if ($Project) { $Arguments += @("--project", $Project) }
 if ($ExternalDepsRoot) { $Arguments += @("--external-deps-root", $ExternalDepsRoot) }
 if ($RuntimeSelfTestReport) { $Arguments += @("--runtime-selftest-report", $RuntimeSelfTestReport) }
+if ($RuntimeSelfTestModDll) { $Arguments += @("--runtime-selftest-mod-dll", $RuntimeSelfTestModDll) }
+if ($RuntimeSelfTestTmlDll) { $Arguments += @("--runtime-selftest-tml-dll", $RuntimeSelfTestTmlDll) }
 if ($Report) { $Arguments += @("--report", $Report) }
 & $Python @Arguments
 exit $LASTEXITCODE

@@ -246,19 +246,25 @@ def test_separate_player_description_and_full_debug_through_real_handoffs(monkey
         'selfEvaluation': ('DEBUG: intended dash is absent. 🌟\r\n' * 3000),
     }
     before = deepcopy(source)
+    # Provider output omits engine identity while preserving all advisory bytes.
+    provider_source = {key: value for key, value in source.items() if key != 'id'}
     requests = []
 
     def respond(request, **_kwargs):
         requests.append(request)
         assert len(requests) == 1, 'Long debug is not a gameplay defect'
-        return {'choices': [{'message': {'content': json.dumps(source)}}],
+        return {'choices': [{'message': {'content': json.dumps(provider_source)}}],
                 '_debug': {'responseFormatType': mode}}
 
     offline_builder(monkeypatch, mode, respond)
     accepted = author.try_llm_plan({}, {}, 'separate-advisory')
+    accepted_id = accepted['id']
+    assert accepted_id != before['id']
     delivered = compile_and_validate_authored_runtime(accepted, {}, {}, 'separate-advisory', run_stage=_run_stage)
     delivered['generatedParentSummary'] = generated_parent_summary_from_data(delivered)
     summary = delivered['generatedParentSummary']
+    assert delivered['id'] == accepted_id
+    assert summary['identity'] == 'generated:' + accepted_id
     vfx = _prompt_packet(delivered, {}, {})
     parent = raw_parent_card_for_llm({'generatedData': delivered})
     assert summary['description'] == before['realization']['description']

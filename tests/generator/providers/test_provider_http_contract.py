@@ -978,3 +978,45 @@ def test_production_entrypoints_import_in_fresh_process_without_starting_service
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
     assert not list(tmp_path.iterdir())
+
+@pytest.mark.parametrize("path", ["/sdcpp_start", "/visual_doctor.json?probe=1&role=item", "/visual_doctor?probe=1"])
+@pytest.mark.parametrize("method,headers,status", [
+    ("GET", {}, 405),
+    ("POST", {"Origin": "https://foreign.example"}, 403),
+    ("POST", {"Host": "foreign.example:5055"}, 403),
+    ("POST", {"Sec-Fetch-Site": "cross-site"}, 403),
+    ("POST", {}, 200),
+])
+def test_live_utility_actions_require_trusted_post(tmp_path, monkeypatch, path, method, headers, status):
+    routes = utility_routes(tmp_path, monkeypatch)
+    calls = []
+    monkeypatch.setattr(routes, "ensure_sdcpp_server", lambda: calls.append("start") or True)
+    monkeypatch.setattr(routes, "sdcpp_debug_snapshot", lambda **_: {})
+    monkeypatch.setattr(routes, "health_payload", lambda: {"imageBackend": "off"})
+    monkeypatch.setattr(routes, "_visual_probe_payload", lambda **_: calls.append("probe") or {"ok": True})
+    handler, capture = boundary_handler(monkeypatch, path=path, utility=routes)
+    for name in ("send_response", "send_header", "end_headers"):
+        setattr(handler, name, getattr(capture, name))
+    handler.headers.update(headers)
+    getattr(handler, "do_" + method)()
+    assert capture.code == status
+    assert calls == (["start" if path == "/sdcpp_start" else "probe"] if status == 200 else [])
+
+
+def test_visual_doctor_escapes_all_diagnostic_text(tmp_path, monkeypatch):
+    routes = utility_routes(tmp_path, monkeypatch)
+    marker = '<script id="probe">alert(1)</script>'
+    monkeypatch.setattr(routes, "health_payload", lambda: {"imageBackend": "off", "imageBackendConfigError": marker})
+    handler = Capture()
+    routes.visual_doctor_html(handler, "/visual_doctor")
+    html = handler.wfile.getvalue().decode()
+    assert marker not in html
+    assert "&lt;script" in html and "&lt;/script&gt;" in html
+
+
+@pytest.mark.parametrize("path", ["/trace.json", "/sdcpp_debug", "/visual_doctor.json", "/debug/recipes"])
+def test_private_diagnostics_reject_rebinding_host(monkeypatch, path):
+    handler, capture = boundary_handler(monkeypatch, path=path)
+    handler.headers["Host"] = "foreign.example:5055"
+    handler.do_GET()
+    assert capture.code == 403

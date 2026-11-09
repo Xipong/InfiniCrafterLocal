@@ -108,6 +108,7 @@ public sealed partial class InfiniCraftPlayer
     internal void ClearGeneratedUtilityState(bool syncNetwork = false)
     {
         ClearAirJumpState();
+        ClearGeneratedUtilityRespawnSync();
         bool changed = _generatedItemExhaustion.Count > 0 || _activeGeneratedUtilityBuffs.Count > 0 || _generatedBuffTicks > 0;
         ClearGeneratedItemExhaustion();
         _activeGeneratedUtilityBuffs.Clear();
@@ -119,18 +120,25 @@ public sealed partial class InfiniCraftPlayer
     {
         ResetDepartedNativeUseProjection();
         ClearAirJumpState();
+        CloseGeneratedUtilityRespawnSync();
         // Keep the last dead tick: queued activations from this life must not revive buffs.
         _generatedUtilityDeathTick = Main.GameUpdateCount;
         RetireGeneratedUtilityOnDeath(syncNetwork: true);
     }
 
+    private static bool RetiresGeneratedUtilityOnDeath(ActiveGeneratedUtilityBuff buff)
+        => buff.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+            || buff.InitialDurationTicks > GeneratedBuffSpec.PersistentAfterDeathMaxTicks;
+
     private void RetireGeneratedUtilityOnDeath(bool syncNetwork = false)
     {
+        // A death/spawn pair need not contain a scheduler/prune frame. Revoke
+        // only this owner's prior-life activations, retaining replay cursors.
+        Common.Runtime.RuntimeDelayedActionScheduler.RetireOwnerLife(Player);
+        Common.Runtime.GeneratedQuickUtilityActivation.RetireOwnerLife(Player);
         bool changed = _generatedItemExhaustion.Count > 0;
         ClearGeneratedItemExhaustion();
-        changed |= _activeGeneratedUtilityBuffs.RemoveAll(buff =>
-            buff.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks
-            || buff.InitialDurationTicks > GeneratedBuffSpec.PersistentAfterDeathMaxTicks) > 0;
+        changed |= _activeGeneratedUtilityBuffs.RemoveAll(RetiresGeneratedUtilityOnDeath) > 0;
         RebuildGeneratedUtilityBuffAggregate();
         if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
     }

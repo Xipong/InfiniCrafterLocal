@@ -1,6 +1,9 @@
 // Linked-source CPU checks. The packet capture boundary is not a Steam session.
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using InfiniCrafterLocal;
@@ -30,6 +33,9 @@ internal static class Program
             ("descriptor mismatch and HTTP mode refuse native bytes", AdmissionControls),
             ("per-client send budget remains independent", Pacing),
             ("disposed service cannot recreate packet work", Disposed),
+            ("stalled HTTP bodies release all slots for the next PNG", () => StalledHttpBodies().GetAwaiter().GetResult()),
+            ("continuing HTTP body progress cannot renew the absolute deadline", () => SlowDripHttpBodies().GetAwaiter().GetResult()),
+            ("disposing live HTTP work cancels readers and waiters without publication", () => DisposedHttpBodies().GetAwaiter().GetResult()),
         };
         int failures = 0;
         foreach (var check in checks)
@@ -39,6 +45,265 @@ internal static class Program
         }
         Console.WriteLine($"Asset transport checks: {checks.Length - failures}/{checks.Length} passed (linked source; no Steam session)");
         return failures == 0 ? 0 : 1;
+    }
+
+    private static async Task StalledHttpBodies()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "ifc-http-check-" + Guid.NewGuid().ToString("N"));
+        TMain.SavePath = root; TMain.netMode = 0; TMain.dedServ = false;
+        InfiniCrafterLocalMod.GeneratedItems = null;
+        byte[] png = Png(8, 8, 27);
+        using var service = new GeneratedAssetSyncService();
+        using var stopping = new CancellationTokenSource();
+        using var headersSent = new CountdownEvent(GeneratedAssetSyncService.HttpDownloadConcurrency);
+        var releaseBodies = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fifthServed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var clients = new List<Task>();
+        async Task Serve(TcpClient client)
+        {
+            using (client)
+            {
+                NetworkStream stream = client.GetStream();
+                using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+                string request = await reader.ReadLineAsync(stopping.Token) ?? "";
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync(stopping.Token))) { }
+                bool good = request.Contains("http_good.png", StringComparison.Ordinal);
+                byte[] header = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Length: {png.Length}\r\nContent-Type: image/png\r\nConnection: close\r\n\r\n");
+                await stream.WriteAsync(header, stopping.Token);
+                await stream.WriteAsync(good ? png : png.AsMemory(0, 8), stopping.Token);
+                await stream.FlushAsync(stopping.Token);
+                if (good) fifthServed.SetResult();
+                else { headersSent.Signal(); await releaseBodies.Task; }
+            }
+        }
+        Task server = Task.Run(async () =>
+        {
+            try
+            {
+                while (!stopping.IsCancellationRequested)
+                    clients.Add(Serve(await listener.AcceptTcpClientAsync(stopping.Token)));
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+        });
+        try
+        {
+            string url = "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port;
+            service.QueueDownloads(url, Enumerable.Range(0, 4).Select(index => $"stall_{index}.png"));
+            Require(headersSent.Wait(TimeSpan.FromSeconds(10)), "all four HTTP slots must receive headers and partial bodies");
+            service.QueueDownloads(url, new[] { "http_good.png" });
+            // The live body timeout is 12 seconds. This is a deadlock guard, not a speed assertion.
+            await fifthServed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Require(SpinWait.SpinUntil(() => service.GetDebugSnapshot().InFlightCount == 0, TimeSpan.FromSeconds(10)), "download cleanup did not finish");
+            string path = service.ResolveLocalPath("http_good.png") ?? "";
+            Require(File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(png), "fifth PNG was not committed byte-exactly");
+            Require(service.GetDebugSnapshot().KnownMissingCount == 4, "timed-out bodies did not enter the bounded retry path");
+            Require(!Directory.EnumerateFiles(service.CacheRoot, "stall_*.png", SearchOption.AllDirectories).Any(), "partial PNG escaped publication");
+        }
+        finally
+        {
+            service.Dispose();
+            releaseBodies.TrySetResult();
+            stopping.Cancel();
+            await server;
+            listener.Stop();
+            await Task.WhenAll(clients);
+            Require(SpinWait.SpinUntil(() => service.GetDebugSnapshot().InFlightCount == 0, TimeSpan.FromSeconds(10)), "cancelled downloads did not retire");
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // Real loopback HTTP only: the production downloader, deadline and shared slots
+    // remain intact. The responder models peers that keep writing or never finish.
+    private sealed class LoopbackHttpServer : IAsyncDisposable
+    {
+        private readonly TcpListener listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource stopping = new();
+        private readonly List<Task> clients = new();
+        private readonly Task accepting;
+        internal readonly ConcurrentQueue<string> Requests = new();
+        internal string Url => "http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        internal LoopbackHttpServer(Func<string, NetworkStream, CancellationToken, Task> respond)
+        {
+            listener.Start();
+            accepting = Accept();
+            async Task Accept()
+            {
+                try
+                {
+                    while (!stopping.IsCancellationRequested)
+                        clients.Add(Serve(await listener.AcceptTcpClientAsync(stopping.Token)));
+                }
+                catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+            }
+            async Task Serve(TcpClient client)
+            {
+                using (client)
+                {
+                    client.NoDelay = true;
+                    try
+                    {
+                        NetworkStream stream = client.GetStream();
+                        using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+                        string request = await reader.ReadLineAsync(stopping.Token) ?? "";
+                        while (!string.IsNullOrEmpty(await reader.ReadLineAsync(stopping.Token))) { }
+                        Requests.Enqueue(request);
+                        await respond(request, stream, stopping.Token);
+                    }
+                    catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+                    catch (IOException) when (stopping.IsCancellationRequested) { }
+                }
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            stopping.Cancel();
+            try
+            {
+                await accepting;
+                await Task.WhenAll(clients);
+            }
+            finally { listener.Stop(); stopping.Dispose(); }
+        }
+    }
+
+    private static async Task WriteHttpPngPrefix(NetworkStream stream, byte[] png, CancellationToken token)
+    {
+        byte[] header = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Length: {png.Length}\r\nContent-Type: image/png\r\nConnection: close\r\n\r\n");
+        await stream.WriteAsync(header, token);
+        await stream.WriteAsync(png.AsMemory(0, 8), token);
+        await stream.FlushAsync(token);
+    }
+
+    private sealed class TemporaryHttpCache(string prefix) : IDisposable
+    {
+        internal string Root { get; } = Path.Combine(Path.GetTempPath(), prefix + Guid.NewGuid().ToString("N"));
+        public void Dispose() { if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+    }
+
+    private static async Task SlowDripHttpBodies()
+    {
+        using var cache = new TemporaryHttpCache("ifc-drip-check-");
+        TMain.SavePath = cache.Root; TMain.netMode = 0; TMain.dedServ = false;
+        InfiniCrafterLocalMod.GeneratedItems = null;
+        byte[] png = Png(256, 256, 29);
+        using var service = new GeneratedAssetSyncService();
+        using var started = new CountdownEvent(GeneratedAssetSyncService.HttpDownloadConcurrency);
+        var progress = new ConcurrentDictionary<string, int>();
+        var recovered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using (var server = new LoopbackHttpServer(async (request, stream, token) =>
+        {
+            await WriteHttpPngPrefix(stream, png, token);
+            if (request.Contains("drip_recovery.png", StringComparison.Ordinal))
+            {
+                await stream.WriteAsync(png.AsMemory(8), token);
+                recovered.SetResult();
+                return;
+            }
+            progress[request] = 0;
+            started.Signal();
+            try
+            {
+                // Every write makes real body progress, much more often than the
+                // 12-second deadline. The valid PNG cannot finish within the guard.
+                for (int offset = 8; offset < png.Length; offset += 64)
+                {
+                    await stream.WriteAsync(png.AsMemory(offset, Math.Min(64, png.Length - offset)), token);
+                    await stream.FlushAsync(token);
+                    progress[request]++;
+                    await Task.Delay(TimeSpan.FromMilliseconds(100), token);
+                }
+                throw new InvalidOperationException("slow peer unexpectedly completed its entire PNG");
+            }
+            catch (IOException) { /* The deadline closes a still-progressing peer. */ }
+        }))
+        {
+            try
+            {
+                service.QueueDownloads(server.Url, Enumerable.Range(0, 4).Select(index => $"drip_{index}.png"));
+                Require(started.Wait(TimeSpan.FromSeconds(10)), "all slow peers must enter live body reads");
+                service.QueueDownloads(server.Url, new[] { "drip_recovery.png" });
+                // An inactivity timeout renewed on every chunk never releases a
+                // slot here. This is the same deadlock guard as the stalled case.
+                await recovered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                Require(SpinWait.SpinUntil(() => service.GetDebugSnapshot().InFlightCount == 0, TimeSpan.FromSeconds(10)), "slow downloads did not retire");
+                Require(progress.Count == 4 && progress.Values.All(count => count >= 3), "fixture did not deliver repeated body progress on all four peers");
+                Require(service.GetDebugSnapshot().KnownMissingCount == 4, "slow body deadlines did not enter retry state");
+                string path = service.ResolveLocalPath("drip_recovery.png") ?? "";
+                Require(File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(png), "post-deadline PNG did not retain exact bytes");
+                Require(!Directory.EnumerateFiles(service.CacheRoot, "drip_*.png", SearchOption.AllDirectories).Any(path => Path.GetFileName(path) != "drip_recovery.png"), "slow partial body was published");
+                Require(!Directory.EnumerateFiles(service.CacheRoot, "*.part", SearchOption.AllDirectories).Any(), "slow partial file escaped cleanup");
+                Console.WriteLine("  slow HTTP body writes before retirement: " + string.Join(", ", progress.Values.OrderBy(count => count)));
+            }
+            finally { service.Dispose(); }
+        }
+    }
+
+    private static async Task DisposedHttpBodies()
+    {
+        using var cache = new TemporaryHttpCache("ifc-dispose-http-check-");
+        TMain.SavePath = Path.Combine(cache.Root, "retired"); TMain.netMode = 0; TMain.dedServ = false;
+        InfiniCrafterLocalMod.GeneratedItems = null;
+        byte[] png = Png(8, 8, 31);
+        using var retired = new GeneratedAssetSyncService();
+        TMain.SavePath = Path.Combine(cache.Root, "recovery");
+        using var recovery = new GeneratedAssetSyncService();
+        using var live = new CountdownEvent(GeneratedAssetSyncService.HttpDownloadConcurrency);
+        using var closed = new CountdownEvent(GeneratedAssetSyncService.HttpDownloadConcurrency);
+        using var reacquired = new CountdownEvent(GeneratedAssetSyncService.HttpDownloadConcurrency);
+        var releaseRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using (var server = new LoopbackHttpServer(async (request, stream, token) =>
+        {
+            await WriteHttpPngPrefix(stream, png, token);
+            if (request.Contains("recovery_", StringComparison.Ordinal))
+            {
+                reacquired.Signal();
+                await releaseRecovery.Task.WaitAsync(token);
+                await stream.WriteAsync(png.AsMemory(8), token);
+                return;
+            }
+            live.Signal();
+            try
+            {
+                int count = await stream.ReadAsync(new byte[1], token);
+                Require(count == 0, "cancelled HTTP client sent unexpected bytes");
+            }
+            catch (IOException) { /* Cancellation may reset rather than close TCP. */ }
+            closed.Signal();
+        }))
+        {
+            try
+            {
+                retired.QueueDownloads(server.Url, Enumerable.Range(0, 4).Select(index => $"retired_{index}.png"));
+                Require(live.Wait(TimeSpan.FromSeconds(10)), "four partial bodies must be live before disposal");
+                retired.QueueDownloads(server.Url, new[] { "queued_before_dispose.png" });
+                Require(retired.GetDebugSnapshot().InFlightCount == 5, "fifth worker must be waiting for an occupied HTTP slot");
+                retired.Dispose();
+                retired.QueueDownloads(server.Url, new[] { "queued_after_dispose.png" });
+                // Dispose clears public bookkeeping synchronously, so that alone
+                // is not cleanup evidence. Observe the live sockets close and make
+                // another service simultaneously reacquire every shared HTTP slot.
+                recovery.QueueDownloads(server.Url, Enumerable.Range(0, 4).Select(index => $"recovery_{index}.png"));
+                Require(closed.Wait(TimeSpan.FromSeconds(5)), "Dispose did not cancel live HTTP readers before the body deadline");
+                Require(reacquired.Wait(TimeSpan.FromSeconds(5)), "Dispose leaked a shared HTTP slot");
+                Require(recovery.GetDebugSnapshot().InFlightCount == 4, "recovery fixture must hold all four slots at once");
+                releaseRecovery.SetResult();
+                Require(SpinWait.SpinUntil(() => recovery.GetDebugSnapshot().InFlightCount == 0, TimeSpan.FromSeconds(10)), "recovery downloads did not finish");
+                for (int index = 0; index < 4; index++)
+                {
+                    string path = recovery.ResolveLocalPath($"recovery_{index}.png") ?? "";
+                    Require(File.Exists(path) && File.ReadAllBytes(path).SequenceEqual(png), "reacquired slot failed byte-exact publication");
+                }
+                Require(server.Requests.Count == 8, "cancelled waiter or disposed service started a new HTTP request");
+                Require(server.Requests.All(request => !request.Contains("queued_", StringComparison.Ordinal)), "disposed queued work reached the peer");
+                Require(retired.GetDebugSnapshot().InFlightCount == 0 && retired.GetDebugSnapshot().KnownMissingCount == 0, "service cancellation became retryable work");
+                Require(!Directory.EnumerateFiles(retired.CacheRoot, "*", SearchOption.AllDirectories).Any(), "retired service published partial or final bytes");
+            }
+            finally { retired.Dispose(); recovery.Dispose(); releaseRecovery.TrySetResult(); }
+        }
     }
 
     private static void Require(bool condition, string message)

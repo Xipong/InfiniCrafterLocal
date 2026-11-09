@@ -451,6 +451,11 @@ def test_source_receipt_projection_rejects_bool_for_identity_integer():
 )
 def test_global_receipts_reject_valid_changed_primary_source(fixture, primary, lowerer):
     source = build_runtime_fixture(fixture)
+    # Both primary choices must be valid before testing receipt identity.
+    # A secondary projectile cannot retain the fixture's held-owner claim.
+    source["runtimeProgram"]["calls"] = [
+        call for call in source["runtimeProgram"]["calls"] if call["fn"] != "set_owner_control"
+    ]
     assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)
     frozen_wire = deepcopy(wire)
@@ -509,6 +514,9 @@ def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation
         program["entities"].append({"id": "other_held", "kind": "owner_attached_projectile"})
         for call in list(program["calls"]):
             if call.get("target") == "held_lantern_pike":
+                # The extra entity shares its visual kind, not primary ownership.
+                if call["fn"] == "set_owner_control":
+                    continue
                 extra = deepcopy(call)
                 extra.update(id="other_" + call["id"], target="other_held")
                 program["calls"].append(extra)

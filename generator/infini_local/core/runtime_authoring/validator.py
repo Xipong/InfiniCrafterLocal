@@ -146,6 +146,11 @@ def _rows(value: Any) -> list[dict[str, Any]]:
 def _calls_by_target(program: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
     out: dict[str, list[dict[str, Any]]] = {}
     for call in _rows(program.get("calls")):
+        # An undecided function has no semantic component/dependency identity.
+        # Keep its raw row and index for strict shape diagnostics and Repair,
+        # but never hash a list/object selector in downstream registry lookups.
+        if not isinstance(call.get("fn"), str):
+            continue
         out.setdefault(str(call.get("target") or ""), []).append(call)
     return out
 
@@ -1284,7 +1289,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         issues.append(ValidationIssue("$.runtimeProgram.calls", "illegal_event_cycle", "Runtime entity graph contains a cycle: " + " -> ".join(cycle) + ".", ("remove one edge", "use a non-cyclic bounded child"), cycle))
         depth: int | None = None
     else:
-        depth = _max_depth(event_edges, binding_spawn_roots)
+        depth = _max_depth(event_edges, event_edges)
         if depth > MAX_CHILD_DEPTH:
             issues.append(ValidationIssue("$.runtimeProgram.calls", "child_depth_budget", f"Runtime graph depth {depth} exceeds {MAX_CHILD_DEPTH}.", (f"depth <= {MAX_CHILD_DEPTH}",)))
     event_spawn_budget += max(input_spawn_budgets.values())
@@ -1460,6 +1465,13 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                 "Active owner-channel consumers require item_use.channel=true.",
                 ("item_use.channel=true",),
                 (str(row.get("id") or ""),) if wire else (item_owner_id,)))
+        if fn == "set_owner_control" and not primary:
+            if p.get("claimHeldProjectile") is True:
+                reject(row, "claimHeldProjectile", "incompatible_param_variant",
+                       "Only primaryEntityId may claim the native held projectile.", ("false",))
+            if p.get("animation") in ("keep_alive", "match_lifetime"):
+                reject(row, "animation", "incompatible_param_variant",
+                       "Only primaryEntityId may override owner animation.", ("none",))
         if fn == "rotate_sprite" and p.get("mode") != "spin" and leaf(row, "radiansPerSecond") not in (0, None):
             reject(row, "radiansPerSecond", "incompatible_param_variant", "Non-spin rotation has exact zero angular rate.")
         if fn == "sustain_mana":

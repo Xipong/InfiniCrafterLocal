@@ -111,6 +111,13 @@ def test_bounded_graph_shared_profile_survives_excluded_first_edge_without_cycle
     assert result['projectiles'][1]['captures'][0]['sourcePath'] == \
         'directProjectile.referencedProjectiles.references[0].profile'
     assert result['uncertainty']['excludedChildProfiles'][0]['child'] == 202
+    envelope = next(row['value'] for row in result['uncertainty']['sourceFacts']
+                    if row['sourcePath'] == 'directProjectile.referencedProjectiles')
+    excluded, admitted = envelope['references']
+    assert excluded['referenceExclusion'] == 'all_indexed_calls_in_identity_excluded_arms'
+    assert 'referenceExclusion' not in admitted
+    assert excluded['profileSourcePath'] == admitted['profileSourcePath'] == result['projectiles'][1]['captures'][0]['sourcePath']
+    assert envelope['sourceCalls'] == calls
     assert raw == before
 
 

@@ -64,7 +64,9 @@ internal static class RuntimeDelayedActionScheduler
     {
         if (data is null || action is null || owner is null || !owner.active || source is null || action.DelayTicks <= 0)
             return false;
-        if (owner.dead && action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff)
+        if (owner.dead && action.ActionCode is (RuntimeEventActionCode.ApplyGeneratedBuff
+                or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner)
+            || owner.statLife <= 0 && action.ActionCode is (RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner))
             return false;
         if (!RuntimeProgramExecutor.HasActionAuthority(action, owner))
             return false;
@@ -235,9 +237,14 @@ internal static class RuntimeDelayedActionScheduler
                 pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;
             }
-            if (pending.Action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff
+            // Self-directed delayed actions belong to the life that admitted them.
+            // Existing short buffs retain their intentional post-death duration;
+            // this fences only queued activations, not already-applied effects.
+            if (pending.Action.ActionCode is (RuntimeEventActionCode.ApplyGeneratedBuff
+                    or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner)
                 && (owner.dead || !owner.GetModPlayer<InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>()
-                    .IsGeneratedUtilityActivationCurrent(pending.EnqueuedTick)))
+                    .IsGeneratedUtilityActivationCurrent(pending.EnqueuedTick))
+                || owner.statLife <= 0 && pending.Action.ActionCode is (RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner))
             {
                 pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;
@@ -286,6 +293,19 @@ internal static class RuntimeDelayedActionScheduler
                     parentCombat: pending.ParentCombat, hitTargetSpawn: pending.HitTargetSpawn);
             }
             ExecutedThisTick++;
+        }
+    }
+
+    internal static void RetireOwnerLife(Player owner)
+    {
+        for (int i = Pending.Count - 1; i >= 0; i--)
+        {
+            PendingAction pending = Pending[i];
+            if (!ReferenceEquals(pending.Owner, owner)
+                || pending.Action.ActionCode is not (RuntimeEventActionCode.ApplyGeneratedBuff
+                    or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner)) continue;
+            Pending.RemoveAt(i);
+            pending.Budget.Return(pending.ReservedSpawnBudget);
         }
     }
 

@@ -1,4 +1,4 @@
-// Test-only DTO and tML boundaries. No game loop, sockets, Steam, or GPU is run.
+// Test-only DTO and tML boundaries. No game loop, tML sockets, Steam, or GPU is run.
 // PNG validation, request scheduling, bundle codec, queues, and file commits are
 // the complete linked production GeneratedAssetSyncService implementation.
 using System.Text;

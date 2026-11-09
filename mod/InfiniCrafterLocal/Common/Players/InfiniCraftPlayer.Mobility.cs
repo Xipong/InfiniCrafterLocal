@@ -38,6 +38,11 @@ public sealed partial class InfiniCraftPlayer
         public string SourceItemId = "";
         public string SourceDefinitionIdentity = "";
         public long SourceGeneration;
+        // Predicted tokens are even, authority tokens odd. A confirmed row can
+        // retain its one local alias without trusting that alias on the server.
+        public long SourcePredictionGeneration;
+        public bool SourceAuthorityConfirmed;
+        public uint? SourceFinalTick;
         public string SourceComponent = "";
         // Local attachment identity, retained only across snapshots of a still
         // live exact row. Reappearing wire tokens cannot revive expired VFX.
@@ -85,6 +90,48 @@ public sealed partial class InfiniCraftPlayer
     }
 
     private long _nextGeneratedBuffSourceGeneration;
+    private long _lastAuthoritativeBuffGeneration;
+    private readonly List<ActiveGeneratedUtilityBuff> _finalTickAirJumpSources = new();
+    private readonly HashSet<(string Item, string Definition, string Component)> _retiredAirJumpPredictions = new();
+    private bool _airJumpPredictionHistoryOverflow;
+    private bool _airJumpAuthorityInitialized;
+    private object? _airJumpAuthoritySocket;
+    private string _airJumpAuthorityWorld = "";
+
+    private static (string Item, string Definition, string Component) AirJumpPredictionKey(ActiveGeneratedUtilityBuff buff)
+        => (buff.SourceItemId, buff.SourceDefinitionIdentity, buff.SourceComponent);
+
+    private void RetireAirJumpPrediction(ActiveGeneratedUtilityBuff buff)
+    {
+        if (buff.SourceGeneration >= 0 || buff.SourceAuthorityConfirmed) return;
+        if (_retiredAirJumpPredictions.Count < MaxAirJumpSources)
+            _retiredAirJumpPredictions.Add(AirJumpPredictionKey(buff));
+        else _airJumpPredictionHistoryOverflow = true; // fail closed instead of evicting history
+    }
+
+    private bool IsCurrentAirJumpAuthority => !_airJumpAuthorityInitialized
+        || ReferenceEquals(_airJumpAuthoritySocket, Netplay.Connection?.Socket)
+            && _airJumpAuthorityWorld == GeneratedItemRegistryService.CurrentWorldIdString();
+
+    private void EnsureAirJumpAuthorityScope()
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient) return;
+        if (!IsCurrentAirJumpAuthority) RetireAirJumpAuthority();
+        _airJumpAuthorityInitialized = true;
+        _airJumpAuthoritySocket = Netplay.Connection?.Socket;
+        _airJumpAuthorityWorld = GeneratedItemRegistryService.CurrentWorldIdString();
+    }
+
+    internal void RetireAirJumpAuthority()
+    {
+        ClearAirJumpState();
+        _activeGeneratedUtilityBuffs.RemoveAll(buff => buff.PlayerEffect?.AirJump is not null);
+        RebuildGeneratedUtilityBuffAggregate();
+        _lastAuthoritativeBuffGeneration = 0;
+        _retiredAirJumpPredictions.Clear();
+        _airJumpPredictionHistoryOverflow = false;
+        _airJumpAuthorityInitialized = false;
+    }
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
     {
@@ -107,6 +154,7 @@ public sealed partial class InfiniCraftPlayer
         GeneratedItemData? source = null, uint? activationTick = null)
     {
         if (buff is null) return false;
+        EnsureAirJumpAuthorityScope();
         if (Player.dead || !IsGeneratedUtilityActivationCurrent(activationTick))
         {
             if (syncNetwork) CorrectGeneratedBuffPrediction();
@@ -170,14 +218,20 @@ public sealed partial class InfiniCraftPlayer
                 if (_activeGeneratedUtilityBuffs.Count >= 32)
                 {
                     var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
+                    RetireAirJumpPrediction(shortest);
                     _activeGeneratedUtilityBuffs.Remove(shortest);
                 }
                 if (incoming.PlayerEffect?.AirJump is not null)
                 {
                     // Negative tokens are disjoint from equipment presentation
                     // tokens. Refreshing an existing entry preserves its lifetime.
-                    if (_nextGeneratedBuffSourceGeneration == long.MinValue) return false;
-                    incoming.SourceGeneration = --_nextGeneratedBuffSourceGeneration;
+                    if (_nextGeneratedBuffSourceGeneration <= long.MinValue / 2) return false;
+                    foreach (var finalTick in _finalTickAirJumpSources)
+                        if (AirJumpPredictionKey(finalTick) == AirJumpPredictionKey(incoming))
+                            RetireAirJumpPrediction(finalTick);
+                    long sequence = --_nextGeneratedBuffSourceGeneration;
+                    incoming.SourceAuthorityConfirmed = Main.netMode != NetmodeID.MultiplayerClient;
+                    incoming.SourceGeneration = sequence * 2 + (incoming.SourceAuthorityConfirmed ? 1 : 0);
                 }
                 _activeGeneratedUtilityBuffs.Add(incoming);
             }
@@ -396,28 +450,12 @@ public sealed partial class InfiniCraftPlayer
             && destination.Y + Player.height < (Main.maxTilesY - 1) * 16f;
 
     private bool IsSafeBlinkDestination(Vector2 destination)
-    {
-        Rectangle target = new((int)destination.X, (int)destination.Y, Player.width, Player.height);
-        if (target.Left < 16 || target.Top < 16 || target.Right >= (Main.maxTilesX - 1) * 16 || target.Bottom >= (Main.maxTilesY - 1) * 16)
-            return false;
-        int left = Math.Max(0, target.Left / 16 - 1);
-        int right = Math.Min(Main.maxTilesX - 1, target.Right / 16 + 1);
-        int top = Math.Max(0, target.Top / 16 - 1);
-        int bottom = Math.Min(Main.maxTilesY - 1, target.Bottom / 16 + 1);
-        for (int x = left; x <= right; x++)
-        for (int y = top; y <= bottom; y++)
-        {
-            Tile tile = Main.tile[x, y];
-            if (tile.HasTile && Main.tileSolid[tile.TileType] && !Main.tileSolidTop[tile.TileType])
-            {
-                Rectangle block = new(x * 16, y * 16, 16, 16);
-                if (target.Intersects(block)) return false;
-            }
-            if (tile.LiquidAmount > 0 && tile.LiquidType == LiquidID.Lava)
-                return false;
-        }
-        return true;
-    }
+        // Safe policy follows native body geometry, including actuated/half
+        // blocks and actual lava overlap. Finite/world bounds apply to both
+        // safe and unsafe destinations before any native collision query.
+        => IsBlinkWithinWorld(destination)
+            && !Collision.SolidCollision(destination, Player.width, Player.height)
+            && !Collision.LavaCollision(destination, Player.width, Player.height);
 
 
     private bool IsContinuouslyHeldAirJumpBuff(ActiveGeneratedUtilityBuff active)
@@ -451,7 +489,17 @@ public sealed partial class InfiniCraftPlayer
                 else
                     active.Ticks--;
                 if (active.Ticks <= 0)
+                {
+                    // The effect already granted this tick's native jump. Keep
+                    // only its presentation witness through movement, never its
+                    // stats, duration or next-tick availability.
+                    if (active.PlayerEffect?.AirJump is not null)
+                    {
+                        active.SourceFinalTick = Main.GameUpdateCount;
+                        _finalTickAirJumpSources.Add(active);
+                    }
                     _activeGeneratedUtilityBuffs.RemoveAt(index);
+                }
             }
             RebuildGeneratedUtilityBuffAggregate();
         }

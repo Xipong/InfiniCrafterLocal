@@ -123,10 +123,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
         return style == expectedStyle && alternate >= 0;
     }
 
-    private static List<GeneratedPlacementKey> FindExactPlacedBodyCells(PlacementAuthorization authorization)
+    private static List<GeneratedPlacementKey> FindExactTileCells(PlacementAuthorization authorization)
     {
         RuntimePlacementSpec? placement = authorization.ExactPlacement;
-        if (placement is null || (!placement.HasPlacedFootprint && !IsNativeChestPlacement(placement)) || authorization.Layer != GeneratedPlacementLayer.Tile)
+        if (placement is null || authorization.Layer != GeneratedPlacementLayer.Tile)
             return new();
         if (!TryResolveMaterialFootprint(authorization.TargetX, authorization.TargetY,
             authorization.ExpectedType, placement.PlaceStyle, out int x, out int y,
@@ -164,7 +164,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         if (authorization.ExactPlacement.PlacedBody is null) witness["lightOnly"] = 1;
         if (authorization.ExactPlacement.PlacedLight is not null || authorization.ExactPlacement.PlacedVfx is not null)
         {
-            // FindExactPlacedBodyCells already proved this complete rectangle.
+            // FindExactTileCells already proved this complete rectangle.
             // Light needs material geometry, not the optional PNG pose decoder.
             int left = cells.Min(cell => cell.X), top = cells.Min(cell => cell.Y);
             witness["originX"] = left; witness["originY"] = top;
