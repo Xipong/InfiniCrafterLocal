@@ -61,7 +61,10 @@ internal static partial class EngineRuntimeChecks
                             observedPromotionMarker = File.Exists(Path.Combine(path, InfiniDumpCommand.DumpIncompleteStateName));
                     });
             }
-            catch (IOException) { refused = true; }
+            // Replacing a directory is IOException on Unix and
+            // UnauthorizedAccessException on Windows. Both are the injected
+            // pointer-publication failure; every recovery assertion still runs.
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { refused = true; }
             Equal(true, refused, "pointer replacement error is terminal");
             Equal(true, observedPromotionMarker, "durable incomplete marker survives promotion until pointer publication");
             Equal("do not replace", File.ReadAllText(Path.Combine(target, "sentinel")), "failed pointer replacement does not destroy old target");
@@ -87,6 +90,59 @@ internal static partial class EngineRuntimeChecks
             Equal(true, Math.Abs(expected - observed) < 1024 * 1024,
                 "disk probe uses destination mount rather than filesystem root");
         }
+    }
+
+    private static void RuntimeDumpCanonicalDefinitionsExcludeRedirectedAliases()
+    {
+        using var state = new NativeActorState();
+        InitializePopulatedParentCapture();
+        int[] aliases = { 226, 1803, 1804, 1805, 1806, 1807 };
+        int[] canonical = { 227, 1533, 1534, 1535, 1536, 1537 };
+        for (int n = 0; n < aliases.Length; n++)
+        {
+            var redirected = new Item(); redirected.SetDefaults(aliases[n]);
+            Equal(canonical[n], redirected.type, "fixture observes actual native redirect rather than renaming row identity");
+            Equal(false, redirected.IsAir || string.IsNullOrWhiteSpace(redirected.Name), "old air/name filter alone admits duplicate alias");
+            Equal(false, InfiniDumpCommand.IsExportableItemDefinition(aliases[n], redirected), "redirected ID is not a second canonical definition");
+            Equal(true, InfiniDumpCommand.IsExportableItemDefinition(canonical[n], new Item(canonical[n])), "canonical definition remains exportable");
+        }
+        Equal(false, InfiniDumpCommand.IsExportableItemDefinition(0, new Item()), "air remains excluded");
+        var first = new Item(ItemID.Wood); first.SetNameOverride("same presentation name");
+        var second = new Item(ItemID.StoneBlock); second.SetNameOverride("same presentation name");
+        Equal(true, InfiniDumpCommand.IsExportableItemDefinition(first.type, first)
+            && InfiniDumpCommand.IsExportableItemDefinition(second.type, second), "display name never deduplicates distinct canonical definitions");
+        var admitted = new System.Collections.Generic.HashSet<int>();
+        for (int requested = 1; requested < ItemID.Count; requested++)
+        {
+            var item = new Item(); item.SetDefaults(requested);
+            if (!InfiniDumpCommand.IsExportableItemDefinition(requested, item)) continue;
+            Equal(requested, item.type, "catalog selector preserves actual native identity");
+            Equal(true, admitted.Add(item.type), "every admitted vanilla definition has one unique identity");
+        }
+        string root = Directory.CreateTempSubdirectory("ifc-dump-alias-").FullName;
+        try
+        {
+            int[] requestedTypes = aliases.Zip(canonical, (alias, type) => new[] { alias, type }).SelectMany(pair => pair).ToArray();
+            MethodInfo capture = typeof(InfiniDumpCommand).GetMethod("CaptureItemSnapshotForExport", BindingFlags.NonPublic | BindingFlags.Static)!;
+            var export = new RuntimeDumpExport(root, requestedTypes.Length + 1, 1, index =>
+            {
+                int requested = requestedTypes[index - 1];
+                var item = new Item(); item.SetDefaults(requested);
+                return InfiniDumpCommand.IsExportableItemDefinition(requested, item)
+                    ? (JsonObject)capture.Invoke(null, new object[] { item, false })! : null;
+            }, _ => null, DumpTestEnvironment());
+            var elapsed = Stopwatch.StartNew();
+            while (!export.Completion.IsCompleted && elapsed.Elapsed < TimeSpan.FromSeconds(120))
+            { GeneratorClient.ParentAnalysis.Pump(); export.Pump(); Thread.Sleep(1); }
+            if (!export.Completion.IsCompleted) export.Cancel();
+            Equal(true, export.Completion.IsCompleted, "actual incremental alias catalog completes");
+            var manifest = export.Completion.GetAwaiter().GetResult();
+            string path = Path.Combine(root, manifest["files"]!["items"]!["path"]!.GetValue<string>());
+            int[] identities = File.ReadLines(path).Select(line => JsonNode.Parse(line)!["type"]!.GetValue<int>()).ToArray();
+            Equal(string.Join(",", canonical), string.Join(",", identities), "canonical observations survive once each, without silently replacing or dropping conflicting rows");
+            Equal(canonical.Length, manifest["files"]!["items"]!["rows"]!.GetValue<int>(), "published descriptor counts only canonical definitions");
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     private static void RuntimeDumpCurrentVanillaSampleUsesIncrementalExport()

@@ -292,6 +292,7 @@ internal static partial class EngineRuntimeChecks
             ("runtime dump failed publication preserves diagnostic files", RuntimeDumpFailedPublicationPreservesDiagnosticFiles),
             ("runtime dump disk probe uses destination filesystem", RuntimeDumpDiskProbeUsesDestinationFilesystem),
             ("runtime dump current vanilla sample incremental capture", RuntimeDumpCurrentVanillaSampleUsesIncrementalExport),
+            ("runtime dump canonical definitions exclude redirected aliases", RuntimeDumpCanonicalDefinitionsExcludeRedirectedAliases),
             ("parent deferred craft complete synchronous parity", ParentDeferredCraftMatchesSynchronousFacts),
             ("parent shared source cache bounds and invalidation", ParentSharedSourceCacheBoundsAndInvalidation),
             ("parent source memo budget and projection parity", ParentSourceMemoBudgetBoundsRetainedControlFacts),
