@@ -63,31 +63,49 @@ public sealed partial class GeneratorClient
         };
     }
 
-    // An explicit store outside a retained excerpt may be ignored only when
-    // its own typed AST expression is in a false identity arm. Every other
-    // explicit store/address in the original method still vetoes specialization,
-    // so the assumptions cannot hide a preceding or unknown-path identity change.
+    // The outcome of a completed condition can be fixed even when an opaque
+    // prefix must still run. Use this only to empty the impossible arm, never
+    // to erase or reorder the original condition (including calls/throws).
+    private static bool? MechanicsConditionOutcome(Expression expression, int type, int style)
+    {
+        if (expression is ParenthesizedExpression parens) return MechanicsConditionOutcome(parens.Expression, type, style);
+        if (expression is UnaryOperatorExpression { Operator: UnaryOperatorType.Not } unary)
+        { var value = MechanicsConditionOutcome(unary.Expression, type, style); return value is null ? null : !value.Value; }
+        if (expression is BinaryOperatorExpression binary
+            && binary.Operator is BinaryOperatorType.ConditionalAnd or BinaryOperatorType.ConditionalOr)
+        {
+            bool? left = MechanicsConditionOutcome(binary.Left, type, style);
+            bool? right = MechanicsConditionOutcome(binary.Right, type, style);
+            if (binary.Operator == BinaryOperatorType.ConditionalAnd)
+                return left == false || right == false ? false : left == true && right == true ? true : null;
+            return left == true || right == true ? true : left == false && right == false ? false : null;
+        }
+        return MechanicsCondition(expression, type, style);
+    }
+
+    // A direct identity access is irrelevant only inside a typed, false
+    // identity arm with no inbound control transfer. This applies equally to
+    // a whole method and a retained excerpt. Every other original IL access
+    // still vetoes pruning, including preceding and unknown-path mutations.
+    private static bool MechanicsInExcludedIdentityArm(NativeCSharpDocument document, AstNode node, int type, int style)
+    {
+        bool Under(AstNode value, AstNode ancestor) => value == ancestor || value.Ancestors.Contains(ancestor);
+        foreach (var branch in node.Ancestors.OfType<IfElseStatement>())
+        {
+            bool? condition = MechanicsCondition(branch.Condition, type, style);
+            if (condition is null) continue;
+            var discarded = condition.Value ? branch.FalseStatement : branch.TrueStatement;
+            if (!Under(node, discarded)) continue;
+            var labels = discarded.DescendantsAndSelf.OfType<LabelStatement>().Select(label => label.Label).ToHashSet();
+            if (document.Tree.Descendants.OfType<GotoStatement>().Any(jump => labels.Contains(jump.Label) && !Under(jump, discarded))
+                || document.Tree.Descendants.OfType<GotoCaseStatement>().Any()) continue;
+            return true;
+        }
+        return false;
+    }
+
     private static bool MechanicsExcludedIdentityAccess(NativeCSharpDocument document, int offset, int type, int style)
     {
-        bool Under(AstNode node, AstNode ancestor) => node == ancestor || node.Ancestors.Contains(ancestor);
-        bool Excluded(AstNode node)
-        {
-            foreach (var branch in node.Ancestors.OfType<IfElseStatement>())
-            {
-                bool? condition = MechanicsCondition(branch.Condition, type, style);
-                if (condition is null) continue;
-                var discarded = condition.Value ? branch.FalseStatement : branch.TrueStatement;
-                if (!Under(node, discarded)) continue;
-                // Local decompiler gotos inside a discarded arm are harmless.
-                // An inbound jump would bypass its guard and invalidates this
-                // exclusion. Goto-case scopes remain unsupported here.
-                var labels = discarded.DescendantsAndSelf.OfType<LabelStatement>().Select(label => label.Label).ToHashSet();
-                if (document.Tree.Descendants.OfType<GotoStatement>().Any(jump => labels.Contains(jump.Label) && !Under(jump, discarded))
-                    || document.Tree.Descendants.OfType<GotoCaseStatement>().Any()) continue;
-                return true;
-            }
-            return false;
-        }
         var accesses = document.Declaration.Body.Descendants.OfType<Expression>().Where(node =>
             node is AssignmentExpression assignment && MechanicsIdentityField(assignment.Left, out _, false)
             || node is UnaryOperatorExpression unary && unary.Operator is UnaryOperatorType.Increment or UnaryOperatorType.Decrement
@@ -105,7 +123,7 @@ public sealed partial class GeneratorClient
                             && code.Arg is FieldInfo field && field.DeclaringType == typeof(Projectile)
                             && MechanicsIdentityField(((UnaryOperatorExpression)node).Expression, out string name, false)
                             && name == field.Name))).ToArray();
-        return accesses.Length > 0 && accesses.All(Excluded);
+        return accesses.Length > 0 && accesses.All(node => MechanicsInExcludedIdentityArm(document, node, type, style));
     }
 
     private static string? MechanicsPruningRefusal(NativeCSharpDocument document, AstNode? region = null, int type = 0, int style = 0)
@@ -126,7 +144,7 @@ public sealed partial class GeneratorClient
         foreach (var instruction in AttackCode(document.Method))
             if (instruction.Arg is FieldInfo field && field.DeclaringType == typeof(Projectile) && field.Name is "type" or "aiStyle")
             {
-                if (region is not null && instruction.Op is "stfld" or "ldflda"
+                if (instruction.Op is "stfld" or "ldflda"
                     && MechanicsExcludedIdentityAccess(document, instruction.Offset, type, style)) continue;
                 if (instruction.Op == "ldflda") return "identity_field_address_exposure_not_pruned";
                 if (instruction.Op == "stfld") return "explicit_identity_write_not_pruned";
@@ -135,10 +153,13 @@ public sealed partial class GeneratorClient
         {
             if (node is GotoStatement or GotoCaseStatement or LabelStatement or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)
                 return "nonlocal_control_or_nested_scope_not_pruned";
-            if (node is AssignmentExpression assignment && MechanicsIdentityField(assignment.Left, out _, false)) return "explicit_identity_write_not_pruned";
+            if (node is AssignmentExpression assignment && MechanicsIdentityField(assignment.Left, out _, false)
+                && !MechanicsInExcludedIdentityArm(document, node, type, style)) return "explicit_identity_write_not_pruned";
             if (node is UnaryOperatorExpression unary && unary.Operator is UnaryOperatorType.Increment or UnaryOperatorType.Decrement or UnaryOperatorType.PostIncrement or UnaryOperatorType.PostDecrement
-                && MechanicsIdentityField(unary.Expression, out _, false)) return "explicit_identity_write_not_pruned";
-            if (node is DirectionExpression direction && direction.Expression.DescendantsAndSelf.OfType<Expression>().Any(value => MechanicsIdentityField(value, out _, false)))
+                && MechanicsIdentityField(unary.Expression, out _, false)
+                && !MechanicsInExcludedIdentityArm(document, node, type, style)) return "explicit_identity_write_not_pruned";
+            if (node is DirectionExpression direction && direction.Expression.DescendantsAndSelf.OfType<Expression>().Any(value => MechanicsIdentityField(value, out _, false))
+                && !MechanicsInExcludedIdentityArm(document, node, type, style))
                 return "identity_address_exposure_not_pruned";
         }
         return null;
@@ -353,7 +374,7 @@ public sealed partial class GeneratorClient
             refusal = capturedReceiverBound ? null : "captured_receiver_binding_unproved";
             gaps.Add("conditional_source_excerpts; original_guards_must_be_reached; enclosing_dispatch_and_runtime_hooks_unknown");
         }
-        else refusal = capturedReceiverBound ? MechanicsPruningRefusal(document) : "captured_receiver_binding_unproved";
+        else refusal = capturedReceiverBound ? MechanicsPruningRefusal(document, type: type, style: style) : "captured_receiver_binding_unproved";
         int removed = 0, removedSections = 0, removedUnreachable = 0, removedEmpty = 0;
         var removedInvocations = new HashSet<InvocationExpression>();
         if (refusal is null)
@@ -374,7 +395,17 @@ public sealed partial class GeneratorClient
                 {
                     if (retainedGuards.Contains(branch)) continue;
                     bool? condition = MechanicsCondition(branch.Condition, type, style);
-                    if (condition is null) continue;
+                    if (condition is null)
+                    {
+                        bool? outcome = MechanicsConditionOutcome(branch.Condition, type, style);
+                        if (outcome is null) continue;
+                        var impossible = outcome.Value ? branch.FalseStatement : branch.TrueStatement;
+                        removedInvocations.UnionWith(impossible.DescendantsAndSelf.OfType<InvocationExpression>());
+                        if (outcome.Value) branch.FalseStatement = Statement.Null;
+                        else branch.TrueStatement = new BlockStatement();
+                        removed++;
+                        continue;
+                    }
                     var selected = condition.Value ? branch.TrueStatement : branch.FalseStatement;
                     var discarded = condition.Value ? branch.FalseStatement : branch.TrueStatement;
                     removedInvocations.UnionWith(discarded.DescendantsAndSelf.OfType<InvocationExpression>());

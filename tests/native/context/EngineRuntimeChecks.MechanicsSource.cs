@@ -23,6 +23,12 @@ internal static partial class EngineRuntimeChecks
             if (type != 177 && Touch()) damage += 9;
             if (type == 177) velocity.X *= 2;
         }
+        public void OpaqueIdentitySuffix()
+        {
+            if (Touch() && type == 178) NewProjectile(null!, position.X, position.Y, 0, 0, 601, 1, 1, owner);
+            if (Touch() || type == 177) damage += 977;
+            else NewProjectile(null!, position.X, position.Y, 0, 0, 602, 1, 1, owner);
+        }
         public void ConditionalRegion()
         {
             if (aiStyle == 1)
