@@ -190,6 +190,69 @@ def prepare_whole_method_author(item: dict) -> tuple[dict, list[dict]]:
     return result, choices
 
 
+def _compact_graph_tables(graph: dict) -> bool:
+    """Normalization: discard unused lookup rows, not graph facts or sources.
+
+    Match BuildExport's member/module namespace and preserve row order. This is
+    only for the known rootless graph after whole-body substitution. Any hidden
+    table reference, unfamiliar row field, or invalid index keeps the original tables.
+    """
+    from .mechanics_context import _GRAPH_FIELDS, _GRAPH_ROW_FIELDS
+    if (not _known_graph(graph) or graph.get('source') != 'parent_reachable_compiled_source_graph'
+            or type(graph.get('version')) is not int or graph['version'] != 1
+            or graph.get('roots') != [] or set(graph) - _GRAPH_FIELDS
+            or not any('bodySource' in n for n in graph['nodes'])
+            or any('fragments' in n for n in graph['nodes'])):
+        return False
+    for key in ('nodes', 'members', 'modules', 'edges'):
+        fields = _GRAPH_ROW_FIELDS[key] | ({'bodySource'} if key == 'nodes' else set())
+        if any(set(row) - fields for row in graph[key]):
+            return False
+    members, modules = graph['members'], graph['modules']
+    if (any(not isinstance(value, str) for row in members for key, value in row.items() if key != 'module')
+            or any(not isinstance(value, str) for row in modules for value in row.values())):
+        return False
+    refs: list[tuple[dict, str]] = []
+    for node in graph['nodes']:
+        refs.extend((node, key) for key in ('method', 'receiverType', 'originReceiverType') if key in node)
+        values = node.get('values', {})
+        if not isinstance(values, dict):
+            return False
+        for value in values.values():
+            if not isinstance(value, list) or len(value) != 4:
+                return False
+            operand = value[1]
+            if isinstance(operand, dict):
+                if set(operand) != {'member'}:
+                    return False
+                refs.append((operand, 'member'))
+    if any(type(row[key]) is not int or not 0 <= row[key] < len(members) for row, key in refs):
+        return False
+    # Refuse table-shaped fields anywhere else, including future block/edge
+    # metadata. Do not mistake an unrecognized reference for an unused member.
+    known = {(id(row), key) for row, key in refs} | {(id(row), 'module') for row in members}
+    def hidden(value):
+        if isinstance(value, dict):
+            return any((key in {'member', 'method', 'receiverType', 'originReceiverType', 'module'}
+                        and (id(value), key) not in known) or hidden(child) for key, child in value.items())
+        return isinstance(value, list) and any(hidden(child) for child in value)
+    if hidden(graph):
+        return False
+    used = sorted({row[key] for row, key in refs})
+    used_modules = sorted({members[index]['module'] for index in used})
+    if len(used) == len(members) and len(used_modules) == len(modules):
+        return False
+    member_ids = {old: new for new, old in enumerate(used)}
+    module_ids = {old: new for new, old in enumerate(used_modules)}
+    for row, key in refs:
+        row[key] = member_ids[row[key]]
+    graph['members'] = [members[index] for index in used]
+    for row in graph['members']:
+        row['module'] = module_ids[row['module']]
+    graph['modules'] = [modules[index] for index in used_modules]
+    return True
+
+
 def apply_whole_method_author(raw: dict, choices: list[dict]) -> bool:
     """Bind to the actual emitted source, then replace only its graph body."""
     graph = raw.get('item', {}).get('parentSourceGraph')
@@ -220,5 +283,6 @@ def apply_whole_method_author(raw: dict, choices: list[dict]) -> bool:
                               'metadataToken': choice['record']['metadataToken']}
         for edge_index, bindings in choice['bindings'].items():
             graph['edges'][edge_index]['context'] = {'argumentBindings': copy.deepcopy(bindings)}
+    _compact_graph_tables(graph)
     raw['item']['parentSourceGraphReading'] = _READING + ' ' + raw['item'].get('parentSourceGraphReading', '')
     return True

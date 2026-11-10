@@ -279,3 +279,101 @@ def test_unrelated_metadata_is_not_a_source_owner():
     saved=copy.deepcopy(item['unrelatedMetadata'])
     prepared,choices=prepare_whole_method_author(item)
     assert choices and prepared['unrelatedMetadata']==saved
+
+
+def graph_with_unused_tables():
+    return {
+        'source': 'parent_reachable_compiled_source_graph', 'version': 1, 'roots': [],
+        'modules': [{'assembly': 'Unused', 'mvid': 'unused'}, {'assembly': 'A', 'mvid': 'a'},
+                    {'assembly': 'B', 'mvid': 'b'}],
+        'members': [{'name': 'Old()', 'module': 0}, {'name': 'Same()', 'module': 1},
+                    {'name': 'RemovedField', 'module': 1}, {'name': 'Same()', 'module': 2},
+                    {'name': 'Receiver', 'module': 2}],
+        'nodes': [
+            {'id': 10, 'method': 1, 'receiverType': 4, 'originReceiverType': 4,
+             'bodySource': {'mechanicsSourceIndex': 0, 'representation': 'unchanged_verified_whole_method',
+                            'metadataToken': 42}, 'unresolved': ['hook may mutate identity']},
+            {'id': 20, 'method': 3, 'values': {'1': ['call', {'member': 1}, [], 0],
+                                             '2': ['call', {'member': 1}, [], 1]},
+             'statements': ['1', '2'], 'blocks': [['entry', ['1', '2']]],
+             'possibleLocalWrites': {'0': ['1', '2']}}],
+        'edges': [{'from': 10, 'to': 20, 'at': 5, 'context': {'argumentBindings': []}, 'kind': 'helper_source'}],
+        'unresolved': ['not execution'], 'completeness': 'partial_source_graph'}
+
+
+def resolved_graph_tables(graph):
+    """Independent semantic oracle: replace every lookup by its literal row."""
+    g = copy.deepcopy(graph)
+    members, modules = g.pop('members'), g.pop('modules')
+    for member in members:
+        member['module'] = modules[member['module']]
+    for node in g['nodes']:
+        for key in ('method', 'receiverType', 'originReceiverType'):
+            if key in node:
+                node[key] = copy.deepcopy(members[node[key]])
+        for value in node.get('values', {}).values():
+            if isinstance(value[1], dict):
+                value[1] = {'member': copy.deepcopy(members[value[1]['member']])}
+    return g
+
+
+def test_source_substitution_compacts_only_unused_lookup_rows_without_new_notation():
+    from infini_local.pipelines.context.whole_method_author import _compact_graph_tables
+    graph = graph_with_unused_tables(); before = copy.deepcopy(graph)
+    assert _compact_graph_tables(graph)
+    assert len(graph['members']) == 3 and len(graph['modules']) == 2
+    assert resolved_graph_tables(graph) == resolved_graph_tables(before)
+    # Same member name in different assemblies is not a duplicate; both calls
+    # and their multiplicity/position remain, along with guards and uncertainty.
+    assert graph['nodes'][0]['method'] != graph['nodes'][1]['method']
+    assert len(graph['nodes'][1]['values']) == 2
+    compacted = copy.deepcopy(graph)
+    assert not _compact_graph_tables(graph) and graph == compacted
+
+
+@pytest.mark.parametrize('change', ['roots', 'version', 'source', 'no-substitution', 'unknown-graph',
+    'unknown-node', 'unknown-member', 'unknown-module', 'unknown-edge', 'omissions',
+    'block-member', 'edge-member', 'rootless-method-metadata', 'invalid-member', 'bool-member',
+    'invalid-module', 'operand-shape', 'value-shape', 'fragments', 'member-metadata', 'module-metadata'])
+def test_uncertain_table_namespace_remains_byte_for_byte(change):
+    from infini_local.pipelines.context.whole_method_author import _compact_graph_tables
+    graph = graph_with_unused_tables()
+    if change == 'roots': graph['roots'] = [{'node': 10, 'receiverType': 'A.Receiver'}]
+    elif change == 'version': graph['version'] = 2
+    elif change == 'source': graph['source'] = 'future_graph'
+    elif change == 'no-substitution': graph['nodes'][0].pop('bodySource')
+    elif change == 'unknown-graph': graph['futureTable'] = [0]
+    elif change == 'unknown-node': graph['nodes'][0]['futureTable'] = [0]
+    elif change == 'unknown-member': graph['members'][0]['future'] = 0
+    elif change == 'unknown-module': graph['modules'][0]['future'] = 0
+    elif change == 'unknown-edge': graph['edges'][0]['future'] = 0
+    elif change == 'omissions': graph['transportOmissions'] = {'unknownFieldCount': 1}
+    elif change == 'block-member': graph['nodes'][1]['blocks'] = [{'member': 0}]
+    elif change == 'edge-member': graph['edges'][0]['context']['member'] = 0
+    elif change == 'rootless-method-metadata': graph['limits'] = {'method': 0}
+    elif change == 'invalid-member': graph['nodes'][1]['values']['1'][1]['member'] = 99
+    elif change == 'bool-member': graph['nodes'][0]['receiverType'] = False
+    elif change == 'invalid-module': graph['members'][0]['module'] = 99
+    elif change == 'operand-shape': graph['nodes'][1]['values']['1'][1]['future'] = 0
+    elif change == 'value-shape': graph['nodes'][1]['values']['1'].append(0)
+    elif change == 'fragments': graph['nodes'][1]['fragments'] = [[0, 1, 2]]
+    elif change == 'member-metadata': graph['members'][0]['returns'] = {'futureIndex': 0}
+    elif change == 'module-metadata': graph['modules'][0]['assembly'] = ['future', 0]
+    before = copy.deepcopy(graph)
+    assert not _compact_graph_tables(graph) and graph == before
+
+
+def test_actual_whole_source_handoff_drops_lookups_used_only_by_superseded_body():
+    item = whole_method_parent()
+    graph = item['parentSourceGraph']
+    graph['modules'].append({'assembly': 'Other', 'mvid': 'other'})
+    graph['members'].append({'name': 'FieldInFullSource', 'module': 1})
+    graph['nodes'][0]['values']['8'] = ['ldfld', {'member': 1}, ['7'], 8]
+    before = copy.deepcopy(item)
+    prepared, choices = prepare_whole_method_author(item)
+    raw = mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    assert apply_whole_method_author(raw, choices)
+    assert len(raw['item']['parentSourceGraph']['members']) == 1
+    assert len(raw['item']['parentSourceGraph']['modules']) == 1
+    assert item == before
+    assert raw['mechanics']['source'][0]['code'] == before['directProjectileRaw']['attackReference']['nativeCSharpSource']['records'][0]['code']
