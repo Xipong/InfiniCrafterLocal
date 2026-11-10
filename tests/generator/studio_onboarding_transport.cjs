@@ -1,7 +1,7 @@
 /* Real HTTP plus shipped API/onboarding owners; only the DOM is a small fixture. */
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const input=require('node:readline').createInterface({input:process.stdin});
+const handshake=process.env.IFC_HANDSHAKE;
 const events={},body={},feedback={textContent:''},progressFeedback={textContent:''};
 const target={focus(){},scrollTop:0},launcher={isConnected:true,focus(){}};
 let html='',lastPostStatus;
@@ -40,7 +40,15 @@ const click=async(dataset={},attributes=['data-onboarding-next'])=>events.click(
 const progress=()=>html.includes('id="onboarding-progress-feedback"')?progressFeedback:feedback;
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 async function nextStep() {lastPostStatus=null;const settled=beginPost();await click();await settled;await tick();assert(lastPostStatus);}
-function exchange(event) {const next=new Promise(resolve=>input.once('line',resolve));console.log(JSON.stringify({event}));return next;}
+async function exchange(event) {
+  fs.writeFileSync(path.join(handshake,event),'');
+  const deadline=Date.now()+15000;
+  while(!fs.existsSync(path.join(handshake,event+'.continue'))) {
+    assert(!fs.existsSync(path.join(handshake,'stop')),'Python fixture stopped');
+    assert(Date.now()<deadline,'Python fixture did not acknowledge '+event);
+    await new Promise(resolve=>setTimeout(resolve,10));
+  }
+}
 (async()=>{
   const initial=beginPost();owner.sync(await api('/api/state'));await initial;await tick();
   assert.equal(lastPostStatus,429);assert(progress().textContent);
@@ -64,5 +72,5 @@ function exchange(event) {const next=new Promise(resolve=>input.once('line',reso
   await exchange('recovery-request');
   remote=await api('/api/state');owner.sync(remote);assert.equal(remote.onboarding.step,3);
   assert.equal(progress().textContent,'');assert.equal(feedback.textContent,unrelated);
-  console.log(JSON.stringify({event:'passed'}));input.close();
-})().catch(error=>{console.error(error);process.exitCode=1;input.close();});
+  console.log(JSON.stringify({event:'passed'}));
+})().catch(error=>{console.error(error);process.exitCode=1;});

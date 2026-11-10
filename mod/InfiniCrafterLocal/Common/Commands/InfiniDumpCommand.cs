@@ -37,11 +37,19 @@ public sealed partial class InfiniDumpCommand : ModCommand
             {
                 Item item = new();
                 item.SetDefaults(type);
-                return item.IsAir || string.IsNullOrWhiteSpace(item.Name) ? null : CaptureItemSnapshotForExport(item, textures);
+                return IsExportableItemDefinition(type, item) ? CaptureItemSnapshotForExport(item, textures) : null;
             }, type => CaptureProjectileSnapshotForExport(type, textures), environment);
         nextProgressAt = DateTime.UtcNow.AddSeconds(5);
         caller.Reply("InfiniCraft dump started in small steps. /infinidump status or /infinidump cancel."
             + (textures ? " Texture diagnostics enabled; individual GPU reads may pause a frame." : " Texture diagnostics skipped; use /infinidump textures to include them."));
+    }
+
+    internal static bool IsExportableItemDefinition(int requestedType, Item item)
+    {
+        // SetDefaults redirects retired native IDs to their canonical definition.
+        // Export that definition at its own ID only; aliases are not additional
+        // items and must not create duplicate identity rows in the verified pair.
+        return item.type == requestedType && !item.IsAir && !string.IsNullOrWhiteSpace(item.Name);
     }
 
     internal static void WriteSnapshot(TextWriter writer, int type, Func<JsonObject?> capture, JsonSerializerOptions options)

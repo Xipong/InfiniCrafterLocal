@@ -303,30 +303,45 @@ internal static partial class EngineRuntimeChecks
         try
         {
             Type type = typeof(InfiniDumpCommand).GetNestedType("BoundedDumpWriter", BindingFlags.NonPublic)!;
-            StreamWriter Open(string name) => (StreamWriter)Activator.CreateInstance(type,
-                BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { Path.Combine(root, name) }, null)!;
+            TextWriter Open(string name, Func<long>? available = null) => (TextWriter)Activator.CreateInstance(type,
+                BindingFlags.Instance | BindingFlags.NonPublic, null,
+                new object?[] { Path.Combine(root, name), CancellationToken.None, available }, null)!;
             using (var writer = Open("bytes.jsonl"))
             {
-                const string row = "{\"name\":\"я\"}";
-                long bytes = System.Text.Encoding.UTF8.GetByteCount(row + writer.NewLine);
-                // Model bytes already streamed without allocating/writing 512 MiB.
-                // The real writer executes both the exact-boundary and overflow writes.
-                type.GetField("bytes", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(writer, InfiniDumpCommand.DumpFileByteLimit - bytes);
+                // Include UTF-8 multibyte text and the canonical LF in the bound.
+                string row = "{\"name\":\"я" + new string('x', InfiniDumpCommand.DumpRecordByteLimit - 14) + "\"}";
+                Equal(InfiniDumpCommand.DumpRecordByteLimit, System.Text.Encoding.UTF8.GetByteCount(row) + 1,
+                    "fixture reaches exact UTF-8 record bound");
                 writer.WriteLine(row);
                 bool refused = false;
-                try { writer.WriteLine("{}"); } catch (InvalidDataException) { refused = true; }
-                Equal(true, refused, "UTF-8 byte count admits the exact bound and refuses the next record before write");
+                try { writer.WriteLine(row.Insert(row.Length - 2, "x")); }
+                catch (InvalidDataException) { refused = true; }
+                Equal(true, refused, "oversized record is refused before writing any part of it");
+                writer.WriteLine("{}");
             }
-            Equal(1, File.ReadAllLines(Path.Combine(root, "bytes.jsonl")).Length, "overflow never writes a partial extra JSONL record");
+            Equal(2, File.ReadLines(Path.Combine(root, "bytes.jsonl")).Count(), "failed row never corrupts neighboring rows");
             using (var writer = Open("rows.jsonl"))
             {
-                type.GetField("rows", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(writer, InfiniDumpCommand.DumpRowLimit - 1);
-                writer.WriteLine("{}");
-                bool refused = false;
-                try { writer.WriteLine("{}"); } catch (InvalidDataException) { refused = true; }
-                Equal(true, refused, "row count admits the exact bound and rejects the next row");
+                for (int n = 0; n < 100_001; n++) writer.WriteLine("{}");
             }
-            Equal(1, File.ReadAllLines(Path.Combine(root, "rows.jsonl")).Length, "row overflow does not append data");
+            Equal(100_001, File.ReadLines(Path.Combine(root, "rows.jsonl")).Count(), "loaded catalog is not limited by old 100k row ceiling");
+            using (var writer = Open("low-disk.jsonl", () => InfiniDumpCommand.DumpDiskReserveBytes))
+            {
+                bool refused = false;
+                try { writer.WriteLine("{}"); } catch (IOException) { refused = true; }
+                Equal(true, refused, "low disk is refused before the next record, with room for recovery state");
+            }
+            Equal(0L, new FileInfo(Path.Combine(root, "low-disk.jsonl")).Length, "low disk never creates a partial next row");
+            using (var writer = Open("invalid.jsonl"))
+            {
+                foreach (Action write in new Action[] { () => writer.Write("partial"), () => writer.WriteLine("{}\n{}"), () => writer.WriteLine("[]") })
+                {
+                    bool refused = false;
+                    try { write(); } catch (InvalidDataException) { refused = true; }
+                    Equal(true, refused, "non-record writes cannot bypass validation and publish a corrupt pair");
+                }
+            }
+
         }
         finally { Directory.Delete(root, true); }
     }

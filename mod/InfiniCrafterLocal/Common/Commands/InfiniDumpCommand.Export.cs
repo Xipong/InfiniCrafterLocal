@@ -42,14 +42,29 @@ public sealed partial class InfiniDumpCommand
         }
         catch (OperationCanceledException)
         {
-            if (notifyCompletion) Main.NewText("InfiniCraft dump cancelled; previous snapshot kept.", 255, 200, 120);
+            if (notifyCompletion)
+            {
+                Main.NewText("InfiniCraft dump cancelled; previous complete snapshot kept.", 255, 200, 120);
+                ReportIncompleteExport(export);
+            }
         }
         catch (Exception error)
         {
-            ModContent.GetInstance<InfiniCrafterLocalMod>().Logger.Error("Runtime dump export failed; previous snapshot kept.", error);
-            if (notifyCompletion) Main.NewText($"InfiniCraft dump failed ({error.GetType().Name}); previous snapshot kept. See client.log.", 255, 140, 120);
+            ModContent.GetInstance<InfiniCrafterLocalMod>().Logger.Error(
+                $"Runtime dump export failed; previous snapshot kept. Incomplete attempt: {export.IncompleteDirectory ?? "not created"}", error);
+            if (notifyCompletion)
+            {
+                Main.NewText($"InfiniCraft dump failed ({error.GetType().Name}); previous complete snapshot kept. See client.log.", 255, 140, 120);
+                ReportIncompleteExport(export);
+            }
         }
         finally { notifyCompletion = true; }
+    }
+
+    private static void ReportIncompleteExport(RuntimeDumpExport export)
+    {
+        if (export.IncompleteDirectory is { } path)
+            Main.NewText("Incomplete diagnostic files kept (not a complete snapshot): " + path, 255, 200, 120);
     }
 
     internal static void CancelExport(bool notify)
@@ -66,7 +81,7 @@ public sealed partial class InfiniDumpCommand
     internal static void UnloadExport()
     {
         CancelExport(notify: false);
-        // Observe eventual file cleanup failures without calling any game API
+        // Observe eventual export failures without calling any game API
         // after unload. Never wait/join a disk worker from the game thread.
         if (activeExport is { } export)
             _ = export.Completion.ContinueWith(task => { _ = task.Exception; },

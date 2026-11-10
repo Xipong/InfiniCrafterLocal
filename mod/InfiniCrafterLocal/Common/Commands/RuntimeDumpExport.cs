@@ -29,6 +29,7 @@ internal sealed class RuntimeDumpExport
     private Record? pending;
     private sealed record Record(JsonObject? Snapshot, bool EndStage, GeneratorClient.ParentAnalysis? Analysis = null);
     internal Task<JsonObject> Completion { get; }
+    internal string? IncompleteDirectory { get; private set; }
     internal int CapturedItems => item - 1;
     internal int CapturedProjectiles => projectile - 1;
     internal bool CaptureFinished => stage == 2 && pending is null;
@@ -63,7 +64,8 @@ internal sealed class RuntimeDumpExport
             try
             {
                 InfiniDumpCommand.CompleteDumpEnvironmentFileHashes(environment);
-                return InfiniDumpCommand.PublishSnapshot(root, Drain, Drain, environment, token);
+                return InfiniDumpCommand.PublishSnapshot(root, Drain, Drain, environment, token,
+                    path => IncompleteDirectory = path);
             }
             finally
             {

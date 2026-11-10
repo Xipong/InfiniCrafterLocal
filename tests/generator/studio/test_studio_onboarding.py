@@ -327,12 +327,12 @@ def test_installer_refuses_client_destinations_and_unselected_builds(studio, act
     assert not controller.installer.snapshot()['busy']
 
 
-def test_real_transport_progress_errors_clear_only_after_persistence(studio):
+def test_real_transport_progress_errors_clear_only_after_persistence(studio, tmp_path):
     """Run both shipped JS owners against the real HTTP/controller/disk path."""
-    import queue
     import shutil
     import subprocess
     import threading
+    import time
     from suite_paths import GENERATOR_ROOT, REPO_ROOT
 
     node = shutil.which('node')
@@ -346,29 +346,42 @@ def test_real_transport_progress_errors_clear_only_after_persistence(studio):
                                     'values': {}, 'extra': {'step': 0}})
     server.publish(controller.snapshot())
     server.start()
-    worker = subprocess.Popen(
-        [node, str(REPO_ROOT / 'tests/generator/studio_onboarding_transport.cjs')],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        env={**os.environ, 'IFC_GENERATOR': str(GENERATOR_ROOT),
-             'IFC_BASE': server.base_url, 'IFC_TOKEN': server.token})
-    messages = queue.Queue()
+    # File markers coordinate actual HTTP acknowledgements with controller/disk work.
+    # Keep controller assertions on the test thread and bound the entire Node process.
+    results, failures = [], []
+    finished = threading.Event()
 
-    def read_messages():
-        for line in worker.stdout:
-            messages.put(line)
-        messages.put(None)
+    def run_fixture():
+        try:
+            results.append(subprocess.run(
+                [node, str(REPO_ROOT / 'tests/generator/studio_onboarding_transport.cjs')],
+                capture_output=True, text=True, timeout=45,
+                env={**os.environ, 'IFC_GENERATOR': str(GENERATOR_ROOT),
+                     'IFC_BASE': server.base_url, 'IFC_TOKEN': server.token,
+                     'IFC_HANDSHAKE': str(tmp_path)}))
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            finished.set()
 
-    reader = threading.Thread(target=read_messages, daemon=True)
-    reader.start()
+    worker = threading.Thread(target=run_fixture)
+    worker.start()
+    current_event = None
 
     def receive(expected):
-        line = messages.get(timeout=10)
-        assert line is not None, worker.stderr.read()
-        assert json.loads(line)['event'] == expected
+        nonlocal current_event
+        deadline = time.monotonic() + 15
+        while not (tmp_path / expected).exists():
+            if finished.is_set():
+                if failures:
+                    raise failures[0]
+                pytest.fail(f'Fixture exited before {expected}: {results[0].stderr}')
+            assert time.monotonic() < deadline, f'Fixture did not report {expected}'
+            finished.wait(0.01)
+        current_event = expected
 
     def resume():
-        worker.stdin.write('continue\n')
-        worker.stdin.flush()
+        (tmp_path / f'{current_event}.continue').touch()
 
     try:
         receive('rejected')
@@ -400,12 +413,14 @@ def test_real_transport_progress_errors_clear_only_after_persistence(studio):
         assert owner().load_progress(config)['step'] == 3
         server.publish(controller.snapshot())
         resume()
-        receive('passed')
-        assert worker.wait(timeout=3) == 0, worker.stderr.read()
+        worker.join(timeout=15)
+        assert not worker.is_alive()
+        if failures:
+            raise failures[0]
+        assert results[0].returncode == 0, results[0].stderr
+        assert json.loads(results[0].stdout.splitlines()[-1])['event'] == 'passed'
         assert config.read_bytes() == before
     finally:
-        if worker.poll() is None:
-            worker.terminate()
-        worker.wait(timeout=3)
-        reader.join(timeout=3)
-        assert not reader.is_alive()
+        (tmp_path / 'stop').touch()
+        worker.join(timeout=46)
+        assert not worker.is_alive()
