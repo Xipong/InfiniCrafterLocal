@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -140,12 +141,8 @@ internal static partial class EngineRuntimeChecks
             Equal(true, graph["scope"]!.GetValue<string>().Contains("live predicates are never evaluated", StringComparison.Ordinal), "scope never claims the guarded bonus is active");
             if (owner != "item")
             {
-                JsonObject guardedValues = node["values"]!.AsObject();
-                var write = guardedValues.Single(value => value.Value![0]!.GetValue<string>() == "stind.r4");
-                var block = node["blocks"]!.AsArray().Single(row => row![0]!.ToJsonString() == write.Value![3]!.ToJsonString())!;
-                Equal(2, block[3]!.AsArray().Count, "crit ref write retains both enclosing runtime guards");
-                foreach (JsonNode? branch in block[3]!.AsArray())
-                    Equal(true, guardedValues.ContainsKey(branch!.GetValue<string>()), "every required runtime guard resolves inside its source node");
+                AssertParentCritWriteEvidence(graph, node, owner);
+                ParentCritWriteEvidenceRejectsMutations(graph, node, owner);
             }
             if (owner == "item")
                 Equal(true, source.Contains(".ApplyCritDelta(", StringComparison.Ordinal), "inherited hook retains its reachable helper");
@@ -154,6 +151,173 @@ internal static partial class EngineRuntimeChecks
         {
             globalsField.SetValue(null, oldGlobals);
             foreach (var row in previous) { if (row.Had) cache[row.Type] = row.Value; else cache.Remove(row.Type); }
+        }
+    }
+    // A fixture-only check of exported evidence, never a call to either hook.
+    // Release emits two enclosing branches. Debug materializes the conjunction
+    // in a bool local whose phi alternatives carry the first branch's control.
+    // Follow that data/control closure rather than counting direct guards.
+    private static void AssertParentCritWriteEvidence(JsonObject graph, JsonObject node, string owner)
+    {
+        Equal(false, node["static"]!.GetValue<bool>(), "crit hook is an instance event");
+        Equal(owner == "global" ? "item,player,crit" : "item,crit",
+            string.Join(",", node["arguments"]!.AsArray().Select(argument => argument!.GetValue<string>())),
+            "crit hook argument slots retain their declared binding");
+        JsonObject values = node["values"]!.AsObject();
+        var blocks = node["blocks"]!.AsArray().OfType<JsonArray>().ToDictionary(row => row[0]!.GetValue<int>());
+        JsonArray Row(string id) => values[id] as JsonArray ?? throw new InvalidOperationException("Missing crit evidence: " + id);
+        string[] Inputs(JsonArray row) => row[2]!.AsArray().Select(input => input!.GetValue<string>()).ToArray();
+        string Member(JsonArray row) => graph["members"]![row[1]!["member"]!.GetValue<int>()]!["name"]!.GetValue<string>();
+        JsonArray write = values.Single(value => value.Value![0]!.GetValue<string>() == "stind.r4").Value!.AsArray();
+        Equal(true, values.Count <= 64 && blocks.Count <= 16, "small crit evidence fixture bound");
+        bool Reaches(int start, int target)
+        {
+            var pending = new Stack<int>(); var seen = new HashSet<int>(); pending.Push(start);
+            while (pending.Count > 0)
+            {
+                int next = pending.Pop();
+                if (next == target) return true;
+                if (!seen.Add(next) || !blocks.TryGetValue(next, out JsonArray? block)) continue;
+                foreach (JsonNode? successor in block[1]!.AsArray()) pending.Push(successor!.GetValue<int>());
+            }
+            return false;
+        }
+        foreach (int damage in new[] { 9, 10, 11 })
+        foreach (int maxLife in new[] { 100, 200 })
+        foreach (int life in new[] { maxLife - 1, maxLife, maxLife + 1 })
+        foreach (bool wet in new[] { false, true })
+        foreach (int initialCrit in new[] { 0, 4, 7 })
+        {
+            var visiting = new HashSet<string>();
+            bool Allows(int blockId)
+            {
+                if (!blocks.TryGetValue(blockId, out JsonArray? block)) throw new InvalidOperationException("Missing crit block");
+                bool allowed = true;
+                foreach (JsonNode? guard in block[3]!.AsArray())
+                {
+                    string id = guard!.GetValue<string>(); JsonArray branch = Row(id);
+                    JsonArray branchBlock = blocks[branch[3]!.GetValue<int>()];
+                    Equal(id, branchBlock[2]!.ToString(), "guard is its block's retained terminator");
+                    int[] next = branchBlock[1]!.AsArray().Select(value => value!.GetValue<int>()).ToArray();
+                    Equal(2, next.Length, "conditional guard has both successors");
+                    Equal(branch[1]!.GetValue<int>(), next[0], "branch target matches CFG edge");
+                    Equal(true, Reaches(next[0], blockId) != Reaches(next[1], blockId), "guard distinguishes this definition/effect block");
+                    bool taken = (double)Read(id) != 0;
+                    allowed &= Reaches(next[taken ? 0 : 1], blockId);
+                }
+                return allowed;
+            }
+            object Read(string id)
+            {
+                if (!visiting.Add(id)) throw new InvalidOperationException("Cyclic crit evidence");
+                try
+                {
+                    JsonArray row = Row(id); string[] inputs = Inputs(row);
+                    string op = row[0]!.GetValue<string>().Replace(".s", "", StringComparison.Ordinal);
+                    object Input(int index) => Read(inputs[index]);
+                    double Number(int index) => (double)Input(index);
+                    switch (op)
+                    {
+                        case "ldarg":
+                            int slot = row[1]!.GetValue<int>();
+                            return slot == 0 ? "this" : node["arguments"]![slot - 1]!.GetValue<string>();
+                        case "const": return (double)row[1]!.GetValue<int>();
+                        case "ldc.r4": return (double)row[1]!.GetValue<float>();
+                        case "ldloc": case "stloc":
+                            Equal(1, inputs.Length, "fixture local has one retained definition"); return Input(0);
+                        case "predecessor_stack_alternatives":
+                            string selected = inputs.Where(input => Allows(Row(input)[3]!.GetValue<int>())).Single();
+                            Equal(true, Reaches(Row(selected)[3]!.GetValue<int>(), row[3]!.GetValue<int>()), "selected phi input reaches its join");
+                            return Read(selected);
+                        case "call":
+                            Equal("player", owner, "receiver accessor belongs to the ModPlayer fixture");
+                            Equal("Terraria.ModLoader.ModPlayer.get_Player()", Member(row), "only the declared ModPlayer receiver accessor is admitted");
+                            Equal("this", Input(0), "player accessor is bound to the hook receiver"); return "player";
+                        case "ldfld":
+                            string member = Member(row);
+                            Equal(member == "Terraria.Item.damage" ? "item" : "player", Input(0), "guard field is bound to its event actor");
+                            return member switch {
+                                "Terraria.Item.damage" => (double)damage,
+                                "Terraria.Entity.wet" => wet ? 1d : 0d,
+                                "Terraria.Player.statLife" => (double)life,
+                                "Terraria.Player.statLifeMax2" => (double)maxLife,
+                                _ => throw new InvalidOperationException("Unexpected crit predicate field: " + member),
+                            };
+                        case "ldind.r4": Equal("crit", Input(0), "delta reads the same crit output"); return (double)initialCrit;
+                        case "add": return Number(0) + Number(1);
+                        case "cgt": case "bgt": return Number(0) > Number(1) ? 1d : 0d;
+                        case "clt": case "blt": return Number(0) < Number(1) ? 1d : 0d;
+                        case "bge": return Number(0) >= Number(1) ? 1d : 0d;
+                        case "ble": return Number(0) <= Number(1) ? 1d : 0d;
+                        case "brtrue": return Number(0) != 0 ? 1d : 0d;
+                        case "brfalse": return Number(0) == 0 ? 1d : 0d;
+                        default: throw new InvalidOperationException("Unsupported crit evidence row: " + op);
+                    }
+                }
+                finally { visiting.Remove(id); }
+            }
+            string[] output = Inputs(write);
+            Equal("crit", Read(output[0]), "ref write targets the event crit argument");
+            Equal(initialCrit + 23d, Read(output[1]), "ref write retains crit + 23, not an unrelated literal");
+            Equal(damage > 10 && (owner == "global" ? wet : life < maxLife), Allows(write[3]!.GetValue<int>()),
+                $"crit write conjunction for {owner}: damage={damage}, life={life}/{maxLife}, wet={wet}");
+        }
+    }
+
+    private static void ParentCritWriteEvidenceRejectsMutations(JsonObject graph, JsonObject node, string owner)
+    {
+        void Reject(string label, Action<JsonObject> mutate)
+        {
+            JsonObject changed = node.DeepClone().AsObject(); mutate(changed);
+            bool rejected = false;
+            try { AssertParentCritWriteEvidence(graph, changed, owner); }
+            catch (InvalidOperationException) { rejected = true; }
+            Equal(true, rejected, "crit evidence rejects " + label);
+        }
+        JsonObject Values(JsonObject changed) => changed["values"]!.AsObject();
+        JsonArray Write(JsonObject changed) => Values(changed).Single(value => value.Value![0]!.GetValue<string>() == "stind.r4").Value!.AsArray();
+        JsonArray FirstBranch(JsonObject changed) => Values(changed).First(value =>
+            value.Value![0]!.GetValue<string>() is "ble.s" or "ble" or "bge.s" or "bge").Value!.AsArray();
+        Reject("missing write guards", changed => changed["blocks"]!.AsArray().Single(block =>
+            block![0]!.GetValue<int>() == Write(changed)[3]!.GetValue<int>())![3] = new JsonArray());
+        Reject("missing predicate definition", changed => Values(changed).Remove(FirstBranch(changed)[2]![0]!.GetValue<string>()));
+        Reject("disconnected predicate inputs with fields still present", changed => {
+            JsonArray branch = FirstBranch(changed); branch[2]![0] = branch[2]![1]!.DeepClone();
+        });
+        Reject("reversed first predicate", changed => {
+            JsonArray branch = FirstBranch(changed); branch[0] = owner == "global" ? "bgt.s" : "blt.s";
+        });
+        Reject("wrong branch target", changed => {
+            JsonArray branch = FirstBranch(changed);
+            branch[1] = changed["blocks"]!.AsArray().Single(block => block![0]!.GetValue<int>() == branch[3]!.GetValue<int>())![1]![1]!.DeepClone();
+        });
+        Reject("swapped branch arms", changed => {
+            JsonArray branch = FirstBranch(changed);
+            JsonArray next = changed["blocks"]!.AsArray().Single(block => block![0]!.GetValue<int>() == branch[3]!.GetValue<int>())![1]!.AsArray();
+            int target = next[0]!.GetValue<int>(); next[0] = next[1]!.GetValue<int>(); next[1] = target;
+            branch[1] = next[0]!.GetValue<int>();
+        });
+        Reject("wrong guard actor", changed => {
+            JsonArray field = Values(changed).First(value => value.Value![0]!.GetValue<string>() == "ldfld").Value!.AsArray();
+            string receiver = field[2]![0]!.GetValue<string>();
+            if (owner == "player") receiver = Values(changed)[receiver]![2]![0]!.GetValue<string>();
+            Values(changed)[receiver]![1] = owner == "global" ? 2 : 1;
+        });
+        Reject("wrong crit destination", changed => Values(changed)[Write(changed)[2]![0]!.GetValue<string>()]![1] = 1);
+        Reject("wrong delta", changed => Values(changed).Single(value => value.Value![0]!.GetValue<string>() == "ldc.r4").Value![1] = 24f);
+        Reject("constant output detached from crit", changed => {
+            JsonArray rhs = Values(changed)[Write(changed)[2]![1]!.GetValue<string>()]!.AsArray();
+            rhs[0] = "ldc.r4"; rhs[1] = 27f; rhs[2] = new JsonArray();
+        });
+        if (Values(node).Any(value => value.Value![0]!.GetValue<string>() == "predecessor_stack_alternatives"))
+        {
+            Reject("disconnected phi controls with predicate rows still present", changed => {
+                string firstId = Values(changed).Single(value => ReferenceEquals(value.Value, FirstBranch(changed))).Key;
+                foreach (JsonNode? block in changed["blocks"]!.AsArray())
+                    block![3] = new JsonArray(block[3]!.AsArray().Where(id => id!.GetValue<string>() != firstId).Select(id => id!.DeepClone()).ToArray());
+            });
+            Reject("true short-circuit bypass", changed => Values(changed).Single(value =>
+                value.Value![0]!.GetValue<string>() == "const" && value.Value![1]!.GetValue<int>() == 0).Value![1] = 1);
         }
     }
 }
