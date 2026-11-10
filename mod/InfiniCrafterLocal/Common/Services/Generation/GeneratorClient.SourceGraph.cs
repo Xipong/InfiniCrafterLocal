@@ -157,7 +157,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> ItemEvents = new(StringComparer.Ordinal)
         {
             "AltFunctionUse", "CanUseItem", "CanShoot", "UseItem", "UseStyle", "HoldItem", "HoldStyle", "UseAnimation",
-            "ModifyWeaponDamage", "ModifyWeaponKnockback",
+            "ModifyWeaponDamage", "ModifyWeaponCrit", "ModifyWeaponKnockback",
             "Shoot", "ModifyShootStats", "OnHitNPC", "ModifyHitNPC", "CanHitNPC", "OnHitPvp", "ModifyHitPvp", "CanHitPvp",
             "UpdateEquip", "UpdateAccessory", "UpdateVanity", "UpdateInventory", "IsArmorSet", "UpdateArmorSet",
             "CanEquipAccessory", "UseItemHitbox", "MeleeEffects", "OnConsumeItem", "ConsumeItem",
@@ -170,7 +170,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> BuffEvents = new(StringComparer.Ordinal) { "Update", "ReApply", "SetStaticDefaults" };
         private static readonly HashSet<string> PlayerEvents = new(StringComparer.Ordinal)
         {
-            "ModifyWeaponDamage", "ModifyWeaponKnockback",
+            "ModifyWeaponDamage", "ModifyWeaponCrit", "ModifyWeaponKnockback",
             "CanUseItem", "CanShoot", "Shoot", "ModifyShootStats", "OnHitNPCWithItem", "ModifyHitNPCWithItem",
             "OnHitNPCWithProj", "ModifyHitNPCWithProj", "OnHitPvp", "ModifyHitPvp", "OnHitAnything",
         };
@@ -455,7 +455,7 @@ public sealed partial class GeneratorClient
                     if (!method.GetParameters().Any(p => p.ParameterType == (receiver == "npc" ? typeof(NPC) : typeof(Player)))) continue;
                     Defer(() =>
                     {
-                        int? node = Add(method, 0);
+                        int? node = Add(method, 0, invocation: Captured(owner.Type));
                         Edge(from, node, "loaded_GlobalBuff_candidate", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
                     });
                 }
