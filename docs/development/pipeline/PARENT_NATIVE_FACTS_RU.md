@@ -27,6 +27,11 @@
   `nativeSourceFacts[N]` того же dossier. Это lossless sharing, не удаление фактов или выбор «лучшего»
   наблюдения. Порядок/кратность массивов и типы сохраняются после раскрытия;
   literal tooltip и accepted generated-parent packets остаются inline.
+  Нотация ссылок действует только при наличии `nativeSourceFacts` в dossier.
+  Если вход уже содержит `sourceSameAs` вне защищённых literal-полей, весь native
+  контекст остаётся дословным без нового пула: незнакомый marker нельзя превратить
+  в ссылку или цикл. `tooltipLines` / `tooltipSource` сохраняются одинаково на
+  корне `raw` и внутри него; accepted generated-parent packet не обходится.
   В Author большие дословно общие блоки C# могут читаться через `sourceTextParts`:
   конкатенация строк и `nativeSourceText[sourceText]` в порядке частей точно
   восстанавливает `code`, включая переводы строк. Не более трёх последовательных

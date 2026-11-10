@@ -7,7 +7,32 @@ import json
 import pytest
 
 from infini_local.pipelines.context.parent_stage import share_exact_native_parent_facts
-from tests.generator.context.native_sharing_oracle import share_native_facts_reference
+from tests.generator.context.native_sharing_oracle import expanded_native_parents, share_native_facts_reference
+
+
+@pytest.mark.parametrize("key", ["tooltipLines", "tooltipSource", "generatedParent"])
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
+def test_literal_fields_preserve_opaque_markers_without_disabling_native_sharing(key, nested):
+    body = {"code": "literal native fact; " * 20, "values": [False, 0, 0.0, -0.0]}
+    literal = [copy.deepcopy(body), {"sourceSameAs": 0, "opaque": {1, 2, 3}}]
+    raw = {key: literal, "native": copy.deepcopy(body)}
+    if nested:
+        raw = {"wrapper": raw}
+    parents = {"A": {"packet": {"raw": raw}},
+               "B": {"packet": {"raw": {"one": body, "two": copy.deepcopy(body)}}}}
+    before = copy.deepcopy(parents)
+    actual = share_exact_native_parent_facts(parents)
+    assert actual["nativeSourceFacts"] == [body]
+    assert expanded_native_parents(actual) == before
+    delivered = actual["parents"]["A"]["packet"]["raw"]
+    if nested:
+        delivered = delivered["wrapper"]
+    assert delivered[key] == literal
+    if key == "generatedParent" and not nested:
+        assert actual["parents"]["A"] == before["A"]
+    delivered[key][1]["opaque"].add(4)
+    actual["nativeSourceFacts"][0]["values"].append(1)
+    assert parents == before
 
 
 @pytest.mark.parametrize("key", ["tooltipLines", "tooltipSource", "generatedParent"])

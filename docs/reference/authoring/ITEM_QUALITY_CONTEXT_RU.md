@@ -39,6 +39,11 @@ scope/неизвестность, scalar type, порядок и кратнос�
 ammo или новый словарь готовых эффектов. Literal tooltips и accepted
 `generatedParent` не заменяются ссылками. Source-unit guide строится по полным
 фактам до sharing; guard проверяет фактически отправляемое представление.
+Ссылки активны только при наличии пула `nativeSourceFacts`. Входной
+`sourceSameAs` вне literal tooltip / accepted generated-parent границ оставляет
+весь native контекст без sharing: marker сохраняется как исходное значение,
+а не получает новый смысл или цикл. Защита literal-полей одинакова на корне
+`raw` и во вложенных объектах.
 Повторяющиеся разрешённые target-kind списки карточек также разделяются через
 `targetsRef` → `fieldGuide.targetKindSets`: каждый kind и порядок сохраняются,
 ни одна capability/граница/зависимость не удаляется. Это ссылки контекста,

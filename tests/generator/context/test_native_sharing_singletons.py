@@ -89,8 +89,27 @@ def test_pool_local_string_notation_does_not_move_outside_its_scope():
 
 
 def test_input_reference_collision_cannot_authorize_renumbering_literal_data():
-    from tests.generator.context.native_sharing_oracle import share_native_facts_reference
     body = {"nested": {"code": "unknown source marker belongs to the input; " * 20}}
     parents = {"A": {"packet": {"raw": {
         "literal": {"sourceSameAs": 2}, "one": body, "two": copy.deepcopy(body)}}}}
-    assert share_exact_native_parent_facts(parents) == share_native_facts_reference(parents)
+    assert share_exact_native_parent_facts(parents) == {"parents": parents}
+
+
+@pytest.mark.parametrize("marker", [
+    {"sourceSameAs": 0}, {"sourceSameAs": 1}, {"sourceSameAs": -1},
+    {"sourceSameAs": True}, {"sourceSameAs": "0"},
+    {"sourceSameAs": 0, "futureField": [False, 0, 0.0]},
+])
+def test_opaque_source_marker_cannot_become_a_reference_cycle(marker):
+    # Pooling this repeated envelope would make pool[0] refer to pool[1],
+    # where the input's literal sourceSameAs:0 closes a new reference cycle.
+    body = {"nested": {"literal": marker, "code": "opaque native source; " * 20}}
+    parents = {"A": {"packet": {"raw": {"one": body, "two": copy.deepcopy(body)}}},
+               "B": {"packet": {"raw": {"one": ["unrelated native fact" * 20] * 2}}}}
+    before = copy.deepcopy(parents)
+    actual = share_exact_native_parent_facts(parents)
+    assert actual == {"parents": before}
+    assert parents == before
+    actual["parents"]["A"]["packet"]["raw"]["one"]["nested"]["literal"]["sourceSameAs"] = "changed"
+    actual["parents"]["B"]["packet"]["raw"]["one"].append("changed")
+    assert parents == before

@@ -93,4 +93,4 @@ def test_literal_tooltips_generated_parents_and_existing_reference_markers_remai
         "c": {"sameAs": 2, "facts": source},
         "d": [source, copy.deepcopy(source)],
     }}}}
-    assert share_exact_native_parent_facts(parents) == share_native_facts_reference(parents)
+    assert share_exact_native_parent_facts(parents) == {"parents": parents}

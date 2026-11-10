@@ -19,9 +19,10 @@ from infini_local.pipelines.context.native_references import known_projectile_re
 
 
 NATIVE_SOURCE_REFERENCE_RULE = (
-    "Read-only native source values may be shared as {sourceSameAs:N}: read the complete value "
-    "at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, "
-    "not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline."
+    "Only when this dossier includes nativeSourceFacts, read {sourceSameAs:N} as the complete value "
+    "at nativeSourceFacts[N], expanding recursively. Without that pool, sourceSameAs is literal source data. "
+    "These are exact repetitions, not inferred mechanics or Author values. "
+    "Literal tooltips and accepted generatedParent packets stay inline."
 )
 _LITERAL_NATIVE_FIELDS = frozenset({"tooltipLines", "tooltipSource", "generatedParent"})
 
@@ -268,14 +269,17 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         if "generatedParent" not in raw:
             count(raw)
     result = copy.deepcopy(parents)
+    # An input marker may be unfamiliar literal data, not a reference we own.
+    # Emitting a pool could reinterpret it or create a cycle, even without the
+    # singleton cleanup. Keep the complete native context literal in that case.
+    if existing_source_reference:
+        return {"parents": result}
     for label, row in result.items():
         raw = parents[label].get("packet", {}).get("raw", {})
         if "generatedParent" not in raw:
-            row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
+            row["packet"]["raw"] = children(raw)
     context = {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
-    # An input marker may be unfamiliar literal data, not a reference we emitted.
-    # Its apparent index cannot authorize interpreting or renumbering that value.
-    return context if existing_source_reference else _inline_single_use_native_facts(context)
+    return _inline_single_use_native_facts(context)
 
 
 _BRIEF_PROPERTIES = (
