@@ -310,8 +310,24 @@ def _known_identity_receipt_fields(receipt: Any) -> bool:
     required = {"source", "version", "identityPredicates", "scope", "selectedEdges"}
     if set(receipt) == required:
         return True
-    if set(receipt) != required | {"blockedIdentityReads", "blockedIdentityReadsOmitted"}:
+    refusal_fields = {"blockedIdentityReads", "blockedIdentityReadsOmitted"}
+    prior_fields = {"priorStaticAccesses", "priorStaticAccessesOmitted"}
+    if set(receipt) not in (required | refusal_fields, required | refusal_fields | prior_fields):
         return False
+    if "priorStaticAccesses" in receipt:
+        triggers, missing = receipt["priorStaticAccesses"], receipt["priorStaticAccessesOmitted"]
+        if not isinstance(triggers, list) or not 1 <= len(triggers) <= 16 or type(missing) is not int or missing < 0:
+            return False
+        for trigger in triggers:
+            if (not isinstance(trigger, dict)
+                    or set(trigger) != {"beforeCallAt", "type", "fieldReadOffsets", "omittedFieldReadCount", "scope"}
+                    or type(trigger["beforeCallAt"]) is not int or trigger["beforeCallAt"] < 0
+                    or not isinstance(trigger["type"], str) or not trigger["type"]
+                    or not isinstance(trigger["fieldReadOffsets"], list) or not 1 <= len(trigger["fieldReadOffsets"]) <= 16
+                    or any(type(offset) is not int or offset < 0 for offset in trigger["fieldReadOffsets"])
+                    or type(trigger["omittedFieldReadCount"]) is not int or trigger["omittedFieldReadCount"] < 0
+                    or trigger["scope"] != "prior_static_access_on_every_entry_to_call_path; no_new_initializer_invocation; earlier_hidden_global_effects_not_modeled"):
+                return False
     # Optional native refusal evidence is dump-only metadata, not authority to
     # choose an edge. Admit its exact bounded schema; future data stays literal.
     rows, omitted = receipt["blockedIdentityReads"], receipt["blockedIdentityReadsOmitted"]

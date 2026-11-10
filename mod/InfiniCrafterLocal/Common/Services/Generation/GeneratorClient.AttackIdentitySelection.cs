@@ -81,20 +81,53 @@ public sealed partial class GeneratorClient
         private readonly Dictionary<string, string> hazardReasons = new();
         private readonly ParentSourceMethod.Value[] hazards;
         private int analysisWork;
-        private readonly Dictionary<MethodBase, bool> identityPreservingEffects = new();
+        private readonly Dictionary<(MethodBase Method, int At), bool> identityPreservingEffects = new();
+        private readonly Dictionary<(Type Owner, int At), int[]?> priorStaticAccesses = new();
+
+        private bool PriorStaticAccess(Type owner, ParentSourceMethod.Value call)
+        {
+            var key = (owner, call.At);
+            if (priorStaticAccesses.TryGetValue(key, out var prior)) return prior is not null;
+            priorStaticAccesses[key] = null;
+            // No selected edges or disconnected windows may prove their own
+            // premise. The complete raw entry CFG is required for every path.
+            if (!body.HasCompleteUnselectedControlFlow) return false;
+            var visited = new HashSet<int>(); var work = new Stack<int>();
+            var witnesses = new HashSet<int>(); work.Push(body.Code[0].Offset);
+            while (work.Count > 0)
+            {
+                Work(); int next = work.Pop(); if (!visited.Add(next)) continue;
+                bool triggered = false;
+                foreach (var instruction in body.Blocks[next].Code)
+                {
+                    Work();
+                    // This is a path to the call without a preceding trigger.
+                    if (instruction.Offset == call.At) return false;
+                    if (instruction.Op == "ldsfld" && instruction.Arg is FieldInfo field && field.DeclaringType == owner)
+                    { witnesses.Add(instruction.Offset); triggered = true; break; }
+                }
+                if (!triggered) foreach (int successor in body.Blocks[next].Next) work.Push(successor);
+            }
+            if (witnesses.Count == 0) return false;
+            priorStaticAccesses[key] = witnesses.OrderBy(at => at).ToArray();
+            return true;
+        }
 
         // A sufficient (not necessary) native body proof. No naming conventions:
         // every instruction must preserve actor identity and avoid reference escape;
         // scalar writes to other native Projectile fields are allowed. Each
         // nested call must have a closed nonvirtual body. Unknown instructions,
         // native implementations, recursive closures and budgets fail closed.
-        private bool IdentityPreservingEffect(MethodBase method, HashSet<MethodBase>? active = null, Stack<Type>? initializing = null)
+        private bool IdentityPreservingEffect(MethodBase method, ParentSourceMethod.Value effectAt,
+            HashSet<MethodBase>? active = null, Stack<Type>? initializing = null)
         {
             initializing ??= new();
             // A proof made while an initializer is running is conditional on
-            // that initialization context. Never publish it as a global fact.
+            // that initialization context. Outside it, reuse only for the same
+            // original caller offset, never for another static-access prefix.
             bool cacheable = initializing.Count == 0;
-            if (cacheable && identityPreservingEffects.TryGetValue(method, out bool cached)) return cached;
+            var cacheKey = (method, effectAt.At);
+            if (cacheable && identityPreservingEffects.TryGetValue(cacheKey, out bool cached)) return cached;
             active ??= new();
             if (active.Count >= 16 || !active.Add(method)) return false;
             bool initializer = method is ConstructorInfo && method.IsStatic && method.DeclaringType is not null;
@@ -116,11 +149,15 @@ public sealed partial class GeneratorClient
                 bool Initialized(Type? owner)
                 {
                     if (owner?.TypeInitializer is not MethodBase typeInitializer) return true;
+                    // A prior static field access prevents a new initializer
+                    // invocation here. It does not prove initialization completed
+                    // (reentrancy is possible), nor model earlier hidden globals.
+                    if (PriorStaticAccess(owner, effectAt)) return true;
                     // CLR does not restart the initializer on a same-type
                     // helper call. Cross-type initialization cycles still
                     // refuse, as do explicit recursive method calls.
                     if (initializing.Contains(owner)) return initializing.Peek() == owner;
-                    return IdentityPreservingEffect(typeInitializer, active, initializing);
+                    return IdentityPreservingEffect(typeInitializer, effectAt, active, initializing);
                 }
                 bool Scalar(Type valueType) => valueType.IsPrimitive
                     && valueType != typeof(IntPtr) && valueType != typeof(UIntPtr);
@@ -133,7 +170,7 @@ public sealed partial class GeneratorClient
                     string op = instruction.Op;
                     if (op is "call" or "callvirt")
                     {
-                        if (instruction.Arg is not MethodBase called || !IdentityPreservingEffect(called, active, initializing)) return false;
+                        if (instruction.Arg is not MethodBase called || !IdentityPreservingEffect(called, effectAt, active, initializing)) return false;
                         continue;
                     }
                     if (op == "starg")
@@ -204,7 +241,7 @@ public sealed partial class GeneratorClient
             {
                 if (initializer) initializing.Pop();
                 active.Remove(method);
-                if (cacheable) identityPreservingEffects[method] = safe;
+                if (cacheable) identityPreservingEffects[cacheKey] = safe;
             }
         }
 
@@ -319,6 +356,19 @@ public sealed partial class GeneratorClient
                 ["hazardReason"] = hazardReasons[refusal.Hazard.Id],
             }).ToArray());
             Receipt["blockedIdentityReadsOmitted"] = omittedRefusals;
+            var triggers = priorStaticAccesses.Where(pair => pair.Value is not null)
+                .OrderBy(pair => pair.Key.At).ThenBy(pair => pair.Key.Owner.FullName, StringComparer.Ordinal).ToArray();
+            if (triggers.Length > 0)
+            {
+                Receipt["priorStaticAccesses"] = new JsonArray(triggers.Take(16).Select(pair => (JsonNode?)new JsonObject
+                {
+                    ["beforeCallAt"] = pair.Key.At, ["type"] = pair.Key.Owner.FullName,
+                    ["fieldReadOffsets"] = new JsonArray(pair.Value!.Take(16).Select(at => (JsonNode?)JsonValue.Create(at)).ToArray()),
+                    ["omittedFieldReadCount"] = Math.Max(0, pair.Value!.Length - 16),
+                    ["scope"] = "prior_static_access_on_every_entry_to_call_path; no_new_initializer_invocation; earlier_hidden_global_effects_not_modeled",
+                }).ToArray());
+                Receipt["priorStaticAccessesOmitted"] = Math.Max(0, triggers.Length - 16);
+            }
         }
 
         private bool Target(string id, HashSet<string> seen)
@@ -388,7 +438,7 @@ public sealed partial class GeneratorClient
                 && statement.Inputs.Count > 0 && MayTarget(statement.Inputs[0], new()))
                 return statement.Op == "stfld" ? "direct_identity_write" : "identity_address_exposed";
             if (!statement.Inputs.Skip(statement.Op == "stfld" ? 1 : 0).Any(i => MayTarget(i, new()))) return null;
-            if (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !IdentityPreservingEffect(call))
+            if (statement.Operand is MethodBase call && !BaseEntityValueAccessor(call) && !IdentityPreservingEffect(call, statement))
                 return "actor_passing_call_uncertified";
             if (statement.Op is "stsfld" or "stfld" or "stobj"
                 || statement.Op.StartsWith("stelem", StringComparison.Ordinal) || statement.Op.StartsWith("stind", StringComparison.Ordinal))

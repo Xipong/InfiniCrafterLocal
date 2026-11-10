@@ -112,6 +112,7 @@ internal static partial class EngineRuntimeChecks
             ("mechanics source preserves effects and unknowns", MechanicsSourcePreservesEffectsAndUnknowns),
             ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
             ("mechanics source excludes only unreachable identity writes", MechanicsSourceExcludesOnlyUnreachableIdentityWrites),
+            ("projectile identity initialization continuation is contextual", ProjectileIdentityInitializationContinuationIsContextual),
             ("mechanics source call index scanning parity", MechanicsCallIndexMatchesScanningOracle),
             ("parent capture panel validates offline inputs", ParentCapturePanelValidation),
             ("populated parent profiler preserves source and cold state", PopulatedParentProfilerPreservesSourceAndColdState),

@@ -33,6 +33,7 @@ public sealed partial class GeneratorClient
         }
         internal readonly MethodBase Method;
         private readonly bool completeSource;
+        internal bool HasCompleteUnselectedControlFlow => completeSource;
         internal readonly Dictionary<string, Value> Values = new();
         internal readonly List<Value> Statements = new();
         internal readonly Dictionary<int, Block> Blocks = new();
