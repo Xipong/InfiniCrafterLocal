@@ -137,6 +137,7 @@ internal static partial class EngineRuntimeChecks
             ("native CSharp source complete exception descriptor verification", NativeCSharpSourceVerifiesExceptionRegions),
             ("native CSharp source whole exception source retains graph refusal", NativeCSharpWholeExceptionSourceKeepsGraphRefusal),
             ("native CSharp source actual exception helpers retain source and unknowns", NativeCSharpExceptionHelpersReachActualCapture),
+            ("native CSharp source compound regions preserve full condition", NativeCSharpCompoundRegionsRetainFullGuardWithoutPruning),
             ("native CSharp source closed regions and all windows", NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies),
             ("native CSharp source actual Last Prism helper inline and links", NativeCSharpLastPrismRetainsReadableHelperAndInlineEffects),
             ("source performance documents rendering", SourcePerformanceDocumentsRendering),

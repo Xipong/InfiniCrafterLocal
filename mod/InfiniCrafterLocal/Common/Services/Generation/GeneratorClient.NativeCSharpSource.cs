@@ -600,6 +600,30 @@ public sealed partial class GeneratorClient
         return new(branch, fieldName, literal, control[0].StartILOffset);
     }
 
+    // Strict excerpts only: a leading identity conjunct admits the unchanged
+    // full conditional region, never an identity-specialized/pruned branch.
+    private static CSharpGuard? ReadCSharpRegionGuard(IfElseStatement branch, Dictionary<int, int> ends)
+    {
+        var ordinary = ReadCSharpGuard(branch, ends);
+        if (ordinary is not null) return ordinary;
+        Expression leading = branch.Condition;
+        if (leading is not BinaryOperatorExpression { Operator: BinaryOperatorType.ConditionalAnd }) return null;
+        while (leading is BinaryOperatorExpression { Operator: BinaryOperatorType.ConditionalAnd } conjunction)
+            leading = conjunction.Left;
+        if (leading is not BinaryOperatorExpression { Operator: BinaryOperatorType.Equality } comparison) return null;
+        var controls = branch.Annotations.OfType<IfInstruction>().ToArray();
+        if (controls.Length != 1 || !ExactCSharpConditional(controls[0], controls[0].StartILOffset, ends)) return null;
+        int offset = controls[0].StartILOffset;
+        var comparisons = comparison.Annotations.OfType<Comp>().ToArray();
+        if (comparisons.Length != 1 || !ExactCSharpConditional(comparisons[0], offset, ends)) return null;
+        // Reuse the canonical typed receiver/literal check without changing its
+        // callers or weakening the specialization reader's equality-only rule.
+        var probe = new IfElseStatement { Condition = (Expression)comparison.Clone() };
+        probe.AddAnnotation(controls[0]);
+        return ReadCSharpGuard(probe, ends) is { } guard
+            ? new CSharpGuard(branch, guard.Field, guard.Literal, guard.Offset) : null;
+    }
+
     private static string? CSharpRegionRefusal(Statement body, MethodInfo method)
     {
         // A region is a complete lexical body, never an offset min/max crop.
@@ -719,7 +743,7 @@ public sealed partial class GeneratorClient
         var unresolved = new JsonArray(); string coverage;
         if (windows.Length > 0)
         {
-            var candidates = document.Tree.Descendants.OfType<IfElseStatement>().Select(branch => ReadCSharpGuard(branch, conditionalEnds)).OfType<CSharpGuard>()
+            var candidates = document.Tree.Descendants.OfType<IfElseStatement>().Select(branch => ReadCSharpRegionGuard(branch, conditionalEnds)).OfType<CSharpGuard>()
                 .Where(guard => guard.Field == "type" && guard.Literal == type || guard.Field == "aiStyle" && guard.Literal == style).ToArray();
             var selectedTrueArms = candidates.Select(candidate => (AstNode)candidate.Branch.TrueStatement).ToHashSet();
             foreach (var candidate in candidates)
@@ -730,6 +754,8 @@ public sealed partial class GeneratorClient
                 string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 var excerpt = CloneCSharpTrueArm(candidate.Branch);
+                refusal = CSharpRegionRefusal(excerpt, method);
+                if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 guards.Add(candidate); rendered.Add(RenderOwnedCSharp(excerpt));
             }
             // Cover every original identity window represented by this graph.
@@ -744,6 +770,8 @@ public sealed partial class GeneratorClient
             if (guards.Count == 0) throw new NotSupportedException("csharp_no_closed_identity_region");
             coverage = "conditional_ast_regions";
             unresolved.Add("conditional_source_excerpts; original_guards_must_be_reached; enclosing_dispatch_and_runtime_hooks_unknown");
+            if (guards.Any(guard => guard.Branch.Condition is BinaryOperatorExpression { Operator: BinaryOperatorType.ConditionalAnd }))
+                unresolved.Add("entryGuards identify leading identity predicates only; each source body requires its own full condition when its original guard is reached; enclosing flow remains unknown");
         }
         else
         {
