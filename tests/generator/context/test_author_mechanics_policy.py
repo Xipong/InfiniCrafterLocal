@@ -156,3 +156,126 @@ def test_exact_typed_identity_must_bind_profile_mechanics_and_reference(factory,
     before=copy.deepcopy(p);out=compact_projectile_profile(p)
     assert 'authorSelection'not in out['mechanicsSource']
     assert p==before
+
+
+"""Synthetic contracts: exact source admission and real Author handoff behavior."""
+import copy
+import hashlib
+import pytest
+from infini_local.pipelines.context.whole_method_author import prepare_whole_method_author, apply_whole_method_author
+from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+from infini_local.pipelines.context.mechanics_context import mechanics_context
+
+
+def whole_method_parent():
+    profile = fixture()
+    source = profile['attackReference']['nativeCSharpSource']['records'][0]
+    code = 'void NativeAI() { Hook(ref type); if (type == 247 && active) Spawn(248); if (type == 757) Spawn(928); scale *= 2; }'
+    source.update(code=code, codeSha256=hashlib.sha256(code.encode()).hexdigest(), locations=[])
+    profile['mechanicsSource']['records'][0]['excludedCallOffsets'] = [10]
+    return {'name': 'Source fixture', 'directProjectileRaw': profile, 'parentSourceGraph': {
+        'source': 'parent_reachable_compiled_source_graph', 'version': 1, 'roots': [],
+        'members': [{'name': 'Fixture.NativeAI()', 'module': 0}],
+        'modules': [{'assembly': 'Fixture', 'mvid': 'fixture-module'}],
+        'nodes': [{'id': 0, 'method': 0, 'static': False, 'arguments': [], 'sha256': 'a' * 64,
+                   'values': {str(i): ['ldarg', 0, [], i] for i in range(100)},
+                   'statements': ['10'], 'blocks': [], 'possibleLocalWrites': {'1': ['3']},
+                   'unresolved': ['opaque hook'], 'coverage': 'source_slice'}],
+        'edges': [{'from': 0, 'to': 0, 'at': 10, 'context': ['9'], 'kind': 'helper_source'}],
+        'unresolved': ['execution unknown'], 'completeness': 'partial_source_graph'}}
+
+
+def test_full_source_is_only_method_body_and_retains_hook_conditions_and_child():
+    original = whole_method_parent(); saved = copy.deepcopy(original)
+    prepared, choices = prepare_whole_method_author(original)
+    assert choices and original == saved
+    assert prepared['directProjectileRaw']['mechanicsSource']['records'] == []
+    raw = mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    assert apply_whole_method_author(raw, choices)
+    node = raw['item']['parentSourceGraph']['nodes'][0]
+    assert not {'values', 'statements', 'blocks', 'possibleLocalWrites'} & set(node)
+    code = raw['mechanics']['source'][node['bodySource']['mechanicsSourceIndex']]['code']
+    assert code == saved['directProjectileRaw']['attackReference']['nativeCSharpSource']['records'][0]['code']
+    assert 'Hook(ref type)' in code and 'type == 247 && active' in code and 'type == 757' in code
+    assert not raw['mechanics']['uncertainty']['excludedChildProfiles']
+    assert 2 in [r['defaults'].get('type') for r in raw['mechanics']['projectiles']]
+    edge = raw['item']['parentSourceGraph']['edges'][0]
+    assert edge['context']['argumentBindings'] == [{'sourceILValue': '9', 'input': 'this', 'identityAfterHooks': 'unknown'}]
+    assert node['unresolved'] == ['opaque hook']
+
+
+@pytest.mark.parametrize('change', ['mvid','sha','signature','token','code','ambiguous','region','unknown-mechanics',
+    'unknown-graph','missing-members','bad-member','bool-member','complex-argument','missing-argument','static','parameters','duplicate-id','generated'])
+def test_uncertainty_keeps_original_graph_and_approximation(change):
+    item=whole_method_parent();profile=item['directProjectileRaw'];g=item['parentSourceGraph'];r=profile['attackReference']['nativeCSharpSource']['records'][0]
+    if change=='mvid':g['modules'][0]['mvid']='other'
+    elif change=='sha':g['nodes'][0]['sha256']='d'*64
+    elif change=='signature':g['members'][0]['name']='Fixture.NativeAI(System.Int32)'
+    elif change=='token':r['metadataToken']+=1
+    elif change=='code':r['code']+='tampered'
+    elif change=='ambiguous':profile['mechanicsSource']['records'].append(copy.deepcopy(profile['mechanicsSource']['records'][0]))
+    elif change=='region':r['coverage']='conditional_ast_regions'
+    elif change=='unknown-mechanics':profile['mechanicsSource']['records'][0]['futureGameplayFact']=1
+    elif change=='unknown-graph':g['nodes'][0]['futureGuard']=1
+    elif change=='missing-members':g.pop('members')
+    elif change=='bad-member':g['nodes'][0]['method']=999
+    elif change=='bool-member':g['nodes'][0]['method']=False
+    elif change=='complex-argument':g['nodes'][0]['values']['9']=['call',{'member':0},[],0]
+    elif change=='missing-argument':g['nodes'][0]['values'].pop('9')
+    elif change=='static':g['nodes'][0]['static']=True
+    elif change=='parameters':g['nodes'][0]['arguments']=['int x']
+    elif change=='duplicate-id':g['nodes'].append(copy.deepcopy(g['nodes'][0]))
+    elif change=='generated':item['generatedData']={'id':'generated'}
+    saved=copy.deepcopy(item);prepared,choices=prepare_whole_method_author(item)
+    assert choices==[] and prepared==saved and item==saved
+
+
+def test_existing_missing_call_argument_remains_unknown_and_never_becomes_this():
+    item=whole_method_parent();edge=item['parentSourceGraph']['edges'][0]
+    edge.update(context=['1000'],sourceCoverage='callsite_omitted_from_source_slice',unresolved='identity unknown')
+    prepared, choices = prepare_whole_method_author(item)
+    raw=mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    assert apply_whole_method_author(raw,choices)
+    assert raw['item']['parentSourceGraph']['edges'][0]['context']['argumentBindings']==[{'sourceILValue':'1000','unresolved':'identity unknown'}]
+
+
+def test_emitted_source_mismatch_refuses_all_body_changes():
+    prepared, choices=prepare_whole_method_author(whole_method_parent())
+    raw=mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    raw['mechanics']['source'][0]['code']+='changed'
+    before=copy.deepcopy(raw)
+    assert not apply_whole_method_author(raw,choices) and raw==before
+
+
+def test_unknown_sibling_profile_refuses_entire_shared_definition():
+    item=whole_method_parent()
+    item['effectiveProjectileRaw']=copy.deepcopy(item['directProjectileRaw'])
+    item['effectiveProjectileRaw']['mechanicsSource']['records'][0]['futureGameplayFact']={'mustKeep':True}
+    before=copy.deepcopy(item)
+    prepared, choices=prepare_whole_method_author(item)
+    assert not choices and prepared==before and item==before
+
+
+def test_conditional_fact_value_borrowing_keeps_original_body():
+    item=whole_method_parent()
+    item['parentSourceGraph']['nodes'][0]['conditionalFacts']=[{'sourceSlice':{'valuesInNode':['9']}}]
+    before=copy.deepcopy(item)
+    prepared, choices=prepare_whole_method_author(item)
+    assert not choices and prepared==before and item==before
+
+
+def test_unknown_edge_context_cannot_hide_a_value_reference():
+    item=whole_method_parent()
+    item['parentSourceGraph']['edges'][0]['context']={'receiver':'9'}
+    before=copy.deepcopy(item)
+    prepared, choices=prepare_whole_method_author(item)
+    assert not choices and prepared==before and item==before
+
+
+def test_unrelated_metadata_is_not_a_source_owner():
+    item=whole_method_parent()
+    item['unrelatedMetadata']={'profile':copy.deepcopy(item['directProjectileRaw'])}
+    item['unrelatedMetadata']['profile']['mechanicsSource']['records'][0]['futureGameplayFact']=1
+    saved=copy.deepcopy(item['unrelatedMetadata'])
+    prepared,choices=prepare_whole_method_author(item)
+    assert choices and prepared['unrelatedMetadata']==saved

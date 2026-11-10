@@ -226,37 +226,39 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         literal_presence[identity] = found
         return found
 
-    def candidate(value: Any) -> int | None:
+    def candidate(value: Any, field: str | None = None) -> int | None:
         if not isinstance(value, (dict, list, str)) or contains_literal(value):
             return None
         key = fingerprint(value)
-        return key if not protected[key] and not forbidden[key] and lengths[key] >= 128 else None
+        minimum = 64 if (field == "requiredPredicates" and isinstance(value, list)
+                         and value and all(isinstance(v, str) and re.fullmatch(r"b[0-9]+", v) for v in value)) else 128
+        return key if not protected[key] and not forbidden[key] and lengths[key] >= minimum else None
 
-    def count(value: Any) -> None:
+    def count(value: Any, field: str | None = None) -> None:
         nonlocal existing_source_reference
-        key = candidate(value)
+        key = candidate(value, field)
         if key is not None:
             counts[key] = counts.get(key, 0) + 1
         if isinstance(value, dict):
             existing_source_reference |= "sourceSameAs" in value
             for name, child in value.items():
                 if name not in literal_keys:
-                    count(child)
+                    count(child, name)
         elif isinstance(value, list):
             for child in value:
                 count(child)
 
     def children(value: Any) -> Any:
         if isinstance(value, dict):
-            return {name: copy.deepcopy(child) if name in literal_keys else visit(child)
+            return {name: copy.deepcopy(child) if name in literal_keys else visit(child, name)
                     for name, child in value.items()}
         if isinstance(value, list):
             return [visit(child) for child in value]
         return copy.deepcopy(value)
 
-    def visit(value: Any) -> Any:
-        key = candidate(value)
-        if key is not None and counts[key] > 1:
+    def visit(value: Any, field: str | None = None) -> Any:
+        key = candidate(value, field)
+        if key is not None and counts[key] > (2 if lengths[key] < 128 else 1):
             if key not in indices:
                 index = indices[key] = len(shared)
                 shared.append(None)
@@ -531,7 +533,7 @@ def _stage_projectile_profiles(raw: dict[str, Any], *, related: bool) -> Iterato
                     yield from profile_rows(profile, f"ammo.{section}[{index}]")
 
 
-def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str) -> dict[str, Any]:
+def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str, whole_sources: dict | None = None) -> dict[str, Any]:
     """Same brief layout for every ingredient, followed by technical source facts.
 
     No name/category routing or chosen inheritance roles. Native mechanics source
@@ -639,6 +641,10 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                     refusal = _identity_unresolved(item["parentSourceGraph"])
                     item.pop("parentSourceGraph")
                     raw["parentSourceGraphOmission"] = {"reason": "unrecognized_parent_source_graph_omitted", **refusal}
+        if stage == "author" and whole_sources and whole_sources.get(label):
+            from .whole_method_author import apply_whole_method_author
+            if not apply_whole_method_author(packet["raw"], whole_sources[label]):
+                raise ValueError("Whole-method Author source did not bind to emitted context")
         briefs[label] = brief
     # Author already has the shared-fact transport contract. Presentation stages
     # keep their existing literal wire rather than acquiring another decoding seam.

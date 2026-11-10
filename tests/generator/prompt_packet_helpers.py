@@ -71,12 +71,15 @@ def expand_catalog_targets(cards: list[dict[str, Any]], target_sets: dict[str, l
 
 def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
     """Independent lossless check; request_dossier deliberately stays literal."""
-    def text_parts(parts: Any) -> str:
+    def text_parts(parts: Any, owner: dict[str, Any] | None = None) -> str:
         assert isinstance(parts, list) and 1 <= len(parts) <= 3
         pieces = []
         for part in parts:
             if isinstance(part, str):
                 pieces.append(part)
+            elif part == {"entryCondition": True}:
+                assert isinstance(owner, dict) and isinstance(owner.get("entryCondition"), str)
+                pieces.append(owner["entryCondition"])
             else:
                 assert isinstance(part, dict) and set(part) == {"sourceText"}
                 index = part["sourceText"]
@@ -100,7 +103,7 @@ def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
                     result[key] = copy.deepcopy(child)
                 elif key == "sourceTextParts" and "sourceTextNotation" in dossier:
                     assert "code" not in value
-                    result["code"] = text_parts(child)
+                    result["code"] = text_parts(child, value)
                 else:
                     result[key] = expand(child, active)
             return result

@@ -158,7 +158,7 @@ def compact_author_parent_context(context: dict[str, Any]) -> dict[str, Any]:
     if used:
         result = {"parentContextNotation": {key: text for key, text in guides.items() if key in used}, **result}
     selected = result if _size(result) < _size(context) else context
-    return compact_author_source_text(selected)
+    return _share_local_entry_condition(compact_author_source_text(selected))
 
 
 _SOURCE_TEXT_READING = (
@@ -291,4 +291,59 @@ def _compact_author_source_text(context: dict[str, Any], *, include_pooled: bool
         return copy.deepcopy(context)
     result["nativeSourceText"] = shared
     result["sourceTextNotation"] = _SOURCE_TEXT_READING + (_SOURCE_TEXT_VALUE_READING if changed_facts else "")
+    return result if _size(result) < _size(context) else copy.deepcopy(context)
+
+
+_ENTRY_CONDITION_READING = (
+    "In sourceTextParts, {entryCondition:true} inserts this same record's complete entryCondition string. "
+    "Concatenate the pieces in order to reconstruct the exact code; it does not evaluate or waive the guard. "
+    "Source paths and snippets remain conditional static evidence, not observed gameplay."
+)
+
+
+def _share_local_entry_condition(context: dict[str, Any]) -> dict[str, Any]:
+    """Reference one long, verbatim sibling guard instead of repeating its text.
+
+    No source is parsed or inferred. Each changed record retains the full
+    readable condition locally and two literal surrounding code fragments.
+    Existing tables, scopes, conditions and dependencies are untouched.
+    """
+    def collision(value: Any) -> bool:
+        if isinstance(value, dict):
+            if set(value) == {"entryCondition"} and value["entryCondition"] is True:
+                return True
+            return any(collision(v) for k, v in value.items() if k not in _LITERAL_KEYS)
+        return isinstance(value, list) and any(collision(v) for v in value)
+
+    if collision(context):
+        return copy.deepcopy(context)
+    changed = False
+
+    def visit(value: Any) -> Any:
+        nonlocal changed
+        if isinstance(value, list):
+            return [visit(v) for v in value]
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        result = {k: copy.deepcopy(v) if k in _LITERAL_KEYS else visit(v) for k, v in value.items()}
+        code, condition = result.get("code"), result.get("entryCondition")
+        if (isinstance(code, str) and isinstance(condition, str) and len(condition) >= 512
+                and "sourceTextParts" not in result
+                and result.get("coverage") == "conditional_source_region; external_inputs_explicit"
+                and code.count(condition) == 1):
+            prefix, suffix = code.split(condition)
+            candidate = {k: v for k, v in result.items() if k != "code"}
+            candidate["sourceTextParts"] = [prefix, {"entryCondition": True}, suffix]
+            if _size(candidate) < _size(result):
+                result = candidate
+                changed = True
+        return result
+
+    result = visit(context)
+    if not changed:
+        return result
+    old_reading = result.get("sourceTextNotation")
+    if old_reading is not None and not isinstance(old_reading, str):
+        return copy.deepcopy(context)
+    result["sourceTextNotation"] = ((old_reading + " ") if old_reading else "") + _ENTRY_CONDITION_READING
     return result if _size(result) < _size(context) else copy.deepcopy(context)
