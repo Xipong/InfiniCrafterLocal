@@ -24,6 +24,12 @@ public sealed partial class InfiniCraftPlayer
 {
     private const string ReadOnlyRemoteStationClaimSaveKey = "infiniReadOnlyRemoteStationClaimV1";
     private const string DormantRemoteStationClaimsSaveKey = "infiniDormantRemoteStationClaimsV1";
+    private const string ActiveRemoteStationClaimSaveKey = "infiniActiveRemoteStationClaimV1";
+    private static readonly string[] RemoteStationClaimFields =
+    {
+        "infiniStationEscrowClientId", "infiniStationEscrowRemoteAuthority", StationOriginScopeSaveKey,
+        "infiniStationEscrowMirror", "infiniPendingStationEscrow", "infiniPendingRemoteCrafts",
+    };
     private const string StationOriginScopeSaveKey = "infiniStationEscrowOriginScopeV1";
     private string _stationEscrowOriginScope = "";
     private TagCompound? _readOnlyRemoteStationClaim;
@@ -243,7 +249,9 @@ public sealed partial class InfiniCraftPlayer
             if (_dormantRemoteStationClaims.Count > 0)
                 tag[DormantRemoteStationClaimsSaveKey] = _dormantRemoteStationClaims.Select(claim => (TagCompound)claim.Clone()).ToList();
             if (_stationEscrowUsesRemoteAuthority)
-                foreach (var entry in CaptureRemoteStationClaim()) tag[entry.Key] = entry.Value;
+                // Preserve opaque claim fields only inside the claim. The live writers
+                // below own root escrow state; SaveJournal and refunds own their fields.
+                tag[ActiveRemoteStationClaimSaveKey] = CaptureRemoteStationClaim();
             if (string.IsNullOrWhiteSpace(_stationEscrowClientId))
                 _stationEscrowClientId = Guid.NewGuid().ToString("N");
             tag["infiniStationEscrowClientId"] = _stationEscrowClientId;
@@ -333,7 +341,19 @@ public sealed partial class InfiniCraftPlayer
                 RetainDormantRemoteStationClaim((TagCompound)claim.Clone());
             if (remoteClaim)
             {
-                TagCompound liveClaim = (TagCompound)tag.Clone();
+                TagCompound rootClaim = (TagCompound)tag.Clone();
+                TagCompound liveClaim = rootClaim.ContainsKey(ActiveRemoteStationClaimSaveKey)
+                    ? rootClaim.GetCompound(ActiveRemoteStationClaimSaveKey)
+                    : rootClaim;
+                // Root escrow fields are authoritative, including absence after an
+                // operation settles. Nested opaque history cannot resurrect them.
+                if (!ReferenceEquals(liveClaim, rootClaim))
+                    foreach (string key in RemoteStationClaimFields)
+                    {
+                        liveClaim.Remove(key);
+                        if (rootClaim.ContainsKey(key)) liveClaim[key] = rootClaim[key];
+                    }
+                liveClaim.Remove(ActiveRemoteStationClaimSaveKey);
                 // Archive metadata is not part of the separate live authority.
                 liveClaim.Remove(ReadOnlyRemoteStationClaimSaveKey);
                 liveClaim.Remove(DormantRemoteStationClaimsSaveKey);

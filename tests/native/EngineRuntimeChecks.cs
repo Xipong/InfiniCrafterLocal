@@ -82,6 +82,18 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("issue345 ReturnOne ACK delayed authority refund", Issue345ReturnOneAckDelayedAuthorityRefundIsOneTime),
+            ("issue345 projectile-only native Goblin reset and roll", ProjectileOnlyNativeReforgeResetAndRoll),
+            ("issue345 projectile-only native multiple-root rounding", ProjectileOnlyNativePrefixMultipleRoots),
+            ("issue345 escrow nested history isolation", Issue345EscrowNestedHistoryCannotRestoreRetiredFields),
+            ("issue345 escrow refund one-time save", Issue345EscrowRefundDeliveredOnlyOnce),
+            ("issue345 escrow favorites current save", Issue345EscrowFavoritesRemainCurrent),
+            ("issue345 projectile-only native prefix attack", ProjectileOnlyNativePrefixEligibilityAndAttack),
+            ("issue345 projectile-only native prefix guards", ProjectileOnlyNativePrefixGuards),
+            ("issue345 projectile-only bridge lifecycle", ProjectileOnlyNativePrefixBridgeLifecycle),
+            ("issue345 sprite local path upper bound", SpriteLocalPathsRetainUpperBound),
+            ("issue345 sprite short local path loader and draw", () => SpriteLocalPathsShareLoaderAndDrawLimits(false)),
+            ("issue345 sprite long local path loader and draw", () => SpriteLocalPathsShareLoaderAndDrawLimits(true)),
             ("audit251 bare placement ordinary neighbor", BarePlacementCannotClaimAdjacentOrdinaryTile),
             ("audit251 bare placement generated neighbors", BarePlacementSeparatesConcurrentGeneratedNeighbors),
             ("audit251 bare placement native multitile", BarePlacementUsesExactNativeMultitile),

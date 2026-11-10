@@ -91,6 +91,9 @@ public sealed class RuntimeSpriteCache : IDisposable
     private const int MinTextureFileMegabytes = 1;
     private const int MaxTextureFileMegabytesHardLimit = 64;
     private const int MaxMissingOrBadRecords = 256;
+    // Both lifecycle loading and draw borrowing resolve to the same certified
+    // local path. Wire selector bounds belong to the asset transport owner.
+    private const int MaxLocalPathLength = 1024;
     private const float PrincipalAxisMinimumAnisotropy = 2.5f;
     private const float ForwardTipMinimumAnisotropy = 8f;
     private const byte PrincipalAxisAlphaThreshold = 8;
@@ -137,7 +140,7 @@ public sealed class RuntimeSpriteCache : IDisposable
             {
                 path = Environment.ExpandEnvironmentVariables(path).Trim();
                 string key = ResolveSelectedKey(path); // stat/selection only; no body read/hash/decode
-                if (key.Length > 320 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return null;
+                if (key.Length > MaxLocalPathLength || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return null;
                 if (_textures.TryGetValue(key, out var cached))
                 {
                     _hitCount++; cached.LastAccessTick = ++_accessCounter;
@@ -200,7 +203,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                 key = ResolveSelectedKey(path);
                 // Check the selected local file, not its transport alias. A ready
                 // URL may contain query/fragment data but still names this exact PNG.
-                if (key.Length > 1024 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                if (key.Length > MaxLocalPathLength || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 {
                     _missCount++;
                     return null;

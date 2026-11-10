@@ -626,6 +626,42 @@ def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 
+def _llm_json_with_transient_retries(
+    payload: dict[str, Any], timeout: float, context: dict[str, Any], retry_causes: list[str],
+) -> dict[str, Any]:
+    """Retry a selected context within the caller's logical deadline and budget."""
+    try:
+        result = _llm_json_single_context(payload, timeout, context)
+        return result
+    except Exception as first_error:
+        remaining_seconds(diagnostics._request_deadline(timeout))
+        if not rejections._is_transport_error(first_error):
+            raise
+        last_error = first_error
+        total_attempts = max(1, int(config.LLM_NETWORK_ATTEMPTS or 2))
+        for attempt in range(2, total_attempts + 1):
+            retry_causes.append("transient_http")
+            diagnostics._attempt_reason("transient_http")
+            delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
+            log_event("warn", "retrying transient LLM failure on selected profile", {
+                "attempt": attempt,
+                "maxAttempts": total_attempts,
+                "delaySeconds": delay,
+                "provider": profiles.active_llm_provider(context),
+                "model": context.get("model"),
+                "status": getattr(last_error, "code", None),
+            })
+            _llm_backoff(delay)
+            try:
+                result = _llm_json_single_context(payload, timeout, context)
+                return result
+            except Exception as retry_error:
+                last_error = retry_error
+                if not rejections._is_transport_error(retry_error):
+                    raise
+        raise last_error
+
+
 @diagnostics._logical_llm_call
 def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any]:
     mode = _record_llm_stage(payload)
@@ -647,7 +683,12 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
             attempted.add(lease.profile_id)
             attempt_payload = payload if lease.profile_id == override_profile_id else _payload_without_model_override(payload)
             try:
-                result = _llm_json_single_context(attempt_payload, timeout, context)
+                # A pin may be the initial route or adopted by failover. It
+                # always retains the same bounded in-place transient retries.
+                if profiles._openrouter_provider(context):
+                    result = _llm_json_with_transient_retries(attempt_payload, timeout, context, retry_causes)
+                else:
+                    result = _llm_json_single_context(attempt_payload, timeout, context)
                 return finish(_with_transport_retry_debug(result, retry_causes), attempt_payload)
             except Exception as profile_error:
                 remaining_seconds(diagnostics._request_deadline(timeout))
@@ -667,34 +708,6 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
     primary_payload = payload
     if lease is not None and lease.profile_id != lease.initial_profile_id:
         primary_payload = _payload_without_model_override(payload)
-    try:
-        result = _llm_json_single_context(primary_payload, timeout, primary)
-        return finish(result, primary_payload)
-    except Exception as first_error:
-        remaining_seconds(diagnostics._request_deadline(timeout))
-        if not rejections._is_transport_error(first_error):
-            raise
-        last_error = first_error
-        retry_causes: list[str] = []
-        total_attempts = max(1, int(config.LLM_NETWORK_ATTEMPTS or 2))
-        for attempt in range(2, total_attempts + 1):
-            retry_causes.append("transient_http")
-            diagnostics._attempt_reason("transient_http")
-            delay = min(1.5, 0.2 * (2 ** (attempt - 2)))
-            log_event("warn", "retrying transient LLM failure on selected profile", {
-                "attempt": attempt,
-                "maxAttempts": total_attempts,
-                "delaySeconds": delay,
-                "provider": profiles.active_llm_provider(primary),
-                "model": primary.get("model"),
-                "status": getattr(last_error, "code", None),
-            })
-            _llm_backoff(delay)
-            try:
-                result = _llm_json_single_context(primary_payload, timeout, primary)
-                return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
-            except Exception as retry_error:
-                last_error = retry_error
-                if not rejections._is_transport_error(retry_error):
-                    raise
-        raise last_error
+    retry_causes: list[str] = []
+    result = _llm_json_with_transient_retries(primary_payload, timeout, primary, retry_causes)
+    return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
