@@ -41,6 +41,7 @@ class TmlWorkflowTests(unittest.TestCase):
             for name in ("build/build_tml_windows.ps1", "build/parse_tml_build_log.py", "validate_release.py",
                          "workbench/workbench.py", "workbench/python/probe.py",
                          "workbench/python/native_environment.py",
+                         "workbench/python/native_review.py",
                          "workbench/python/campaign.py", "workbench/python/agent_evidence.py"):
                 target = tools / name
                 target.parent.mkdir(parents=True, exist_ok=True)
