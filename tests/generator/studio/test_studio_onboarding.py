@@ -251,7 +251,11 @@ const click=(dataset={},attributes=[])=>events.click({target:{closest(){return {
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, monkeypatch):
+@pytest.mark.parametrize(('system', 'machine', 'asset', 'executable'), [
+    ('Linux', 'x86_64', 'sd-bin-linux-x64-vulkan.zip', 'sd-server'),
+    ('Windows', 'AMD64', 'sd-bin-win-x64-vulkan.zip', 'sd-server.exe'),
+])
+def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, monkeypatch, system, machine, asset, executable):
     import hashlib
     import io
     import urllib.error
@@ -264,17 +268,17 @@ def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, 
     calls = []
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, 'w') as package:
-        package.writestr('bin/sd-server', b'fixture executable never run')
+        package.writestr(f'bin/{executable}', b'fixture executable never run')
     data = archive.getvalue()
-    url = 'https://github.com/leejet/stable-diffusion.cpp/releases/download/test/sd-bin-linux-x64-vulkan.zip'
-    metadata = {'tag_name': 'test', 'assets': [{'id': 42, 'name': 'sd-bin-linux-x64-vulkan.zip',
+    url = f'https://github.com/leejet/stable-diffusion.cpp/releases/download/test/{asset}'
+    metadata = {'tag_name': 'test', 'assets': [{'id': 42, 'name': asset,
         'browser_download_url': url, 'size': len(data), 'digest': 'sha256:' + hashlib.sha256(data).hexdigest()}]}
     def download(target):
         calls.append(target)
         return io.BytesIO(json.dumps(metadata).encode() if target == installer_owner.CATALOG_URL else data)
     monkeypatch.setattr(installer_owner, '_open_url', download)
-    monkeypatch.setattr(installer_owner.host_platform, 'system', lambda: 'Linux')
-    monkeypatch.setattr(installer_owner.host_platform, 'machine', lambda: 'x86_64')
+    from types import SimpleNamespace
+    monkeypatch.setattr(installer_owner, 'host_platform', SimpleNamespace(system=lambda: system, machine=lambda: machine))
     before, draft = config.read_bytes(), dict(app.values)
     controller.snapshot()
     assert calls == [], 'Opening Studio must not contact GitHub'
@@ -321,3 +325,87 @@ def test_installer_refuses_client_destinations_and_unselected_builds(studio, act
     assert app.actions.results[action]['ok'] is False
     assert config.read_bytes() == before and app.values == draft
     assert not controller.installer.snapshot()['busy']
+
+
+def test_real_transport_progress_errors_clear_only_after_persistence(studio):
+    """Run both shipped JS owners against the real HTTP/controller/disk path."""
+    import queue
+    import shutil
+    import subprocess
+    import threading
+    from suite_paths import GENERATOR_ROOT, REPO_ROOT
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is needed for the real transport onboarding regression')
+    controller, app, config = studio
+    server = controller.server
+    before = config.read_bytes()
+    for index in range(server.commands.maxsize):
+        server.commands.put_nowait({'id': f'earlier-{index}', 'action': 'onboardingProgress',
+                                    'values': {}, 'extra': {'step': 0}})
+    server.publish(controller.snapshot())
+    server.start()
+    worker = subprocess.Popen(
+        [node, str(REPO_ROOT / 'tests/generator/studio_onboarding_transport.cjs')],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env={**os.environ, 'IFC_GENERATOR': str(GENERATOR_ROOT),
+             'IFC_BASE': server.base_url, 'IFC_TOKEN': server.token})
+    messages = queue.Queue()
+
+    def read_messages():
+        for line in worker.stdout:
+            messages.put(line)
+        messages.put(None)
+
+    reader = threading.Thread(target=read_messages, daemon=True)
+    reader.start()
+
+    def receive(expected):
+        line = messages.get(timeout=10)
+        assert line is not None, worker.stderr.read()
+        assert json.loads(line)['event'] == expected
+
+    def resume():
+        worker.stdin.write('continue\n')
+        worker.stdin.flush()
+
+    try:
+        receive('rejected')
+        while not server.commands.empty():
+            controller.apply(server.commands.get_nowait())
+        server.publish(controller.snapshot())
+        resume()
+        receive('accepted')
+        command = server.commands.get_nowait()
+        controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is True
+        assert owner().load_progress(config)['step'] == 1
+        server.publish(controller.snapshot())
+        resume()
+        receive('disk-request')
+        sidecar(config).unlink()
+        sidecar(config).mkdir()
+        command = server.commands.get_nowait()
+        with pytest.raises(OSError):
+            controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is False
+        server.publish(controller.snapshot())
+        resume()
+        receive('recovery-request')
+        sidecar(config).rmdir()
+        command = server.commands.get_nowait()
+        controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is True
+        assert owner().load_progress(config)['step'] == 3
+        server.publish(controller.snapshot())
+        resume()
+        receive('passed')
+        assert worker.wait(timeout=3) == 0, worker.stderr.read()
+        assert config.read_bytes() == before
+    finally:
+        if worker.poll() is None:
+            worker.terminate()
+        worker.wait(timeout=3)
+        reader.join(timeout=3)
+        assert not reader.is_alive()
