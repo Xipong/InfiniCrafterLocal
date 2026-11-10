@@ -6,6 +6,7 @@ Missing/ambiguous definition certificates or identity-pruning refusals keep both
 from __future__ import annotations
 import copy
 import hashlib
+import json
 from typing import Any
 from .csharp_source_view import _records, _certificate, _at_path, _model_source_record, _specialized_record
 
@@ -107,4 +108,69 @@ def selected_diagnostics(rows: Any, paths: list) -> Any:
             row['selectedSource']='producer_readable_source_under_identity_assumption'
             if isinstance(program,dict):
                 row['sourceCoverage']={k:copy.deepcopy(program[k])for k in ('coverage','unresolved','identitySelection')if k in program}
+    return result
+
+
+def strict_source_diagnostics(rows: Any, reference: dict, attack: dict,
+                              removed_definitions: list) -> Any:
+    """A complete unchanged method can replace its derived diagnostic graph.
+
+    This is independent of approximate identity pruning. Bind the original graph
+    and the actually emitted whole method exactly; never use a regional source,
+    a same-named method, or a source superseded by the approximate policy.
+    """
+    from .attack_tables import unpack_attack_tables
+    from .csharp_source_view import _known_graph
+    if not isinstance(rows, list):
+        return rows
+    records = _records(reference) or {}
+    projected = unpack_attack_tables(attack)
+    envelope = projected.get('nativeCSharpSource', {})
+    emitted = envelope.get('records', []) if isinstance(envelope, dict) else []
+    result = copy.deepcopy(rows)
+    for i, row in enumerate(result):
+        if not isinstance(row, dict) or not isinstance(row.get('path'), list):
+            continue
+        program = row.get('selectedProgram')
+        if (not isinstance(program, dict) or set(program) - {
+                'method', 'observations', 'dependencies', 'predicates', 'symbols',
+                'coverage', 'unresolved', 'identitySelection'}):
+            continue
+        original, selected = _at_path(reference, row['path']), _at_path(projected, row['path'])
+        if not original or not selected or not _known_graph(original[2]) or not isinstance(selected[2], dict):
+            continue
+        definition = _definition(original[2])
+        if definition is None or definition in removed_definitions:
+            continue
+        stricts = [r for r in records.values() if r.get('coverage') == 'whole_method'
+                   and _definition(r) == definition and row['path'] in r['graphPaths']]
+        if len(stricts) != 1:
+            continue
+        matches = [r for r in emitted if isinstance(r, dict)
+                   and r.get('id') == selected[2].get('nativeCSharpSourceRef')
+                   and isinstance(r.get('id'), str)
+                   and {k: v for k, v in r.items() if k != 'id'} == _model_source_record(stricts[0])]
+        if len(matches) != 1:
+            continue
+        qualifiers = []
+        def retain_qualifiers(value: Any, path: tuple = ()) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in {'unresolved', 'coverage', 'scope', 'identitySelection',
+                               'identitySelectionUnavailable', 'graphCapture'}:
+                        qualifiers.append({'path': list((*path, key)), 'value': copy.deepcopy(child)})
+                    else:
+                        retain_qualifiers(child, (*path, key))
+            elif isinstance(value, list):
+                for index, child in enumerate(value):
+                    retain_qualifiers(child, (*path, index))
+        retain_qualifiers(program)
+        replacement = {k: v for k, v in row.items() if k != 'selectedProgram'}
+        replacement.update(selectedSource='unchanged_verified_whole_method',
+                           nativeCSharpSourceRef=matches[0]['id'])
+        if qualifiers:
+            replacement['selectedProgramQualifiers'] = qualifiers
+        size = lambda value: len(json.dumps(value, ensure_ascii=False, separators=(',', ':')))
+        if size(replacement) < size(row):
+            result[i] = replacement
     return result

@@ -242,7 +242,7 @@ view can omit distant action; the full GIF remains available. The original PNGs,
 HTML review are alongside it in `runs/<case>/`. Default capture uses a fixed
 side-view, up to 120 ticks of held input and 180 total ticks. Use `--hold`,
 `--ticks`, `--input`, `--action`, `--assert` and `--set` to express the desired
-interaction; ammunition is never guessed. `--gif-stride` samples only the GIF; by default it is selected to fit the GIF pixel budget and recorded in the plan and receipt.
+interaction; ammunition is never guessed. `--gif-stride` samples only the GIF; its default starts at 2 (30 fps at 60 native ticks/s), increases if needed to fit the GIF pixel budget, and is recorded in the plan and receipt.
 `--ammo ITEM_ID[:STACK]` puts explicitly selected vanilla ammo into slots 54–57
 (repeat for up to four types; default stack 100). Native admission checks the
 item type and maximum stack. `--aim X Y` sets the initial cursor in world pixels;
@@ -612,8 +612,9 @@ python tools/workbench/workbench.py timeline artifacts/my-run/native.json \
 
 Open the generated `native-review/native.html`. PNG hashes/dimensions and trace
 completeness are validated. GIF export assembles recorded images; it does not invent
-intermediate physics. `--gif-stride 2` samples only the GIF, leaving the HTML/trace
-complete. Viewer charge indicators and observed-state bookmarks are telemetry, not
+intermediate physics. Native GIF export defaults to `--gif-stride 2` (30 fps),
+leaving the HTML/trace complete. Explicit `--gif-stride 1` retains every frame,
+but its 10/20ms encoded delays can be stretched by GIF viewers. Viewer charge indicators and observed-state bookmarks are telemetry, not
 claims that the original game's HUD or audio was rendered.
 
 ### Native graphics and resources
@@ -1292,8 +1293,18 @@ SpriteBatch overloads are observed once even when one forwards to the other.
 only PNG encoding, including when native dust drawing is disabled.
 
 Native GIF export rounds cumulative native tick timestamps to centiseconds, so
-60fps and stride-2 review do not accumulate a speed error. Palette conversion and
-an explicit final 800ms pause remain; no intermediate game frame is invented.
+the encoded duration is `round((lastTick - firstTick) * 100 / 60) * 10 + 800` ms,
+independent of stride. The default stride 2 yields 30/40ms delays without changing
+simulation speed. When an appended final tick is adjacent to the previous sample,
+stride >1 omits that penultimate sample instead of encoding a short tail delay.
+Both endpoint PNGs and their original presentation timestamps are preserved. A
+two-tick clip necessarily retains its 20ms interval; explicit stride 1 retains
+10/20ms intervals. Higher strides remain supported. Palette conversion and an
+explicit final 800ms pause remain; no intermediate game frame is invented.
+Pillow may combine identical images and sum their delays, so an encoded GIF can
+have fewer frames and longer individual delays than the sampling receipt.
+Decoded timing tests verify both GIFs and their total duration, not actual viewer
+playback speed; no universal browser/viewer timing guarantee is claimed.
 
 Complete before/after native dust states live once in `nativeRender.snapshots`; PNG frame receipts refer to the same tick with `nativeDustStateTick` and counts. Compact JSON preserves every observation without duplicating particle arrays, keeping trail-heavy bow traces within the portable reader budget.
 

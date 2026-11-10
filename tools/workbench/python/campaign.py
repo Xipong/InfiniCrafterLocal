@@ -10,6 +10,7 @@ import sys
 
 import workbench as w
 from python.agent_evidence import NATIVE_EXIT, report
+from python.native_review import DEFAULT_GIF_STRIDE
 
 
 def keys(obj, allowed, context):
@@ -81,7 +82,7 @@ def plan_suite(manifest):
             raise ValueError("vanillaItem cannot use local_cache boundary")
         if case.get("review", "none") not in ("none", "schematic", "native"):
             raise ValueError("review must be none, schematic or native")
-        if type(case.get("gif", False)) is not bool or type(case.get("gifStride", 1)) is not int or not 1 <= case.get("gifStride", 1) <= 600:
+        if type(case.get("gif", False)) is not bool or type(case.get("gifStride", DEFAULT_GIF_STRIDE)) is not int or not 1 <= case.get("gifStride", DEFAULT_GIF_STRIDE) <= 600:
             raise ValueError("gif must be boolean and gifStride must be 1..600")
         if case.get("gif") and case.get("review") != "native":
             raise ValueError("GIF suite cases require native review")
@@ -133,7 +134,7 @@ def run_suite(manifest, output, no_build=False):
                    "--review", case.get("review", "none"), "--timeout", str(case.get("timeout", 180)),
                    "--item-boundary", case.get("itemBoundary", "fresh")]
         if case.get("gif"):
-            command += ["--gif", "--gif-stride", str(case.get("gifStride", 1))]
+            command += ["--gif", "--gif-stride", str(case.get("gifStride", DEFAULT_GIF_STRIDE))]
         if "vanillaItem" in case:
             command += ["--vanilla-item", case["vanillaItem"]]
         else:

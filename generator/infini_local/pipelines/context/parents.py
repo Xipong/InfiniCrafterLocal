@@ -9,7 +9,7 @@ from infini_local.core.item_identity_tools import (
     generated_data_of,
     item_field,
 )
-from infini_local.pipelines.context.author_mechanics_policy import select_author_mechanics, selected_diagnostics, _definition, preferred_guarded_records
+from infini_local.pipelines.context.author_mechanics_policy import select_author_mechanics, selected_diagnostics, strict_source_diagnostics, _definition, preferred_guarded_records
 from infini_local.pipelines.context.attack_behavior import project_attack_behavior
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
 from infini_local.pipelines.context.native_references import known_projectile_references
@@ -433,6 +433,7 @@ def compact_projectile_profile(proj: dict[str, Any], *, include_references: bool
                         if _definition(record) not in selection["certificates"]]
             if verified:
                 mechanics["verifiedSourceRecords"] = verified
+            selected = strict_source_diagnostics(selected, reference, attack, selection["certificates"])
         if selected:
             out["strictIdentitySelections"] = selected
     # The native producer owns verification and scope. Never infer a trajectory

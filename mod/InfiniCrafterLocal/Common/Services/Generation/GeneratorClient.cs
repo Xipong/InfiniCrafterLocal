@@ -399,6 +399,15 @@ public sealed partial class GeneratorClient
                 return null;
             if (cached is not null)
                 return cached;
+
+            // Publish only the terminal generation failure, after recovery is
+            // exhausted. Successful retries and cancellation remain failure-free.
+            if (attempt == attempts)
+            {
+                request.FailureStatusCode = result.StatusCode;
+                request.FailureMessage = result.Message;
+                request.FailurePlayerMessage = result.PlayerMessage;
+            }
         }
         return null;
     }

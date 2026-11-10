@@ -14,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 
+from python.native_review import DEFAULT_GIF_STRIDE
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 NATIVE = HERE / "native"
@@ -796,13 +798,13 @@ def main():
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")
-    r=sub.add_parser("native-review");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--gif",action="store_true");r.add_argument("--gif-stride",type=int,default=1,help="Sample every N original PNGs only in optional GIF; HTML retains every native tick")
+    r=sub.add_parser("native-review");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--gif",action="store_true");r.add_argument("--gif-stride",type=int,default=DEFAULT_GIF_STRIDE,help="Sample every N original PNGs only in optional GIF (default 2: 30 fps); HTML retains every native tick")
     r=sub.add_parser("timeline");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True)
     r=sub.add_parser("frame");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int,required=True);r.add_argument("--out",type=Path,required=True);r.add_argument("--camera",choices=("action","scene"),default="action")
     r=sub.add_parser("render");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--png",action="store_true");r.add_argument("--gif",action="store_true");r.add_argument("--camera",choices=("action","scene"),default="action")
     r=sub.add_parser("run");sources=r.add_mutually_exclusive_group(required=True);sources.add_argument("--item",type=Path);sources.add_argument("--vanilla-item",help="Exact native ItemID name or positive integer; backend admits verified controls only");r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh",help="Use the actual fresh-input or saved-cache production reader; never rewrite source JSON");r.add_argument("--png",action="store_true");r.add_argument("--gif",action="store_true");r.add_argument("--camera",choices=("action","scene"),default="action")
     r.add_argument("--review",choices=("schematic","native","none"),default="schematic",help="Review export only; none still records native frames if requested by scenario")
-    r.add_argument("--gif-stride",type=int,default=1);r.add_argument("--timeout",type=int,default=180)
+    r.add_argument("--gif-stride",type=int,default=DEFAULT_GIF_STRIDE);r.add_argument("--timeout",type=int,default=180)
     args=parser.parse_args()
     try:
         if args.command in ("setup-particle","setup-luminance","setup-vfx"):

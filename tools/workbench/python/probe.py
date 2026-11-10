@@ -12,6 +12,7 @@ import sys
 
 import workbench as w
 from python.campaign import expected_result, run_suite
+from python.native_review import DEFAULT_GIF_STRIDE
 
 
 def finite_json(value):
@@ -197,7 +198,7 @@ def plan_probe(args):
     bounded_integer(args.timeout, 1, 3600, "--timeout")
     if args.gif_stride is not None:
         bounded_integer(args.gif_stride, 1, 600, "--gif-stride")
-    gif_stride = args.gif_stride or 1
+    gif_stride = args.gif_stride if args.gif_stride is not None else DEFAULT_GIF_STRIDE
     if args.gif:
         render = scene["nativeRender"]
         width = bounded_integer(render.get("width", 512), 64, 1024, "nativeRender.width")
@@ -410,7 +411,7 @@ def add_parser(subparsers):
     parser.add_argument("--gif", action="store_true", help="Capture actual native player/item/VFX frames and export a GIF (requires graphics assets)")
     parser.add_argument("--test-world-id", type=int, help="Explicitly copy an item to this numeric test world (only recipeMeta.worldId changes; original and receipt retained)")
     parser.add_argument("--asset-dir", type=Path, action="append", default=[], help="Directory with published item PNGs; repeatable")
-    parser.add_argument("--gif-stride", type=int, help="Sample every N recorded frames in GIF; default auto-fits pixel budget")
+    parser.add_argument("--gif-stride", type=int, help="Sample every N recorded frames in GIF; default starts at 2 (30 fps) and increases to fit pixel budget")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--out", type=Path, help="Fresh output directory; default unique artifacts/workbench/probe-* directory")
     parser.add_argument("--no-build", action="store_true")

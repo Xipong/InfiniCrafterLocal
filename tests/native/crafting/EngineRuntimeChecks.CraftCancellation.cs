@@ -43,6 +43,9 @@ internal static partial class EngineRuntimeChecks
                     Equal(heldOrdinal, server.Requests.Count, "no post-cancellation poll or generation retry");
                     Equal(false, client.IsEndpointCoolingDown, "cancellation does not punish independent lanes");
                     Equal(false, request.FailureIsFatal, "no failure/refund outcome manufactured by HTTP cancellation");
+                    Equal(0, request.FailureStatusCode, "cancelled request has no HTTP failure status");
+                    Equal("", request.FailureMessage, "cancelled request has no diagnostic failure");
+                    Equal("", request.FailurePlayerMessage, "cancelled request has no player failure message");
                     server.FatalGeneration = true;
                     server.Release();
                     var independent = new GeneratorClient.PreparedGenerationRequest();
@@ -64,6 +67,9 @@ internal static partial class EngineRuntimeChecks
                 delayRequest.Cancel();
                 Equal(true, await delayWorker.WaitAsync(TimeSpan.FromSeconds(1)) is null, "recovery delay is cancellable");
                 Equal(3, delayServer.Requests.Count, "recovery cancellation starts no second full generation");
+                Equal(0, delayRequest.FailureStatusCode, "recovery-delay cancellation has no transient status");
+                Equal("", delayRequest.FailureMessage, "recovery-delay cancellation has no transient diagnostic");
+                Equal("", delayRequest.FailurePlayerMessage, "recovery-delay cancellation has no transient player message");
             }
             finally { delayRequest.Cancel(); await delayWorker.WaitAsync(TimeSpan.FromSeconds(5)); }
         }
@@ -125,6 +131,87 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static async Task CraftExhaustedTransientFailureRetainsDiagnosticsAsync(bool truncateResponse)
+    {
+        string? oldRecovery = Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS");
+        string? oldAttempts = Environment.GetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS");
+        try
+        {
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS", "0");
+            foreach (var (attempts, finalStatus) in new[] { (1, 503), (2, 503), (2, 429) })
+            {
+                Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", attempts.ToString());
+                await using var server = new CraftHttpFixture(0) {
+                    RejectSecondGeneration = true, FailureStatus = finalStatus,
+                    FailureJson = "{\"error\":\"temporarily_unavailable\",\"message\":\"retry budget exhausted\",\"playerMessage\":\"Please try again later.\"}",
+                    TruncateGenerationResponse = truncateResponse,
+                };
+                var client = new GeneratorClient { Endpoint = server.Endpoint };
+                var request = new GeneratorClient.PreparedGenerationRequest();
+                Equal(true, await Task.Run(() => client.GeneratePreparedBlocking(request)).WaitAsync(TimeSpan.FromSeconds(5)) is null,
+                    "exhausted transient request returns no item");
+                Equal(attempts == 1 ? "cache,generate,cache" : "cache,generate,cache,generate,cache",
+                    string.Join(",", server.Requests), "transient failure preserves retry/recovery topology");
+                Equal(false, request.FailureIsFatal, "transient exhaustion is not an authoritative recipe rejection");
+                Equal(truncateResponse ? 0 : finalStatus, request.FailureStatusCode, "last generation failure status survives exhausted recovery");
+                if (truncateResponse)
+                    Equal(false, string.IsNullOrWhiteSpace(request.FailureMessage), "transport exception diagnostic survives exhausted recovery");
+                else
+                    Equal("temporarily_unavailable: retry budget exhausted", request.FailureMessage, "HTTP diagnostic survives exhausted recovery");
+                Equal(truncateResponse ? "" : "Please try again later.", request.FailurePlayerMessage,
+                    "transient player message is retained without inventing one for transport exceptions");
+                Equal(false, request.CancellationToken.IsCancellationRequested, "exhaustion does not retire the request");
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS", oldRecovery);
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", oldAttempts);
+        }
+    }
+
+    private static async Task CraftSuccessfulRecoveryClearsFailureStateAsync()
+    {
+        string? oldRecovery = Environment.GetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS");
+        string? oldAttempts = Environment.GetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS");
+        try
+        {
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS", "0");
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", "2");
+            foreach (var (cacheHit, successAfterRequest, topology) in new[] {
+                (true, 0, "cache"),
+                (false, 0, "cache,generate"),
+                (true, 2, "cache,generate,cache"),
+                (false, 3, "cache,generate,cache,generate"),
+            })
+            {
+                var data = GeneratedItemData.Placeholder();
+                data.Id = "craft-recovery-control"; data.Name = "Craft recovery control"; data.SourceMode = "test_fixture";
+                await using var server = new CraftHttpFixture(0) {
+                    SuccessJson = data.ToJson(), CacheHit = cacheHit, SuccessAfterRequest = successAfterRequest,
+                    FailureJson = "{\"error\":\"transient_before_success\",\"playerMessage\":\"Temporary outage.\"}",
+                };
+                var client = new GeneratorClient { Endpoint = server.Endpoint };
+                var request = new GeneratorClient.PreparedGenerationRequest {
+                    FailureIsFatal = true, FailureStatusCode = 422,
+                    FailureMessage = "previous failure", FailurePlayerMessage = "previous player message",
+                };
+                var result = await Task.Run(() => client.GeneratePreparedBlocking(request)).WaitAsync(TimeSpan.FromSeconds(5));
+                Equal(data.Id, result?.Id ?? "", "success delivers after " + topology);
+                Equal(topology, string.Join(",", server.Requests), "successful recovery does not add generation attempts");
+                Equal(false, request.FailureIsFatal, "success clears prior fatal classification");
+                Equal(0, request.FailureStatusCode, "success exposes no old or intermediate transient status");
+                Equal("", request.FailureMessage, "success exposes no old or intermediate transient diagnostic");
+                Equal("", request.FailurePlayerMessage, "success exposes no old or intermediate player message");
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_CACHE_RECOVERY_SECONDS", oldRecovery);
+            Environment.SetEnvironmentVariable("INFINI_CRAFT_HTTP_ATTEMPTS", oldAttempts);
+        }
+    }
+
     // Real local HTTP against production GeneratorClient. No model/provider calls.
     private sealed class CraftHttpFixture : IAsyncDisposable
     {
@@ -142,6 +229,8 @@ internal static partial class EngineRuntimeChecks
         internal bool RejectSecondGeneration;
         internal string? SuccessJson;
         internal bool CacheHit;
+        internal int SuccessAfterRequest;
+        internal bool TruncateGenerationResponse;
         internal string DiscoveryJson = "{\"multiplayer\":{\"assetTransport\":\"native\",\"assetPublicBaseUrl\":\"\"}}";
         internal int DiscoveryStatus = 200;
         internal int FailureStatus = 422;
@@ -203,10 +292,13 @@ internal static partial class EngineRuntimeChecks
                         int ordinal = Requests.Count;
                         if (!cache) generations++;
                         if (ordinal == heldOrdinal) { Held.TrySetResult(true); await release.Task.WaitAsync(stop.Token); }
-                        bool success = SuccessJson is not null && (!cache || CacheHit);
+                        bool success = SuccessJson is not null && ordinal > SuccessAfterRequest && (!cache || CacheHit);
                         int status = success ? 200 : cache ? 404 : FatalGeneration || RejectSecondGeneration && generations > 1 ? FailureStatus : 503;
                         byte[] responseBody = Encoding.UTF8.GetBytes(success ? SuccessJson! : FailureJson);
-                        byte[] headers = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {responseBody.Length}\r\nConnection: close\r\n\r\n");
+                        // Declare one byte more than sent to exercise HttpClient's real
+                        // transport exception path without an external service.
+                        int responseLength = responseBody.Length + (!cache && TruncateGenerationResponse ? 1 : 0);
+                        byte[] headers = Encoding.ASCII.GetBytes($"HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {responseLength}\r\nConnection: close\r\n\r\n");
                         try { await stream.WriteAsync(headers, stop.Token); await stream.WriteAsync(responseBody, stop.Token); await stream.FlushAsync(stop.Token); }
                         catch (Exception error) when (ordinal == heldOrdinal && error is IOException or SocketException) { }
                         if (ordinal == 3) RecoveryReplied.TrySetResult(true);

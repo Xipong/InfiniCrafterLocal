@@ -3,6 +3,10 @@ import hashlib,html,json,shutil,struct,zlib
 from pathlib import Path
 
 
+# GIF viewers can stretch 10 ms delays; keep normal playback at 30 fps or lower.
+DEFAULT_GIF_STRIDE = 2
+
+
 def png_dimensions(raw):
     if len(raw)<33 or raw[:8]!=b'\x89PNG\r\n\x1a\n' or raw[12:16]!=b'IHDR' or raw[8:12]!=b'\x00\x00\x00\r':raise ValueError('Native frame is not PNG')
     width,height,depth,color,compression,filtering,interlace=struct.unpack('>IIBBBBB',raw[16:29])
@@ -112,7 +116,7 @@ def close_crop(trace, frame):
         return None
 
 
-def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
+def export_native_review(trace,trace_path,output,gif=False,gif_stride=DEFAULT_GIF_STRIDE):
     if type(gif_stride) is not int or not 1<=gif_stride<=600:raise ValueError("GIF stride must be an integer1..600")
     trace_bytes=Path(trace_path).read_bytes()
     if json.loads(trace_bytes)!=trace:raise ValueError('Native trace changed before review export')
@@ -131,6 +135,12 @@ def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
     if gif:
         gif_frames=frames[::gif_stride]
         if gif_frames[-1]!=frames[-1]:gif_frames.append(frames[-1])
+        # A final odd tick would otherwise reintroduce a 10/20 ms GIF delay.
+        # Omit only the adjacent penultimate sample, retaining first/last ticks
+        # and their exact cumulative timing. A two-tick clip cannot avoid a
+        # short delay without dropping an endpoint or changing its duration.
+        if gif_stride>1 and len(gif_frames)>2 and gif_frames[-1][0]['tick']-gif_frames[-2][0]['tick']==1:
+            del gif_frames[-2]
         if sum(f['width']*f['height'] for f,_ in gif_frames)>100_000_000:raise ValueError('GIF exceeds safe pixel budget; use --gif-stride or HTML/raw PNGs')
         try:from PIL import Image
         except ImportError as exc:raise RuntimeError('Native GIF export requires optional Pillow') from exc
@@ -143,7 +153,7 @@ def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
         times=[round((f['tick']-gif_frames[0][0]['tick'])*100/60) for f,_ in gif_frames]
         durations=[max(10,(b-a)*10) for a,b in zip(times,times[1:])]+[800]
         images[0].save(output/'native.gif',save_all=True,append_images=images[1:],duration=durations,loop=0)
-        metadata['gif']={'path':'native.gif','frameDurationsMs':durations,'sourceTicks':[f['tick'] for f,_ in gif_frames],'stride':gif_stride,'omittedFrames':len(frames)-len(gif_frames),'note':'Original PNG samples only; optional stride omits GIF frames, never HTML/native data. Palette/timing quantized; last frame pause800ms.'}
+        metadata['gif']={'path':'native.gif','frameDurationsMs':durations,'sourceTicks':[f['tick'] for f,_ in gif_frames],'stride':gif_stride,'omittedFrames':len(frames)-len(gif_frames),'note':'Original PNG samples only; stride omits GIF frames, never HTML/native data; an adjacent penultimate sample is omitted for stride >1 except in a two-tick clip. Palette/timing quantized; last frame pause800ms.'}
         # Keep the full capture and additionally enlarge a bounded crop of the same
         # original pixels. The native screen bounds are recorded by the renderer.
         crop = close_crop(trace, gif_frames[0][0])
