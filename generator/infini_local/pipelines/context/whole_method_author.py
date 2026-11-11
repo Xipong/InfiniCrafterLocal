@@ -44,6 +44,12 @@ _READING = (
     'Edge argumentBindings copy simple input loads; sourceILValue is a raw-capture coordinate, not a graph reference. '
     'The retained coverage/counts describe the original graph capture, not completeness of runtime behavior.'
 )
+_RESIDUAL_READING = (
+    ' A bodySource node may retain values and blocks for outgoing call arguments, control dependencies and local uncertainty. '
+    'These are unchanged symbolic IL observations, not a second complete body or evaluated helper results. '
+    'Their original sites, branch directions, local alternatives and unknowns still apply; '
+    'the complete source effects and ordering are in bodySource.'
+)
 
 
 def _size(value: Any) -> int:
@@ -77,7 +83,7 @@ def _edge_bindings(graph: dict, node: dict) -> dict[int, Any] | None:
     """Do not drop an edge's value namespace when replacing its method body.
 
     The first supported case is deliberately small: parameterless instance
-    methods with direct receiver loads. Complex argument expressions keep IL.
+    methods with direct receiver loads. Complex arguments need a residual IL view.
     Pre-existing omitted-call arguments remain explicitly unavailable.
     """
     result = {}
@@ -108,6 +114,71 @@ def _edge_bindings(graph: dict, node: dict) -> dict[int, Any] | None:
                 return None
         result[index] = bindings
     return result
+
+
+def _residual_edge_context(graph: dict[str, Any], node: dict[str, Any]) -> dict[str, Any] | None:
+    """Keep exact IL dependencies when a whole C# body owns the source effects.
+
+    No expression evaluation, instruction folding or new value namespace. Keep
+    every original control row and candidate local write, then close their and
+    the outgoing call arguments' dependencies. Unknown/missing shapes refuse.
+    """
+    if 'fragments' in node or not isinstance(node.get('blocks'), list):
+        return None
+    values = node.get('values')
+    if not isinstance(values, dict):
+        return None
+    needed: list[str] = []
+    for edge in graph['edges']:
+        if edge.get('from') != node['id']:
+            continue
+        if (not isinstance(edge.get('context'), list)
+                or any(not isinstance(identifier, str) for identifier in edge['context'])
+                or type(edge.get('at')) is not int):
+            return None
+        needed.extend(edge['context'])
+        needed.append(str(edge['at']))
+    for block in node['blocks']:
+        if (not isinstance(block, list) or len(block) != 4 or type(block[0]) is not int
+                or not isinstance(block[1], list) or any(type(i) is not int for i in block[1])
+                or block[2] is not None and type(block[2]) is not int
+                or not isinstance(block[3], list) or any(not isinstance(i, str) for i in block[3])):
+            return None
+        if block[2] is not None:
+            needed.append(str(block[2]))
+        needed.extend(block[3])
+    writes = node.get('possibleLocalWrites', {})
+    if (not isinstance(writes, dict) or any(not isinstance(key, str) or not isinstance(row, list)
+            or any(not isinstance(i, str) for i in row) for key, row in writes.items())):
+        return None
+    for key, row in writes.items():
+        needed.append(key)
+        needed.extend(row)
+    selected: set[str] = set()
+    while needed:
+        identifier = needed.pop()
+        if identifier in selected:
+            continue
+        row = values.get(identifier)
+        if (not isinstance(row, list) or len(row) != 4 or not isinstance(row[0], str)
+                or not isinstance(row[2], list) or any(not isinstance(i, str) for i in row[2])
+                or type(row[3]) is not int):
+            return None
+        selected.add(identifier)
+        needed.extend(row[2])
+    # Do not replace a body unless every surviving reference still resolves.
+    # Preserve original dictionary/array order, including repeated candidates.
+    return {'values': {key: copy.deepcopy(row) for key, row in values.items() if key in selected},
+            'blocks': copy.deepcopy(node['blocks']),
+            **({'possibleLocalWrites': copy.deepcopy(writes)} if 'possibleLocalWrites' in node else {})}
+
+
+def _body_plan(graph: dict[str, Any], node: dict[str, Any]) -> tuple[dict[int, Any], dict[str, Any]] | None:
+    bindings = _edge_bindings(graph, node)
+    if bindings is not None:
+        return bindings, {}
+    residual = _residual_edge_context(graph, node)
+    return ({}, residual) if residual is not None else None
 
 
 def prepare_whole_method_author(item: dict) -> tuple[dict, list[dict]]:
@@ -150,13 +221,18 @@ def prepare_whole_method_author(item: dict) -> tuple[dict, list[dict]]:
         if len(bodies) != 1:
             continue
         record = rows[0][0]
-        bindings = _edge_bindings(graph, node)
-        if bindings is None:
+        plan = _body_plan(graph, node)
+        if plan is None:
             continue
-        if _size({k: node[k] for k in _BODY_FIELDS if k in node}) <= len(record['code']) + 640:
+        bindings, residual = plan
+        # One verified approximate source body is already emitted for this definition.
+        # Replacing it pays only the increase to unchanged whole source, not a second full body.
+        source_increase = (max(0, len(record['code']) - min(len(readable['code']) for _, readable in rows))
+                           if residual else len(record['code']))
+        if _size({k: node[k] for k in _BODY_FIELDS if k in node}) <= source_increase + _size(residual) + 640:
             continue
         choices.append({'node': node['id'], 'definition': key, 'record': copy.deepcopy(record),
-                        'bindings': bindings})
+                        'bindings': bindings, 'residual': residual})
     if not choices:
         return item, []
     selected = {tuple(choice['definition']) for choice in choices}
@@ -273,16 +349,18 @@ def apply_whole_method_author(raw: dict, choices: list[dict]) -> bool:
         definition = tuple(choice['definition'])
         if (member['name'] != definition[0] + '()' or node.get('sha256') != definition[2]
                 or graph['modules'][member['module']]['mvid'] != definition[1]
-                or _edge_bindings(graph, node) != choice['bindings']):
+                or _body_plan(graph, node) != (choice['bindings'], choice['residual'])):
             return False
         replacements.append((node, matches[0], choice))
     for node, index, choice in replacements:
         for key in _BODY_FIELDS:
             node.pop(key, None)
+        node.update(copy.deepcopy(choice['residual']))
         node['bodySource'] = {'mechanicsSourceIndex': index, 'representation': 'unchanged_verified_whole_method',
                               'metadataToken': choice['record']['metadataToken']}
         for edge_index, bindings in choice['bindings'].items():
             graph['edges'][edge_index]['context'] = {'argumentBindings': copy.deepcopy(bindings)}
     _compact_graph_tables(graph)
-    raw['item']['parentSourceGraphReading'] = _READING + ' ' + raw['item'].get('parentSourceGraphReading', '')
+    residual_reading = _RESIDUAL_READING if any(choice['residual'] for choice in choices) else ''
+    raw['item']['parentSourceGraphReading'] = _READING + residual_reading + ' ' + raw['item'].get('parentSourceGraphReading', '')
     return True

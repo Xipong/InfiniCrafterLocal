@@ -11,12 +11,11 @@ from typing import Any
 from .csharp_source_view import _records, _certificate, _at_path, _model_source_record, _specialized_record
 
 POLICY = (
-    "For certificate-matched whole methods or exactly matched guarded source regions, this Author view uses the producer's readable C# "
-    "under its stated assumption that captured type/aiStyle stays stable across opaque calls. "
-    "Explicit identity mutation/address escapes or unproved receiver binding prevent selection. "
-    "Entry guards of conditional regions still have to be reached; enclosing dispatcher flow remains unknown. Strict alternative source and graphs remain in the raw capture, not this request. "
-    "This is an approximate gameplay view, not a proof of complete runtime behavior. "
-    "Unmatched methods, lifecycle, calls/hooks and extraction failures retain their existing limits."
+    "For coverage=approximate_identity_ast_method or approximate_identity_ast_regions only, certificate-matched producer C# assumes captured type/aiStyle stays stable across opaque calls. "
+    "Explicit identity mutation/address escape or unproved receiver binding blocks selection. "
+    "Regional entry guards must be reached; enclosing flow is unknown. Strict alternatives remain in raw capture. "
+    "Unchanged whole_method keeps original gates, even after hooks, with no identity-stability assumption. "
+    "Neither view proves execution or full runtime behavior. Unmatched methods, lifecycle, calls/hooks and extraction failures keep their limits."
 )
 
 def _definition(value: Any) -> tuple | None:

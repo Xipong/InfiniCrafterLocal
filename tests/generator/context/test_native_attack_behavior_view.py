@@ -83,6 +83,33 @@ def test_unsupported_syntax_or_local_alias_collision_never_partially_renames(exp
     assert program["predicates"][0]["inputs"] == ["l1@12", "0"]
 
 
+@pytest.mark.parametrize("text, collision", [
+    ("d0", True), ("[d1]", True), ("d0.5", True), ("éd0λ", True),
+    ("d01", False), ("d2", False), ("d999999", False),
+    ("ad0 d0a _d0 d0_", False), ("d١ d０", False), ("d01 d1", True),
+])
+def test_reserved_dependency_scan_preserves_exact_ascii_boundaries(text, collision):
+    source = native_reference()
+    source["motion"]["programs"][0]["unresolved"] = [text]
+    before = copy.deepcopy(source)
+    result = project_attack_behavior(source)["motion"]["programs"][0]
+    assert list(result["dependencies"]) == (["l1@12", "addressed_l2"] if collision else ["d0", "d1"])
+    assert source == before
+
+
+def test_empty_dependency_set_does_not_scan_program_text(monkeypatch):
+    from infini_local.pipelines.context import attack_behavior
+    source = {"method": "M", "observations": [], "dependencies": {}, "predicates": [], "symbols": {}}
+    before = copy.deepcopy(source)
+
+    def no_scan(*args, **kwargs):
+        raise AssertionError("No reserved names require a text scan")
+
+    monkeypatch.setattr(attack_behavior.re, "finditer", no_scan)
+    result = attack_behavior._program(source)
+    assert result == before and source == before
+
+
 @pytest.mark.parametrize("extra", [{"source": "future_source"}, {"version": True}, {"version": 2}, {"behaviorView": {"future": True}}])
 def test_unknown_contract_is_literal_detached(extra):
     source = native_reference() | extra

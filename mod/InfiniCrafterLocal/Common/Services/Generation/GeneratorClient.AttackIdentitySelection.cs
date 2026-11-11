@@ -76,7 +76,9 @@ public sealed partial class GeneratorClient
         internal readonly JsonObject Receipt;
         private readonly ParentSourceMethod body;
         private readonly int type, style, targetArgument;
-        private readonly Dictionary<int, HashSet<int>> selectedReach = new();
+        private readonly Dictionary<int, ParentSourceMethod.BlockSet> selectedReach = new();
+        private int[]? reachNodes;
+        private Dictionary<int, int>? reachIndices;
         private readonly Dictionary<int, ParentSourceMethod.Value?> readHazards = new();
         private readonly Dictionary<string, string> hazardReasons = new();
         private readonly ParentSourceMethod.Value[] hazards;
@@ -252,16 +254,32 @@ public sealed partial class GeneratorClient
             if (++analysisWork > 4_000_000) throw new NotSupportedException("identity_control_flow_work_bound");
         }
 
-        private HashSet<int> CurrentReach(int start)
+        private ParentSourceMethod.BlockSet CurrentReach(int start)
         {
             if (selectedReach.TryGetValue(start, out var cached)) return cached;
-            var reached = new HashSet<int>(); var pending = new Stack<int>(); pending.Push(start);
+            if (reachNodes is null)
+            {
+                reachNodes = body.Blocks.Keys.ToArray();
+                reachIndices = reachNodes.Select((node, index) => (node, index))
+                    .ToDictionary(pair => pair.node, pair => pair.index);
+            }
+            // The selected CFG changes only between proof rounds. Keep one
+            // compact immutable row per queried start, not a HashSet plus a
+            // successor array for every visited block. Preserve stack order,
+            // duplicate edges and Work() calls so proof bounds do not change.
+            var words = new ulong[(reachNodes.Length + 63) / 64];
+            var pending = new Stack<int>(); pending.Push(start);
             while (pending.Count > 0)
             {
-                Work(); int block = pending.Pop(); if (!reached.Add(block)) continue;
-                foreach (int next in Selected.TryGetValue(block, out int chosen) ? new[] { chosen } : body.Blocks[block].Next.ToArray()) pending.Push(next);
+                Work(); int block = pending.Pop();
+                int bit = reachIndices![block];
+                ulong mask = 1UL << (bit & 63);
+                if ((words[bit >> 6] & mask) != 0) continue;
+                words[bit >> 6] |= mask;
+                if (Selected.TryGetValue(block, out int chosen)) pending.Push(chosen);
+                else foreach (int next in body.Blocks[block].Next) pending.Push(next);
             }
-            return selectedReach[start] = reached;
+            return selectedReach[start] = new ParentSourceMethod.BlockSet(reachNodes, reachIndices!, words);
         }
 
         internal AttackIdentitySelection(ParentSourceMethod body, int type, int style, bool selectIdentityBranches = true)

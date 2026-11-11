@@ -159,8 +159,11 @@ def _program(value: dict) -> dict:
         return copy.deepcopy(value)
     removed_literals = set()
     original_text = str(out)
-    if not any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", original_text)
-               for name in names.values()):
+    # One scan retains the exact ASCII identifier boundaries and reserved-name
+    # set without searching the whole program once for every dependency.
+    reserved = set(names.values())
+    if not reserved or not any(match.group(0) in reserved for match in re.finditer(
+            r"(?<![A-Za-z0-9_])d[0-9]+(?![A-Za-z0-9_])", original_text)):
         renamed = copy.deepcopy(out)
         try:
             literals = {
