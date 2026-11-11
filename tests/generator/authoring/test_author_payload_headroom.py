@@ -133,6 +133,7 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
     assert source == before
     catalog = packet["runtimeCapabilityContract"]["catalog"]
     guide = catalog["fieldGuide"]
+    guide = _expand_constraint_references(guide, guide["consumerConstraints"])
     expanded: Any = _expand_constraint_references(catalog["capabilities"], guide["consumerConstraints"])
     cards: dict[str, dict[str, Any]] = {row["fn"]: row for row in expanded}
     seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "

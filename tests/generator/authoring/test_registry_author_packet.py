@@ -71,7 +71,9 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
                 assert "paramRef" not in cards[owner]["params"][leaf]
     canonical = runtime_authoring_prompt_field_guide()
     canonical["types"] = {name: author_parameter_shape(schema) for name, schema in canonical["types"].items()}
-    assert {key: catalog["fieldGuide"][key] for key in canonical} == canonical
+    assert _expand_constraint_references(
+        {key: catalog["fieldGuide"][key] for key in canonical}, catalog["fieldGuide"]["consumerConstraints"]
+    ) == canonical
     from infini_local.core.runtime_authoring.terraria_vocabulary import (
         DAMAGE_CLASS_MEANINGS,
         DAMAGE_CLASS_TOKENS,

@@ -375,29 +375,14 @@ public sealed partial class GeneratorClient
                     : limit == -1 ? ExportMechanicalRow(id, expanded: true) : ExportRow(id, limit);
                 return row;
             }
+            // Measurements live only for this selection. Source rows are frozen
+            // once measured; accepted output is materialized only at the end.
+            var measurements = new ExportMeasurements();
             bool Fits(int? requestedBudget = null)
             {
                 int budget = requestedBudget ?? exportBudget;
-                var result = BuildExport(chosen, budget);
-                if (result.ToJsonString().Length > budget) return false;
-                var ids = chosen.Keys.OrderBy(id => id).Select((id, next) => (id, next)).ToDictionary(p => p.id, p => p.next);
-                var admittedRoots = discoveryRoots.Where(ids.ContainsKey).Select(id => ids[id]).ToHashSet();
-                var retainedEdges = result["edges"]!.AsArray().OfType<JsonObject>().ToArray();
-                var reached = result["roots"]!.AsArray().OfType<JsonObject>().Select(root => root["node"]!.GetValue<int>()).ToHashSet();
-                foreach (var edge in retainedEdges)
-                    if (edge["from"] is null && edge["to"] is JsonNode to && admittedRoots.Contains(to.GetValue<int>()))
-                        reached.Add(to.GetValue<int>());
-                var work = new Queue<int>(reached);
-                while (work.Count > 0)
-                {
-                    int source = work.Dequeue();
-                    foreach (var edge in retainedEdges)
-                        if (edge["from"]?.GetValue<int>() == source && edge["to"] is JsonNode to && reached.Add(to.GetValue<int>()))
-                            work.Enqueue(to.GetValue<int>());
-                }
-                // Local incoming edges are insufficient: a retained A↔B cycle
-                // must not survive after its last path from a root was omitted.
-                return reached.Count == chosen.Count;
+                var plan = PlanExport(chosen, budget, measurements);
+                return plan.Characters <= budget && plan.RetainsRootPaths(discoveryRoots);
             }
             bool RetainsCore(JsonObject before, JsonObject after)
             {
@@ -514,134 +499,10 @@ public sealed partial class GeneratorClient
                     if (!Fits()) chosen.Remove(id);
                 }
             } while (previousUnbound != chosen.Count && chosen.Count < NodeLimit);
-            return BuildExport(chosen, exportBudget);
+            return PlanExport(chosen, exportBudget, measurements).Materialize();
         }
 
         private JsonObject BuildExport(Dictionary<int, JsonObject> chosen, int characterBudget = CharacterLimit - CatalogCoverageReserve)
-        {
-            var nodeIds = chosen.Keys.OrderBy(id => id).Select((id, next) => (id, next)).ToDictionary(p => p.id, p => p.next);
-            var exportedNodes = new JsonArray();
-            var usedMembers = new HashSet<int>();
-            foreach (int id in nodeIds.Keys)
-            {
-                var row = chosen[id].DeepClone().AsObject();
-                row["id"] = nodeIds[id];
-                usedMembers.Add(row["method"]!.GetValue<int>());
-                foreach (string context in new[] { "receiverType", "originReceiverType" })
-                    if (row[context] is JsonNode type) usedMembers.Add(type.GetValue<int>());
-                if (row["values"] is JsonObject values)
-                    foreach (var value in values)
-                        if (value.Value?[1] is JsonObject operand && operand["member"] is JsonNode member) usedMembers.Add(member.GetValue<int>());
-                exportedNodes.Add(row);
-            }
-            var memberIds = usedMembers.OrderBy(id => id).Select((id, next) => (id, next)).ToDictionary(p => p.id, p => p.next);
-            var exportedMembers = new JsonArray();
-            var usedModules = usedMembers.Select(id => members[id]!["module"]!.GetValue<int>()).Distinct().OrderBy(id => id).ToArray();
-            var moduleIds = usedModules.Select((id, next) => (id, next)).ToDictionary(p => p.id, p => p.next);
-            foreach (int id in memberIds.Keys)
-            {
-                var row = members[id]!.DeepClone().AsObject();
-                row["module"] = moduleIds[row["module"]!.GetValue<int>()];
-                exportedMembers.Add(row);
-            }
-            foreach (JsonObject row in exportedNodes.OfType<JsonObject>())
-            {
-                row["method"] = memberIds[row["method"]!.GetValue<int>()];
-                foreach (string context in new[] { "receiverType", "originReceiverType" })
-                    if (row[context] is JsonNode type) row[context] = memberIds[type.GetValue<int>()];
-                if (row["values"] is JsonObject values)
-                    foreach (var value in values)
-                        if (value.Value?[1] is JsonObject operand && operand["member"] is JsonNode member)
-                            operand["member"] = memberIds[member.GetValue<int>()];
-            }
-            var exportedRoots = new JsonArray();
-            foreach (var root in roots.OfType<JsonObject>())
-                if (root["node"] is JsonNode id && nodeIds.TryGetValue(id.GetValue<int>(), out int mapped))
-                {
-                    var row = root.DeepClone().AsObject(); row["node"] = mapped; exportedRoots.Add(row);
-                }
-            var exportedEdges = new JsonArray();
-            var candidateEdges = new List<JsonObject>();
-            foreach (var edge in edges.OfType<JsonObject>())
-            {
-                int? from = edge["from"]?.GetValue<int>(), to = edge["to"]?.GetValue<int>();
-                if (from is int source && !chosen.ContainsKey(source)) continue;
-                if (from is null && to is int destination && !chosen.ContainsKey(destination)) continue;
-                var row = edge.DeepClone().AsObject();
-                if (from is int f)
-                {
-                    row["from"] = nodeIds[f];
-                    if (edge["at"] is JsonNode at && (chosen[f]["values"] is not JsonObject values
-                        || !values.ContainsKey(at.GetValue<int>().ToString(CultureInfo.InvariantCulture))))
-                        row["sourceCoverage"] = "callsite_omitted_from_source_slice";
-                }
-                if (to is int t)
-                {
-                    if (nodeIds.TryGetValue(t, out int mapped)) row["to"] = mapped;
-                    else { row.Remove("to"); row["unresolved"] = "source_character_bound"; }
-                }
-                candidateEdges.Add(row);
-            }
-            int omittedNodes = nodes.Count - chosen.Count;
-            int omittedRoots = roots.Count - exportedRoots.Count + omittedDiscoveryRoots;
-            int omittedBodies = chosen.Count(p => projections.ContainsKey(p.Key) && p.Value["values"] is null);
-            bool partial = gaps.Count > 0 || omittedNodes > 0 || omittedRoots > 0 || omittedBodies > 0
-                || chosen.Values.Any(row => row["omittedStatementCount"] is not null || row["unresolvedEnclosingBranchCount"] is not null
-                    || row["unresolvedLocalDependencyCount"] is not null || row["unresolved"] is JsonArray unknown && unknown.Count > 0);
-            var unresolved = gaps.DeepClone().AsArray();
-            if (omittedNodes > 0 || omittedBodies > 0) unresolved.Add("source_character_bound");
-            if (chosen.Count == NodeLimit && omittedNodes > 0) unresolved.Add("node_limit");
-            if (candidateEdges.Count > 0) unresolved.Add("edge_export_bound");
-            var result = new JsonObject
-            {
-                ["source"] = "parent_reachable_compiled_source_graph", ["version"] = 1,
-                ["roots"] = exportedRoots, ["nodes"] = exportedNodes, ["members"] = exportedMembers,
-                ["modules"] = new JsonArray(usedModules.Select(id => modules[id]!.DeepClone()).ToArray()),
-                ["edges"] = exportedEdges, ["unresolved"] = unresolved,
-                ["scope"] = "Read-only source, never inherited execution or final stats/DPS. values: [IL opcode, operand, input IDs, block]. {member:N}/node.method/receiverType/originReceiverType reference members[N]; module references modules[N]. blocks: [offset, successors, branch-value ID, required enclosing branch IDs]; targets outside this slice stay unresolved. ldloc/predecessor definitions are alternatives, not independent rolls. Helpers bind caller inputs to argument slots (instance this=0). All statements require control to reach their offsets. Roots, virtual bodies and registered globals/players are dispatch candidates; current immunity registrations are not target admission. nativeIdentity distinguishes certified identity CFG from conditional source windows; live predicates are never evaluated. Native units/operators are not final stat multipliers. No hooks/helpers/getters/constructors ran. Runtime detours, missing edges and omitted source remain unknown. Discovery is independent of export; sourceCoverage marks edges whose callsite is not in the exported slice.",
-                ["limits"] = new JsonObject { ["nodes"] = NodeLimit, ["edges"] = EdgeLimit, ["helperDepth"] = DepthLimit,
-                    ["characters"] = CharacterLimit, ["allocatedCharacters"] = characterBudget + CatalogCoverageReserve,
-                    ["reservedCatalogCoverageCharacters"] = CatalogCoverageReserve, ["discoveryNodes"] = DiscoveryNodeLimit, ["discoveryEdges"] = DiscoveryEdgeLimit },
-                ["omittedNodeCount"] = omittedNodes, ["omittedRootCount"] = omittedRoots, ["omittedBodyCount"] = omittedBodies,
-                ["omittedEdgeCount"] = candidateEdges.Count,
-                ["completeness"] = "partial_source_graph",
-            };
-            // Count metadata/refusals first, then allocate remaining transport
-            // to edges. Edge-heavy discovery must not reject every method.
-            // Retained causal links precede out-of-slice and standalone edges.
-            int characters = result.ToJsonString().Length + 64; // Final status/count changes must fit too.
-            var linked = new HashSet<int>();
-            var orderedEdges = candidateEdges.Select(edge => (Edge: edge,
-                Priority: edge["to"] is JsonNode target && linked.Add(target.GetValue<int>()) ? 0
-                    : edge["from"] is not null && edge["to"] is not null ? 1 : edge["to"] is not null ? 2 : 3));
-            var opaqueLinks = new HashSet<(int? From, int? To, string Kind, string Reason, string Identity)>();
-            foreach (var candidate in orderedEdges.OrderBy(candidate => candidate.Priority))
-            {
-                if (exportedEdges.Count >= EdgeLimit) break;
-                var edge = candidate.Edge;
-                if (edge["sourceCoverage"] is not null)
-                {
-                    // One explicit unresolved anchor preserves reachability.
-                    // Repeated calls absent from the retained source are not a
-                    // useful substitute for the omitted body and its guards.
-                    string identity = edge["context"] is JsonObject || edge["context"] is JsonValue literal && literal.TryGetValue<int>(out _)
-                        ? edge["context"]!.ToJsonString() : "";
-                    var key = (edge["from"]?.GetValue<int>(), edge["to"]?.GetValue<int>(), edge["kind"]?.GetValue<string>() ?? "",
-                        edge["unresolved"]?.GetValue<string>() ?? "", identity);
-                    // A missing destination can carry the only precise refusal
-                    // (unknown virtual receiver, identity, native window, etc.).
-                    // Keep one such witness instead of erasing its reason.
-                    if (!opaqueLinks.Add(key)) continue;
-                }
-                int cost = edge.ToJsonString().Length + (exportedEdges.Count > 0 ? 1 : 0);
-                if (characters + cost > characterBudget) continue;
-                exportedEdges.Add(edge); characters += cost;
-            }
-            int omittedEdges = candidateEdges.Count - exportedEdges.Count;
-            result["omittedEdgeCount"] = omittedEdges;
-            if (candidateEdges.Count > 0 && omittedEdges == 0) unresolved.RemoveAt(unresolved.Count - 1);
-            result["completeness"] = partial || omittedEdges > 0 ? "partial_source_graph" : "bounded_source_graph; runtime_dispatch_unknown";
-            return result;
-        }
+            => PlanExport(chosen, characterBudget, new ExportMeasurements()).Materialize();
     }
 }

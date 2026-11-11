@@ -95,7 +95,8 @@ public sealed partial class GeneratorClient
                     long postdomWords = ((long)blocks + 64L) / 64L;
                     long cost = 4096L + codeCount * 512L + blocks * 1024L
                         + (blocks + 1L) * postdomWords * sizeof(ulong)
-                        + ParentSourceMethod.ReachabilityMemoByteLimit(blocks);
+                        + ParentSourceMethod.ReachabilityMemoByteLimit(blocks)
+                        + ParentSourceMethod.DependencyMemoByteLimit(codeCount);
                     if (cost > limit) return;
                     while (order.Count > 0 && (entries.Count >= MethodLimit || weight + cost > limit))
                     {

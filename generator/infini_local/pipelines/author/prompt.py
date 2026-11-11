@@ -344,9 +344,13 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
             "targetsRef refers to fieldGuide.targetKindSets."
         )
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
-    field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
+    # Shared types and binding payloads use the same literal numeric rules as
+    # capability parameters, and already have the same reading notation.
+    field_guide["consumerConstraints"] = _share_consumer_constraints(
+        [*capabilities, *entities, *inputs, *actions, *events, field_guide["types"]])
     field_guide["consumerConstraintReadingRule"] = (
-        "At every parameter depth, consumerConstraint/projectionConstraints string values refer to "
+        "At every parameter depth, consumerConstraint/projectionConstraints "
+        "(schema annotations x-infini-consumerConstraint/x-infini-authorProjection) string values refer to "
         "fieldGuide.consumerConstraints; object values are literal rules."
     )
     for card in capabilities:
@@ -416,6 +420,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         "B": {"packet": raw_parent_card_for_llm(b, attack_source_memo=attack_source_memo)},
     }
     context = parent_context_for_stage(parents, stage="author")
+    compact_context = compact_author_parent_context(context)
     from infini_local.pipelines.context.whole_method_author import prepare_whole_method_author
     prepared_a, choice_a = prepare_whole_method_author(a)
     prepared_b, choice_b = prepare_whole_method_author(b)
@@ -431,8 +436,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # Compare the actual shared view, including restored conditional child
         # profiles, not just an optimistic subtraction of method body sizes.
         encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-        if candidate is not None and len(encode(compact_author_parent_context(candidate))) < len(encode(compact_author_parent_context(context))):
-            context = candidate
+        if candidate is not None:
+            compact_candidate = compact_author_parent_context(candidate)
+            if len(encode(compact_candidate)) < len(encode(compact_context)):
+                compact_context = compact_candidate
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
@@ -442,7 +449,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        **compact_author_parent_context(context),
+        **compact_context,
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
