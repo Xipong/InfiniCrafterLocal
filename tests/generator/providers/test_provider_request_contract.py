@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import urllib.error
 
 import infini_local.pipelines.transport.http as transport_http
@@ -386,6 +387,11 @@ def test_successful_provider_reply_keeps_raw_usage_and_publishes_actual_counters
     pytest.param("parse", '```json\n{"name":"First"}\n```\ntrailing {"name":"Second"}', {"name": "First"}, id="fenced-first-object"),
     pytest.param("candidates", '{"a":1}{"b":2}', ['{"a":1}', '{"b":2}'], id="duplicate-objects"),
     pytest.param("parse", 'prefix {"text":"brace } inside string", "ok": true} suffix', {"text": "brace } inside string", "ok": True}, id="string-braces"),
+    pytest.param("parse", '<think>{"name":"Draft"}</think>{"name":"Final"}', {"name": "Final"}, id="private-think"),
+    pytest.param("parse", '<THINK>```json\n{"name":"Draft"}\n```</THINK>```json\n{"name":"Final"}\n```', {"name": "Final"}, id="think-fences"),
+    pytest.param("candidates", '<think>{"name":"Draft"}', [], id="unfinished-think"),
+    pytest.param("candidates", '<think>{"name":"Draft"}</analysis>{"name":"Final"}', [], id="mismatched-think-close"),
+    pytest.param("parse", '{"text":"<think>literal</think>"}', {"text": "<think>literal</think>"}, id="literal-think"),
     pytest.param("parse", '<thought>{"name":"Decoy"}</thought>{"name":"Authored"}', {"name": "Authored"}, id="private-thought"),
     pytest.param("candidates", '<thought>{"name":"unfinished-decoy"}', [], id="unfinished-private-thought"),
     pytest.param("parse", '{"text":"<analysis>literal</analysis>"}', {"text": "<analysis>literal</analysis>"}, id="literal-private-tags"),
@@ -500,3 +506,32 @@ def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_s
     assert result["_debug"]["cachedInputTokens"] == 0
     assert result["_debug"]["cacheHit"] is False
     assert result["_debug"]["cacheWriteTokens"] == 12
+
+
+@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
+@pytest.mark.parametrize("fenced", [False, True])
+def test_actual_author_selects_final_document_outside_think(wire, monkeypatch, mode, fenced):
+    from infini_local.pipelines.author import request as author
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.core.runtime_authoring.program_schema import strict_author_shape_report
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+
+    draft = build_capability_witness("move_straight")
+    final = copy.deepcopy(draft)
+    draft["name"], final["name"] = "Draft", "Final"
+    for document in (draft, final):
+        assert strict_author_shape_report(document)["ok"]
+        assert validate_runtime_program(document)["ok"]
+    final_text = json.dumps(final)
+    if fenced:
+        final_text = "```json\n" + final_text + "\n```"
+    content = "<think>" + json.dumps(draft) + "</think>" + final_text
+    wire.configure(LLM_API_MODE=mode)
+    wire.replies.append({"id": "resp_final", "status": "completed", "output_text": content}
+                        if mode == "responses" else {"choices": [{"message": {"content": content}}]})
+    monkeypatch.setattr(author, "USE_LLM", True)
+    result = author.try_llm_plan({"name": "Alpha"}, {"name": "Beta"}, "final-author")
+    assert result["name"] == "Final"
+    assert result["runtimeProgram"] == final["runtimeProgram"]
+    assert len(wire.calls) == 1
+    assert wire.calls[0][0].endswith("/responses" if mode == "responses" else "/chat/completions")

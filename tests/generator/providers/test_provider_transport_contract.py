@@ -246,7 +246,7 @@ def test_real_http_redirects_fail_closed_without_forwarding_bearer_or_adopting_f
         assert body["provider"] == {"only": [PIN], "allow_fallbacks": False}
 
 
-@pytest.mark.parametrize("phase", ["fast", "body", "headers", "error_body", "retry"])
+@pytest.mark.parametrize("phase", ["fast", "body", "headers", "error_body", "retry", "retry_pinned_pool"])
 def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback_transport, monkeypatch, phase):
     endpoint, _events = loopback_transport
     budget = 0.18
@@ -254,7 +254,13 @@ def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback
         "fast": [{}], "body": [{"trickle": 0.005}], "headers": [{"header_trickle": 0.003}],
         "error_body": [{"status": 400, "body": {"error": {"message": "synthetic message rejection"}}, "trickle": 0.005}],
         "retry": [{"status": 503, "before_headers": 0.11}, {"before_headers": 0.11}],
-    }[phase]
+    }["retry" if phase == "retry_pinned_pool" else phase]
+    if phase == "retry_pinned_pool":
+        monkeypatch.setattr(llm_config, "LLM_POOL_PROFILES", ({
+            "id": "llm_2", "enabled": True, "provider": "openrouter",
+            "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
+            "api_mode": "chat_completions", "openrouter_provider": "OtherVendor/Secondary",
+        },))
     base, observed = endpoint(replies)
     monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
     started = time.monotonic()
@@ -639,12 +645,16 @@ def test_content_failure_returns_unchanged_without_reroll(wire, stage, mode, att
     assert "transportRetryCount" not in result.get("_debug", {})
 
 
-@pytest.mark.parametrize("provider,mode,attempts", [
-    pytest.param("openrouter", "chat_completions", 1, id="one-attempt-stops"),
-    pytest.param("openrouter", "responses", 2, id="transient-retries-same-route"),
-])
-def test_transient_retry_budget_never_changes_selected_route(wire, provider, mode, attempts):
-    wire.configure(LLM_PROVIDER=provider, LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=attempts)
+@pytest.mark.parametrize("pool_size", [1, 2])
+@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
+@pytest.mark.parametrize("attempts", [1, 2])
+def test_transient_retry_budget_never_changes_selected_route(wire, mode, attempts, pool_size):
+    provider = "openrouter"
+    secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
+                 "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
+                 "api_mode": mode, "openrouter_provider": "OtherVendor/Secondary"}
+    wire.configure(LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=attempts,
+                   LLM_POOL_PROFILES=(secondary,) if pool_size == 2 else ())
     wire.replies.append(503)
     request = packet("vfx_director")
     request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/retry"
@@ -1126,3 +1136,54 @@ def test_logical_call_scope_is_released_before_the_next_stage(wire, monkeypatch,
         ["LLM logical call failed" if first_outcome == "rejected" else "LLM logical call finished",
          "LLM logical call finished"])
     assert len({data["logicalCallId"] for _, data in events}) == len(events)
+
+
+@pytest.mark.parametrize("pool_size", [1, 2])
+@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
+@pytest.mark.parametrize("status", [401, 402])
+def test_pinned_terminal_auth_and_quota_do_not_retry(wire, pool_size, mode, status):
+    secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
+                 "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
+                 "api_mode": mode, "openrouter_provider": "OtherVendor/Secondary"}
+    wire.configure(LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=2,
+                   LLM_POOL_PROFILES=(secondary,) if pool_size == 2 else ())
+    wire.replies.append(status)
+    with llm_profiles.llm_item_lease("terminal-pinned") as lease:
+        with pytest.raises((RuntimeError, urllib.error.HTTPError)):
+            transport.llm_chat_json(packet(), timeout=1)
+        assert lease.profile_id == "llm_1" and not lease.failovers
+    assert len(wire.calls) == 1
+    assert "primary.example" in wire.calls[0][0]
+    assert wire.calls[0][1]["provider"] == {"only": [PIN], "allow_fallbacks": False}
+
+
+@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
+@pytest.mark.parametrize("secondary_replies", [[503, None], [503, 503], [401], [402]],
+                         ids=["transient-success", "transient-exhausted", "auth-terminal", "quota-terminal"])
+def test_failover_into_pinned_profile_retains_in_place_retry_budget(wire, mode, secondary_replies):
+    secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
+                 "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
+                 "api_mode": mode, "openrouter_provider": "TargetVendor/Endpoint"}
+    wire.configure(OPENROUTER_PROVIDER="", LLM_API_MODE=mode, LLM_NETWORK_ATTEMPTS=2,
+                   LLM_POOL_PROFILES=(secondary,))
+    wire.replies.extend([503, *secondary_replies])
+    request = packet()
+    request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/primary"
+    with llm_profiles.llm_item_lease("failover-pinned-retry") as lease:
+        if secondary_replies[-1] is None:
+            result = transport.llm_chat_json(request, timeout=1)
+            assert result["_debug"]["transportRetryCauses"] == ["profile_failover", "transient_http"]
+            assert result["_debug"]["transportRetryCount"] == 2
+        else:
+            with pytest.raises((RuntimeError, urllib.error.HTTPError)):
+                transport.llm_chat_json(request, timeout=1)
+        assert lease.profile_id == "llm_2" and len(lease.failovers) == 1
+        assert lease.call_count == 1
+    assert len(wire.calls) == 1 + len(secondary_replies)
+    suffix = "/responses" if mode == "responses" else "/chat/completions"
+    assert wire.calls[0][0] == "https://primary.example/api/v1" + suffix
+    assert wire.calls[0][1]["model"] == "override/primary"
+    for url, body, _ in wire.calls[1:]:
+        assert url == secondary["base_url"] + suffix
+        assert body["model"] == "vendor/secondary"
+        assert body["provider"] == {"only": ["TargetVendor/Endpoint"], "allow_fallbacks": False}

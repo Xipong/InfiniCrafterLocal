@@ -415,6 +415,24 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         "A": {"packet": raw_parent_card_for_llm(a, attack_source_memo=attack_source_memo)},
         "B": {"packet": raw_parent_card_for_llm(b, attack_source_memo=attack_source_memo)},
     }
+    context = parent_context_for_stage(parents, stage="author")
+    from infini_local.pipelines.context.whole_method_author import prepare_whole_method_author
+    prepared_a, choice_a = prepare_whole_method_author(a)
+    prepared_b, choice_b = prepare_whole_method_author(b)
+    if choice_a or choice_b:
+        alternatives = {
+            "A": {"packet": raw_parent_card_for_llm(prepared_a, attack_source_memo=attack_source_memo)} if choice_a else parents["A"],
+            "B": {"packet": raw_parent_card_for_llm(prepared_b, attack_source_memo=attack_source_memo)} if choice_b else parents["B"],
+        }
+        try:
+            candidate = parent_context_for_stage(alternatives, stage="author", whole_sources={"A": choice_a, "B": choice_b})
+        except ValueError:
+            candidate = None
+        # Compare the actual shared view, including restored conditional child
+        # profiles, not just an optimistic subtraction of method body sizes.
+        encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        if candidate is not None and len(encode(compact_author_parent_context(candidate))) < len(encode(compact_author_parent_context(context))):
+            context = candidate
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
@@ -424,7 +442,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        **compact_author_parent_context(parent_context_for_stage(parents, stage="author")),
+        **compact_author_parent_context(context),
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }

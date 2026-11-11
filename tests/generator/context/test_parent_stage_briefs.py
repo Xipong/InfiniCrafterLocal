@@ -355,3 +355,69 @@ def test_current_native_integration_slice_remains_conditional_in_author_request(
         assert all('operations' in integration and key not in integration
                    for key in ['observations', 'dependencies', 'predicates'])
     assert parents == before
+
+
+import copy,json
+import pytest
+from infini_local.pipelines.context.author_source_notation import _share_local_entry_condition
+from infini_local.pipelines.context.parent_stage import share_exact_native_parent_facts
+from prompt_packet_helpers import expand_native_source_references
+
+def sample():
+ guard=' || '.join('type == '+str(i) for i in range(100))
+ return {'parents':{'A':{'packet':{'raw':{'mechanics':{'uncertain':{'coverage':'conditional_source_region; external_inputs_explicit','entryCondition':guard,'code':'if ('+guard+')\r\n{\r\nreturn false;\r\n}\r\n','externalInputs':[{'name':'hook','unknown':True}]}}}}}}}
+
+def expand_local(x):
+ if isinstance(x,list):return [expand_local(v) for v in x]
+ if not isinstance(x,dict):return x
+ r={k:expand_local(v) for k,v in x.items() if k not in ('sourceTextParts','sourceTextNotation')}
+ if 'sourceTextParts' in x:
+  r['code']=''.join(v if isinstance(v,str) else x['entryCondition'] for v in x['sourceTextParts'])
+ return r
+
+def test_exact_condition_code_crlf_guards_and_dependencies():
+ x=sample();before=copy.deepcopy(x);out=_share_local_entry_condition(x)
+ assert x==before and out!=x and expand_local(out)==x
+ assert _share_local_entry_condition(out)==out
+
+@pytest.mark.parametrize('kind',['repeated','absent','unknown-coverage','existing-parts','nonstring','marker-conflict','short','foreign-notation'])
+def test_local_condition_refuses_ambiguous_or_unprofitable(kind):
+ x=sample();r=x['parents']['A']['packet']['raw']['mechanics']['uncertain']
+ if kind=='repeated':r['code']+=r['entryCondition']
+ if kind=='absent':r['code']='unrelated'
+ if kind=='unknown-coverage':r['coverage']='future'
+ if kind=='existing-parts':r['sourceTextParts']=['literal']
+ if kind=='nonstring':r['entryCondition']={'not':'text'}
+ if kind=='marker-conflict':x['future']={'entryCondition':True}
+ if kind=='short':r.update(entryCondition='x',code='if(x)return;')
+ if kind=='foreign-notation':x['sourceTextNotation']={'future':True}
+ assert _share_local_entry_condition(x)==x
+
+@pytest.mark.parametrize('key',['generatedParent','tooltipLines','tooltipSource'])
+def test_protected_literal_fields_are_not_reencoded(key):
+ value=sample()['parents']['A']['packet']['raw']['mechanics']['uncertain'];x={key:value}
+ assert _share_local_entry_condition(x)==x
+
+def parent(rows):return {'A':{'packet':{'raw':{'rows':rows}}}}
+def predicate():return ['b'+str(100000+i) for i in range(8)]
+
+def test_predicate_references_keep_scope_order_and_multiplicity():
+ p=predicate();rows=[{'scope':str(i),'requiredPredicates':p,'effect':i} for i in range(4)]
+ rows.append({'scope':'reversed','requiredPredicates':p[::-1],'effect':9})
+ x=parent(rows);before=copy.deepcopy(x);out=share_exact_native_parent_facts(x)
+ assert x==before and 'nativeSourceFacts' in out
+ assert expand_native_source_references(out)['parents']==x
+ assert out['parents']['A']['packet']['raw']['rows'][-1]['requiredPredicates']==p[::-1]
+ assert len(json.dumps(out))<len(json.dumps({'parents':x}))
+
+@pytest.mark.parametrize('kind',['two','other-field','other-ids','typed','protected'])
+def test_small_predicate_arrays_are_not_generically_pooled(kind):
+ p=predicate();key='requiredPredicates';n=4
+ if kind=='two':n=2
+ if kind=='other-field':key='other'
+ if kind=='other-ids':p=['condition'+str(i) for i in range(6)]
+ if kind=='typed':p[0]=True
+ rows=[{'scope':str(i),key:p,'effect':i} for i in range(n)]
+ x=parent(rows)
+ if kind=='protected':x['A']['packet']['raw']['generatedParent']={'accepted':True}
+ assert 'nativeSourceFacts' not in share_exact_native_parent_facts(x)

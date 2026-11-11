@@ -12,6 +12,8 @@ import json
 import re
 from typing import Any
 
+from infini_local.pipelines.context.author_mechanics_policy import POLICY
+from infini_local.pipelines.context.author_source_notation import _source_sites
 from infini_local.pipelines.context.mechanics_expression import MechanicsRenderer
 from infini_local.pipelines.context.native_references import known_projectile_references
 from infini_local.pipelines.context.attack_tables import pack_attack_tables, unpack_attack_tables
@@ -120,7 +122,7 @@ _SOURCE_RECEIPTS = {
     "id", "sourceMethodSha256", "sourceModuleVersionId", "metadataToken", "assemblySha256",
     "decompiler", "codeSha256", "graphPaths", "locations", "coveredWindows", "excludedCallOffsets",
     "spawnTypeCandidates", "removedConditionalCount", "removedEmptyStatementCount",
-    "removedSwitchSectionCount", "removedUnreachableStatementCount",
+    "removedSwitchSectionCount", "removedUnreachableStatementCount", "identityPruning",
 }
 _SOURCE_FIELDS = {"method", "code", "coverage", "entryGuards", "entryCondition", "entryScope", "unresolved",
                   "approximation", "receiverBinding", "identitySpecialization", "identityWitnesses", "spawnSites"}
@@ -202,6 +204,55 @@ def _roots(raw: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     return result
 
 
+def _compact_raw_source_coordinates(location: Any, call: dict[str, Any], source_count: int) -> Any:
+    """Drop only coordinates of absent strict text; keep calls and branch IDs.
+
+    The complete original mapping remains in the capture. Unknown extensions or
+    unbound records stay literal rather than being treated as diagnostic noise.
+    """
+    if (not isinstance(location, dict)
+            or set(location) != {"statement", "predicates", "scope", "mechanicsSourceIndex"}
+            or location["scope"] != "raw_capture_strict_source_lines; not_lines_of_readable_author_source"
+            or type(location["mechanicsSourceIndex"]) is not int
+            or not 0 <= location["mechanicsSourceIndex"] < source_count):
+        return location
+    statement, predicates = location["statement"], location["predicates"]
+    if (not isinstance(statement, dict) or set(statement) != {"mapping", "ilOffset", "locations"}
+            or statement["mapping"] != "source_lines" or type(statement["ilOffset"]) is not int
+            or statement["ilOffset"] != call.get("at") or not isinstance(statement["locations"], list)):
+        return location
+    for row in statement["locations"]:
+        if (not isinstance(row, dict) or set(row) != {"ilOffset", "startLine", "endLine"}
+                or any(type(row[k]) is not int for k in row)
+                or row["ilOffset"] < 0 or not 0 < row["startLine"] <= row["endLine"]):
+            return location
+    if not isinstance(predicates, list) or not isinstance(call.get("requiredPredicates"), list):
+        return location
+    ids = []
+    for predicate in predicates:
+        if isinstance(predicate, dict) and "sourceSites" in predicate:
+            predicate = _source_sites(predicate)
+        if (not isinstance(predicate, dict) or set(predicate) != {"id", "ilSites"}
+                or not isinstance(predicate["id"], str) or not isinstance(predicate["ilSites"], list)):
+            return location
+        ids.append(predicate["id"])
+        for site in predicate["ilSites"]:
+            if (not isinstance(site, dict) or set(site) != {"ilOffset", "sourceLines"}
+                    or type(site["ilOffset"]) is not int or site["ilOffset"] < 0):
+                return location
+            lines = site["sourceLines"]
+            if lines is not None and (not isinstance(lines, list) or any(
+                    not isinstance(pair, list) or len(pair) != 2
+                    or any(type(n) is not int for n in pair) or not 0 < pair[0] <= pair[1]
+                    for pair in lines)):
+                return location
+    if ids != call["requiredPredicates"]:
+        return location
+    return {"mechanicsSourceIndex": location["mechanicsSourceIndex"],
+            "scope": location["scope"],
+            "coordinatesOmitted": "strict_source_coordinates_retained_in_raw_capture"}
+
+
 def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     """Build one self-contained view, leaving the original packet untouched."""
     if "generatedParent" in raw:
@@ -273,6 +324,9 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
     def excluded(call: dict[str, Any], source: dict[str, Any], child_type: Any = None) -> bool:
         # Producer IL anchors, never line-based lexical ranges or numeric ID inference.
         for record in _rows(source.get("records")):
+            receipt = record.get("identityPruning")
+            if receipt is not None and receipt != {"allowed": True, "refusal": None}:
+                continue
             if not (all(call.get(key) is not None and call.get(key) == record.get(key)
                         for key in ("method", "sourceMethodSha256", "sourceModuleVersionId"))
                     and type(call.get("at")) is int):
@@ -314,10 +368,6 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                         index_profiles(child_path, child)
 
             index_profiles(path, profile)
-        if "strictIdentitySelections" in profile:
-            # These retain producer graphs that a readable C# view replaced,
-            # using the established Author projection when it is recognized.
-            strict_selections.append({"sourcePath": path, "selections": copy.deepcopy(profile["strictIdentitySelections"])})
         defaults = {key: value for key, value in profile.items() if key not in _DIAGNOSTICS}
         if "sameAs" in defaults:
             # Capture aliases are renamed and point to the sourcePath rows below,
@@ -328,7 +378,7 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
         source = _source(profile)
         if source is not None:
             extra = {key: value for key, value in source.items() if key not in {
-                "source", "version", "identity", "records", "unresolved", "strictSourceRefusals", "verifiedSourceRecords"}}
+                "source", "version", "identity", "records", "unresolved", "strictSourceRefusals", "verifiedSourceRecords", "authorSelection"}}
             if extra:
                 retain_source(path + ".mechanicsSource", extra)
             if not source["records"]:
@@ -381,6 +431,22 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                     and type(csharp.get("version")) is int and csharp["version"] == 1 else [])
         source_aliases: list[tuple[str, dict[str, Any]]] = []
         source_targets: dict[str, set[int]] = {}
+        if source is not None and isinstance(source.get("authorSelection"), dict):
+            aliases = source["authorSelection"].get("aliases", {})
+            records = source["records"]
+            if isinstance(aliases, dict) and all(isinstance(k, str) and type(v) is int
+                    and 0 <= v < len(records) for k, v in aliases.items()):
+                retained = []
+                for record in fallback:
+                    identifier = record.get("id")
+                    if identifier in aliases:
+                        target = records[aliases[identifier]]
+                        source_aliases.append((identifier, target))
+                        retained.append(target)
+                    else:
+                        retained.append(record)
+                fallback = retained
+                retain_source(path + ".authorSourcePolicy", POLICY)
         if source is not None:
             supplements = _rows(source.get("verifiedSourceRecords"))
             # Compare the exact declared model projection, not a method name.
@@ -466,6 +532,15 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
                 result["sourceReferenceStatus"] = "no_unique_emitted_source_record"
             return result
 
+        if "strictIdentitySelections" in profile:
+            # Resolve only the exact whole-method receipt issued upstream.
+            selections = copy.deepcopy(profile["strictIdentitySelections"])
+            if isinstance(selections, list):
+                selections = [bind_source_refs(row) if isinstance(row, dict)
+                              and row.get("selectedSource") == "unchanged_verified_whole_method"
+                              else row for row in selections]
+            strict_selections.append({"sourcePath": path, "selections": selections})
+
         programs = [(role, reference.get(role)) for role in ("motionDispatch", "collision", "positionIntegration")]
         programs += [("motionDispatchEffects", row) for row in _rows(reference.get("motionDispatchEffects"))]
         motion = reference.get("motion")
@@ -516,12 +591,14 @@ def mechanics_context(raw: dict[str, Any]) -> dict[str, Any] | None:
             for call in _rows(link_view.get("sourceCalls")):
                 location = call.get("sourceLocation")
                 if (isinstance(location, dict) and isinstance(location.get("sourceRecord"), str)
-                        and set(location) <= {"sourceRecord", "statement", "predicates"}):
+                        and set(location) <= {"sourceRecord", "statement", "predicates", "scope"}):
                     # Upstream line mappings name the profile-local verified
                     # source table. An approximate same-named body is not it.
                     call["sourceLocation"] = bind_source_refs({
                         **{key: value for key, value in location.items() if key != "sourceRecord"},
                         "nativeCSharpSourceRef": location["sourceRecord"]})
+                    call["sourceLocation"] = _compact_raw_source_coordinates(
+                        call["sourceLocation"], call, len(code))
         references = links.get("references")
         if "references" in links:
             link_view["references"] = [] if isinstance(references, list) else copy.deepcopy(references)

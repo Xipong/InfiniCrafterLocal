@@ -88,9 +88,10 @@ class MechanicsRenderer:
                     or not isinstance(row["unresolved"], list)):
                 return None
             reasons = []
+            reason_scopes = []
             for diagnostic in row["unresolved"]:
                 if (not isinstance(diagnostic, dict) or not {"path", "reason", "sourceIlOffset"} <= diagnostic.keys()
-                        or not diagnostic.keys() <= {"path", "reason", "sourceIlOffset", "sourceAddressIlOffsets", "local", "member"}
+                        or not diagnostic.keys() <= {"path", "reason", "sourceIlOffset", "sourceAddressIlOffsets", "local", "member", "scope"}
                         or not isinstance(diagnostic["path"], str) or not isinstance(diagnostic["reason"], str)
                         or not _index(diagnostic["sourceIlOffset"])):
                     return None
@@ -101,9 +102,21 @@ class MechanicsRenderer:
                 if "sourceAddressIlOffsets" in diagnostic and (not isinstance(diagnostic["sourceAddressIlOffsets"], list)
                         or any(not _index(n) for n in diagnostic["sourceAddressIlOffsets"])):
                     return None
+                if "scope" in diagnostic:
+                    # The producer copies alias uncertainty from the unknown
+                    # expression into each diagnostic path. It is not a receipt:
+                    # retain it per field/condition and refuse unfamiliar scopes.
+                    if (diagnostic["reason"] != "address_exposed_local" or "local" not in diagnostic
+                            or not diagnostic.get("sourceAddressIlOffsets")
+                            or diagnostic["scope"] != "sourceDefinition describes direct stores only; aliases may change the value at this read"):
+                        return None
+                    scoped_reason = {"reason": diagnostic["reason"], "scope": diagnostic["scope"]}
+                    if scoped_reason not in reason_scopes:
+                        reason_scopes.append(scoped_reason)
                 if diagnostic["reason"] not in reasons:
                     reasons.append(diagnostic["reason"])
-            return {"status": row["status"], "reasons": reasons}
+            return {"status": row["status"], "reasons": reasons,
+                    **({"reasonScopes": reason_scopes} if reason_scopes else {})}
         condition = row_summary(value["condition"])
         fields = {name: row_summary(row) for name, row in value["fields"].items()}
         if condition is None or any(row is None for row in fields.values()):

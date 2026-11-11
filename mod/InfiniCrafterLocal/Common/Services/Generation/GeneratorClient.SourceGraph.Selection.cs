@@ -125,6 +125,63 @@ public sealed partial class GeneratorClient
             return value.Inputs.Count > 0 && ActorAddress(value.Inputs[0]);
         }
 
+        // Bounded source-selection normalization only. A formal output is not an
+        // actor-state write: helper signatures alone must not make calls causal.
+        private static bool WritesMethodOutput(ParentSourceMethod body, ParentSourceMethod.Value value)
+        {
+            if (value.Op == "ret" && value.Inputs.Count > 0) return true;
+            // IsIn alone is marshaling metadata: [In] ref still permits managed
+            // writes. Only the compiler's readonly parameter markers exclude it.
+            static bool WritableByRef(ParameterInfo parameter) => parameter.ParameterType.IsByRef
+                && !parameter.GetCustomAttributesData().Any(attribute => attribute.AttributeType.FullName is
+                    "System.Runtime.CompilerServices.IsReadOnlyAttribute" or "System.Runtime.CompilerServices.RequiresLocationAttribute");
+            var parameters = body.Method.GetParameters();
+            bool OutputAddress(string id)
+            {
+                bool formalByRef = false;
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                var work = new Stack<string>(); work.Push(id);
+                while (work.Count > 0)
+                {
+                    string next = work.Pop();
+                    if (!seen.Add(next)) continue;
+                    if (seen.Count > 128 || !body.Values.TryGetValue(next, out var address)) return false;
+                    if (address.Op == "ldarg" && address.Operand is int argument)
+                    {
+                        int formal = argument - (body.Method.IsStatic ? 0 : 1);
+                        if (formal < 0 || formal >= parameters.Length || !WritableByRef(parameters[formal])) return false;
+                        formalByRef = true;
+                    }
+                    else if (address.Op is "ldloc" or "stloc" or "predecessor_stack_alternatives")
+                    {
+                        if (address.Inputs.Count == 0) return false;
+                        foreach (string input in address.Inputs) work.Push(input);
+                    }
+                    else if (address.Op == "ldflda" && address.Inputs.Count == 1) work.Push(address.Inputs[0]);
+                    // Local addresses, by-value argument addresses, ref returns,
+                    // and written/address-exposed unknowns do not prove output.
+                    else return false;
+                }
+                return formalByRef;
+            }
+            if (WritesSourceStorage(value) && value.Op != "stsfld" && value.Inputs.Count > 0
+                && OutputAddress(value.Inputs[0])) return true;
+            if (value.Op is not ("call" or "callvirt" or "newobj") || value.Operand is not MethodBase call) return false;
+            var arguments = call.GetParameters();
+            for (int index = 0; index < arguments.Length; index++)
+            {
+                int slot = index + (!call.IsStatic && value.Op != "newobj" ? 1 : 0);
+                if (WritableByRef(arguments[index])
+                    && slot < value.Inputs.Count && OutputAddress(value.Inputs[slot])) return true;
+            }
+            // A value-type instance call can mutate its receiver in place. A
+            // constructor allocation has arguments but no implicit receiver.
+            return value.Op != "newobj" && !call.IsStatic && call.DeclaringType?.IsValueType == true
+                && !call.DeclaringType.IsDefined(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute), inherit: false)
+                && !call.IsDefined(typeof(System.Runtime.CompilerServices.IsReadOnlyAttribute), inherit: false)
+                && value.Inputs.Count > 0 && OutputAddress(value.Inputs[0]);
+        }
+
         private static int StatementPriority(ParentSourceMethod.Value value, ParentSourceMethod body)
             => IsSpawnOrBuff(value) ? 0
             : value.Operand is MethodInfo effect && effect.ReturnType == typeof(void)
@@ -132,6 +189,7 @@ public sealed partial class GeneratorClient
                 && body.Method.DeclaringType?.Assembly != typeof(Terraria.NPC).Assembly ? 0
             : WritesActorState(body, value) ? 1
             : value.Op == "ret" && value.Inputs.Count > 0 ? 2
+            : WritesMethodOutput(body, value) ? 1
             : value.Operand is MethodBase helper && helper.DeclaringType?.Assembly == body.Method.DeclaringType?.Assembly
                 && body.Method.DeclaringType?.Assembly != typeof(Terraria.NPC).Assembly ? 3
             : HasMutableArguments(value) || WritesSourceStorage(value) ? 4
@@ -204,7 +262,7 @@ public sealed partial class GeneratorClient
                 ? new AttackSourceObservation(source.Body, "dispatch", selected: Array.Empty<ParentSourceMethod.Value>()) : null;
             bool Mechanical(ParentSourceMethod.Value value) => nativeRoots is not null
                 ? nativeRoots.IsRoot(value) && !(value.Op == "ret" && value.Inputs.Count == 0)
-                : WritesActorState(source.Body, value);
+                : WritesActorState(source.Body, value) || WritesMethodOutput(source.Body, value);
             int CoreRank(ParentSourceMethod.Value[] group)
                 => group.Any(IsSpawnOrBuff) ? 0
                     : group.Any(HasMutableArguments) && group.Any(Mechanical) ? 1

@@ -157,7 +157,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> ItemEvents = new(StringComparer.Ordinal)
         {
             "AltFunctionUse", "CanUseItem", "CanShoot", "UseItem", "UseStyle", "HoldItem", "HoldStyle", "UseAnimation",
-            "ModifyWeaponDamage", "ModifyWeaponKnockback",
+            "ModifyWeaponDamage", "ModifyWeaponCrit", "ModifyWeaponKnockback",
             "Shoot", "ModifyShootStats", "OnHitNPC", "ModifyHitNPC", "CanHitNPC", "OnHitPvp", "ModifyHitPvp", "CanHitPvp",
             "UpdateEquip", "UpdateAccessory", "UpdateVanity", "UpdateInventory", "IsArmorSet", "UpdateArmorSet",
             "CanEquipAccessory", "UseItemHitbox", "MeleeEffects", "OnConsumeItem", "ConsumeItem",
@@ -170,7 +170,7 @@ public sealed partial class GeneratorClient
         private static readonly HashSet<string> BuffEvents = new(StringComparer.Ordinal) { "Update", "ReApply", "SetStaticDefaults" };
         private static readonly HashSet<string> PlayerEvents = new(StringComparer.Ordinal)
         {
-            "ModifyWeaponDamage", "ModifyWeaponKnockback",
+            "ModifyWeaponDamage", "ModifyWeaponCrit", "ModifyWeaponKnockback",
             "CanUseItem", "CanShoot", "Shoot", "ModifyShootStats", "OnHitNPCWithItem", "ModifyHitNPCWithItem",
             "OnHitNPCWithProj", "ModifyHitNPCWithProj", "OnHitPvp", "ModifyHitPvp", "OnHitAnything",
         };
@@ -455,7 +455,7 @@ public sealed partial class GeneratorClient
                     if (!method.GetParameters().Any(p => p.ParameterType == (receiver == "npc" ? typeof(NPC) : typeof(Player)))) continue;
                     Defer(() =>
                     {
-                        int? node = Add(method, 0);
+                        int? node = Add(method, 0, invocation: Captured(owner.Type));
                         Edge(from, node, "loaded_GlobalBuff_candidate", at, new JsonObject { ["buffId"] = id, ["receiver"] = receiver }, node is null ? "graph_limit" : null);
                     });
                 }
@@ -573,7 +573,8 @@ public sealed partial class GeneratorClient
                 // Keep data and control dependencies of matching field consumers;
                 // no unconditional numeric interpretation is attached to slices.
                 var matchingValues = body.Values.Values.Where(v => v.Operand is FieldInfo f && focus.Contains(f)
-                    || v.Operand is MethodBase helper && ReadsFields(helper, focus, new HashSet<MethodBase>(), 0, method.Module.Assembly)).ToArray();
+                    || v.Operand is MethodBase && ReferencedCallFields(body, v, focus, new HashSet<(MethodBase, Type?)>(), 0,
+                        method.Module.Assembly, currentInvocation.Receiver).Count > 0).ToArray();
                 // A compiler may materialize a condition through locals or a
                 // stack join before branching on it. Follow forward data and
                 // control dependencies, stopping each control arm at its join.
@@ -748,7 +749,8 @@ public sealed partial class GeneratorClient
                     if (body is null) { Gap("consumer_roster_contains_unreadable_source"); continue; }
                     // A direct common-field read does not exclude a specific
                     // state read reached through a helper in the same hook.
-                    var references = ReferencedFields(method, watched, new HashSet<MethodBase>(), 0, method.Module.Assembly);
+                    var references = ReferencedFields(method, watched, new HashSet<(MethodBase, Type?)>(), 0,
+                        method.Module.Assembly, owner.Type);
                     if (references.Count == 0) continue;
                     void AdmitConsumer()
                     {
@@ -774,29 +776,34 @@ public sealed partial class GeneratorClient
                 }
         }
 
-        private HashSet<FieldInfo> ReferencedFields(MethodBase method, HashSet<FieldInfo> fields, HashSet<MethodBase> seen, int depth, Assembly assembly)
+        private HashSet<FieldInfo> ReferencedFields(MethodBase method, HashSet<FieldInfo> fields,
+            HashSet<(MethodBase, Type?)> seen, int depth, Assembly assembly, Type? receiver)
         {
             var references = new HashSet<FieldInfo>();
             if (depth > DepthLimit || method.Module.Assembly != assembly || method.Module.Assembly == typeof(NPC).Assembly
-                || !seen.Add(method) || Read(method) is not { } body) return references;
+                || !seen.Add((method, receiver)) || Read(method) is not { } body) return references;
             foreach (var value in body.Values.Values)
             {
                 if (value.Operand is FieldInfo field && fields.Contains(field)
                     && value.Op is "ldfld" or "ldsfld" or "ldflda" or "ldsflda") references.Add(field);
-                else if (value.Operand is MethodBase helper)
-                    references.UnionWith(ReferencedFields(helper, fields, seen, depth + 1, assembly));
+                else if (value.Operand is MethodBase)
+                    references.UnionWith(ReferencedCallFields(body, value, fields, seen, depth + 1, assembly, receiver));
             }
             return references;
         }
 
-        private bool ReadsFields(MethodBase method, HashSet<FieldInfo> fields, HashSet<MethodBase> seen, int depth, Assembly assembly)
+        private HashSet<FieldInfo> ReferencedCallFields(ParentSourceMethod body, ParentSourceMethod.Value call,
+            HashSet<FieldInfo> fields, HashSet<(MethodBase, Type?)> seen, int depth, Assembly assembly, Type? receiver)
         {
-            if (depth > DepthLimit || method.Module.Assembly != assembly || method.Module.Assembly == typeof(NPC).Assembly
-                || !seen.Add(method) || Read(method) is not { } body) return false;
-            if (body.Values.Values.Any(v => v.Operand is FieldInfo field && fields.Contains(field)
-                && v.Op is "ldfld" or "ldsfld" or "ldflda" or "ldsflda")) return true;
-            return body.Values.Values.Select(v => v.Operand).OfType<MethodBase>()
-                .Any(helper => ReadsFields(helper, fields, seen, depth + 1, assembly));
+            if (call.Operand is not MethodBase helper || helper.Module.Assembly != assembly
+                || helper.Module.Assembly == typeof(NPC).Assembly) return new();
+            // Discovery and focused slicing must agree with source-call dispatch.
+            // A foreign receiver stays unknown; direct base calls keep their body.
+            Type? boundReceiver = !helper.IsStatic && receiver is not null
+                && helper.DeclaringType?.IsAssignableFrom(receiver) == true && CallsCapturedThis(body, call) ? receiver : null;
+            MethodBase target = call.Op == "callvirt" && helper is MethodInfo { IsVirtual: true } method && boundReceiver is not null
+                ? CapturedVirtualTarget(method, boundReceiver) ?? helper : helper;
+            return ReferencedFields(target, fields, seen, depth, assembly, boundReceiver);
         }
 
         internal JsonObject Finish()

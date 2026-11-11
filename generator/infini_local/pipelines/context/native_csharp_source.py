@@ -9,13 +9,14 @@ from infini_local.pipelines.context.attack_behavior import project_attack_behavi
 from infini_local.pipelines.context.attack_tables import pack_attack_tables
 from infini_local.pipelines.context.csharp_source_view import (
     SOURCE_READING, _CERT, _REFERENCE_FIELDS, _at_path, _capture_metadata, _certificate,
-    _compact_model_view, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record, project_lifecycle_source,
+    _compact_model_view, _token_matches, _integer, _known_graph, _linked_calls, _records, _windows, _specialized_record, project_lifecycle_source,
 )
 from infini_local.pipelines.context.parent_stage import parent_context_for_stage
 from infini_local.pipelines.context.native_interaction_source import project_interaction_source
 
 
-def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[dict[str, Any]] | None = None
+def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[dict[str, Any]] | None = None, *,
+                                preferred_source_records: list[str] | None = None
                                 ) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     """Prefer only explicit matching source records; all refusals preserve input facts."""
     reference = project_interaction_source(project_lifecycle_source(reference))
@@ -26,7 +27,7 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             or type(reference.get("version")) is not int or reference["version"] != 1):
         return original, calls
     call_fields = {*_CERT, "at", "requiredPredicates", "projectileTypes"}
-    if source_calls is not None and any(not isinstance(call, dict) or not call_fields <= set(call) <= call_fields | {"unresolved"}
+    if source_calls is not None and any(not isinstance(call, dict) or not call_fields <= set(call) <= call_fields | {"unresolved", "metadataToken"}
             or _certificate(call) is None or not _integer(call["at"])
             or not isinstance(call["requiredPredicates"], list)
             or any(not isinstance(guard, str) for guard in call["requiredPredicates"])
@@ -34,6 +35,12 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             or any(not _integer(value) for value in call["projectileTypes"])
             or "unresolved" in call and not isinstance(call["unresolved"], str) for call in source_calls):
         return original, calls
+    if source_calls is not None:
+        by_certificate = {_certificate(record): record for record in records.values()}
+        for call in source_calls:
+            record = by_certificate.get(_certificate(call))
+            if record is not None and not _token_matches(call, record):
+                return original, calls
     paths, predicates = [], {}
     for record in records.values():
         windows = set()
@@ -42,7 +49,7 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             if any(key[:len(previous)] == previous or previous[:len(key)] == key for previous in paths):
                 return original, calls
             found = _at_path(original, path)
-            if (found is None or not _known_graph(found[2]) or _certificate(found[2]) != _certificate(record)):
+            if (found is None or not _known_graph(found[2]) or _certificate(found[2]) != _certificate(record) or not _token_matches(found[2], record)):
                 return original, calls
             if record["coverage"] == "conditional_ast_regions":
                 for window in _windows(found[2]):
@@ -102,7 +109,7 @@ def native_csharp_source_for_llm(reference: dict[str, Any], source_calls: list[d
             # method. A certified whole body (or its proved identity variant)
             # therefore takes priority even when a partial graph is smaller.
             fuller_source = record["coverage"] == "whole_method" and record["id"] not in chosen
-            if fuller_source:
+            if fuller_source or record["id"] in (preferred_source_records or []):
                 chosen, original, best_size, best_view = selection, proposed, None, None
                 continue
             if best_size is None:

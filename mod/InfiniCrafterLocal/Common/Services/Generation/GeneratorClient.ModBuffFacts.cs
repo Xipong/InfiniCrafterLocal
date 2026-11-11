@@ -28,12 +28,17 @@ public sealed partial class GeneratorClient
         catch { return null; }
     }
 
-    private static JsonObject MethodSourceIdentity(MethodBase method) => new()
+    private static JsonObject MethodSourceIdentity(MethodBase method, bool includeMetadataToken = false)
     {
+        var result = new JsonObject
+        {
         ["method"] = method.DeclaringType!.FullName + "." + method.Name,
         ["sourceModuleVersionId"] = method.Module.ModuleVersionId.ToString(),
         ["sourceMethodSha256"] = Convert.ToHexString(SHA256.HashData(method.GetMethodBody()!.GetILAsByteArray()!)).ToLowerInvariant(),
-    };
+        };
+        if (includeMetadataToken) result["metadataToken"] = method.MetadataToken;
+        return result;
+    }
 
     private static HashSet<int> SourceBranchTargets(List<AmmoIl> code) => new(code.SelectMany(i =>
         i.Op == "switch" && i.Arg is int[] many ? many

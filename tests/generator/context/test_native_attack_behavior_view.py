@@ -468,3 +468,47 @@ def test_ordered_context_does_not_reinterpret_switch_or_unknown_edge_shape(op, s
     predicate = projected['motion']['programs'][0]['predicates'][0]
     predicate['op'], predicate['successors'] = op, successors
     assert ordered_attack_context(projected) == projected
+
+
+def prior_static_access_diagnostics():
+    return {"priorStaticAccesses": [{"beforeCallAt": 25, "type": "Terraria.Main", "fieldReadOffsets": [12, 18],
+        "omittedFieldReadCount": 0,
+        "scope": "prior_static_access_on_every_entry_to_call_path; no_new_initializer_invocation; earlier_hidden_global_effects_not_modeled"}],
+        "priorStaticAccessesOmitted": 0}
+
+
+def test_prior_static_access_diagnostics_preserve_selected_behavior_and_raw_receipt():
+    source = identity_selection_reference()
+    expected = project_attack_behavior(source)
+    receipt = source["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    receipt.update(identity_refusal_diagnostics())
+    receipt.update(prior_static_access_diagnostics())
+    before = copy.deepcopy(source)
+    assert project_attack_behavior(source) == expected
+    assert source == before
+
+
+@pytest.mark.parametrize("mutation", ["missing_count", "bool_count", "too_many", "empty", "bad_offset", "bad_reads", "bad_scope", "future"])
+def test_unrecognized_prior_static_access_diagnostics_preserve_raw_source(mutation):
+    source = identity_selection_reference()
+    receipt = source["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    receipt.update(identity_refusal_diagnostics())
+    receipt.update(prior_static_access_diagnostics())
+    row = receipt["priorStaticAccesses"][0]
+    if mutation == "missing_count":
+        receipt.pop("priorStaticAccessesOmitted")
+    elif mutation == "bool_count":
+        receipt["priorStaticAccessesOmitted"] = True
+    elif mutation == "too_many":
+        receipt["priorStaticAccesses"] *= 17
+    elif mutation == "empty":
+        row["fieldReadOffsets"] = []
+    elif mutation == "bad_offset":
+        row["beforeCallAt"] = True
+    elif mutation == "bad_reads":
+        row["fieldReadOffsets"] = [True]
+    elif mutation == "bad_scope":
+        row["scope"] = "initializer_completed"
+    else:
+        row["future"] = "unknown"
+    assert project_attack_behavior(source) == source

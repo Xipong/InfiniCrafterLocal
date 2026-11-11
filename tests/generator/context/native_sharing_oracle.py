@@ -66,3 +66,25 @@ def share_native_facts_reference(parents):
         if "generatedParent" not in raw:
             row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
     return {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
+
+
+def expanded_native_parents(context):
+    """Decode actual delivery independently, keeping literal/generated boundaries."""
+    pool = context.get("nativeSourceFacts", [])
+    def expand(value):
+        if isinstance(value, list):
+            return [expand(child) for child in value]
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        if set(value) == {"sourceSameAs"}:
+            index = value["sourceSameAs"]
+            assert type(index) is int and 0 <= index < len(pool)
+            return expand(pool[index])
+        return {name: copy.deepcopy(child) if name in {"tooltipLines", "tooltipSource", "generatedParent"}
+                else expand(child) for name, child in value.items()}
+    parents = copy.deepcopy(context["parents"])
+    for row in parents.values():
+        raw = row.get("packet", {}).get("raw", {})
+        if "generatedParent" not in raw:
+            row["packet"]["raw"] = expand(raw)
+    return parents

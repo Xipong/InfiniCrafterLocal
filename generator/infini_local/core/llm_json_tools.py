@@ -20,7 +20,7 @@ def _visible_model_output(text: str) -> str:
     # A channel opening outside a string owns its complete body, including JSON
     # examples, or the remaining tail when the closing tag was truncated.
     return re.sub(
-        r'"(?:\\.|[^"\\])*"|<(thought|analysis)\b[^>]*>.*?(?:</\1\s*>|\Z)',
+        r'"(?:\\.|[^"\\])*"|<(think|thought|analysis)\b[^>]*>.*?(?:</\1\s*>|\Z)',
         lambda match: "" if match.group(1) else match.group(0),
         text or "",
         flags=re.IGNORECASE | re.DOTALL,

@@ -175,7 +175,11 @@
     try {
       const response = await fetch(path,{method:payload ? 'POST':'GET',cache:'no-store',credentials:'same-origin',headers:{'X-Infini-Token':token,...(payload ? {'Content-Type':'application/json'}:{})},body:payload ? JSON.stringify(payload):undefined,signal:controller.signal});
       const data = await response.json();
-      if (!response.ok) throw new Error(response.status === 403 ? t('Сессия недоступна. Открой студию заново через запускатор.') : t(data.error) || t("Ошибка локального соединения ({0})", response.status));
+      if (!response.ok) {
+        const error = new Error(response.status === 403 ? t('Сессия недоступна. Открой студию заново через запускатор.') : t(data.error) || t("Ошибка локального соединения ({0})", response.status));
+        error.httpStatus = response.status;
+        throw error;
+      }
       return data;
     } finally {clearTimeout(timer);}
   }

@@ -251,7 +251,11 @@ const click=(dataset={},attributes=[])=>events.click({target:{closest(){return {
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, monkeypatch):
+@pytest.mark.parametrize(('system', 'machine', 'asset', 'executable'), [
+    ('Linux', 'x86_64', 'sd-bin-linux-x64-vulkan.zip', 'sd-server'),
+    ('Windows', 'AMD64', 'sd-bin-win-x64-vulkan.zip', 'sd-server.exe'),
+])
+def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, monkeypatch, system, machine, asset, executable):
     import hashlib
     import io
     import urllib.error
@@ -264,17 +268,17 @@ def test_installer_http_requires_session_and_never_adopts_browser_draft(studio, 
     calls = []
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, 'w') as package:
-        package.writestr('bin/sd-server', b'fixture executable never run')
+        package.writestr(f'bin/{executable}', b'fixture executable never run')
     data = archive.getvalue()
-    url = 'https://github.com/leejet/stable-diffusion.cpp/releases/download/test/sd-bin-linux-x64-vulkan.zip'
-    metadata = {'tag_name': 'test', 'assets': [{'id': 42, 'name': 'sd-bin-linux-x64-vulkan.zip',
+    url = f'https://github.com/leejet/stable-diffusion.cpp/releases/download/test/{asset}'
+    metadata = {'tag_name': 'test', 'assets': [{'id': 42, 'name': asset,
         'browser_download_url': url, 'size': len(data), 'digest': 'sha256:' + hashlib.sha256(data).hexdigest()}]}
     def download(target):
         calls.append(target)
         return io.BytesIO(json.dumps(metadata).encode() if target == installer_owner.CATALOG_URL else data)
     monkeypatch.setattr(installer_owner, '_open_url', download)
-    monkeypatch.setattr(installer_owner.host_platform, 'system', lambda: 'Linux')
-    monkeypatch.setattr(installer_owner.host_platform, 'machine', lambda: 'x86_64')
+    from types import SimpleNamespace
+    monkeypatch.setattr(installer_owner, 'host_platform', SimpleNamespace(system=lambda: system, machine=lambda: machine))
     before, draft = config.read_bytes(), dict(app.values)
     controller.snapshot()
     assert calls == [], 'Opening Studio must not contact GitHub'
@@ -321,3 +325,102 @@ def test_installer_refuses_client_destinations_and_unselected_builds(studio, act
     assert app.actions.results[action]['ok'] is False
     assert config.read_bytes() == before and app.values == draft
     assert not controller.installer.snapshot()['busy']
+
+
+def test_real_transport_progress_errors_clear_only_after_persistence(studio, tmp_path):
+    """Run both shipped JS owners against the real HTTP/controller/disk path."""
+    import shutil
+    import subprocess
+    import threading
+    import time
+    from suite_paths import GENERATOR_ROOT, REPO_ROOT
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is needed for the real transport onboarding regression')
+    controller, app, config = studio
+    server = controller.server
+    before = config.read_bytes()
+    for index in range(server.commands.maxsize):
+        server.commands.put_nowait({'id': f'earlier-{index}', 'action': 'onboardingProgress',
+                                    'values': {}, 'extra': {'step': 0}})
+    server.publish(controller.snapshot())
+    server.start()
+    # File markers coordinate actual HTTP acknowledgements with controller/disk work.
+    # Keep controller assertions on the test thread and bound the entire Node process.
+    results, failures = [], []
+    finished = threading.Event()
+
+    def run_fixture():
+        try:
+            results.append(subprocess.run(
+                [node, str(REPO_ROOT / 'tests/generator/studio_onboarding_transport.cjs')],
+                capture_output=True, text=True, timeout=45,
+                env={**os.environ, 'IFC_GENERATOR': str(GENERATOR_ROOT),
+                     'IFC_BASE': server.base_url, 'IFC_TOKEN': server.token,
+                     'IFC_HANDSHAKE': str(tmp_path)}))
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=run_fixture)
+    worker.start()
+    current_event = None
+
+    def receive(expected):
+        nonlocal current_event
+        deadline = time.monotonic() + 15
+        while not (tmp_path / expected).exists():
+            if finished.is_set():
+                if failures:
+                    raise failures[0]
+                pytest.fail(f'Fixture exited before {expected}: {results[0].stderr}')
+            assert time.monotonic() < deadline, f'Fixture did not report {expected}'
+            finished.wait(0.01)
+        current_event = expected
+
+    def resume():
+        (tmp_path / f'{current_event}.continue').touch()
+
+    try:
+        receive('rejected')
+        while not server.commands.empty():
+            controller.apply(server.commands.get_nowait())
+        server.publish(controller.snapshot())
+        resume()
+        receive('accepted')
+        command = server.commands.get_nowait()
+        controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is True
+        assert owner().load_progress(config)['step'] == 1
+        server.publish(controller.snapshot())
+        resume()
+        receive('disk-request')
+        sidecar(config).unlink()
+        sidecar(config).mkdir()
+        command = server.commands.get_nowait()
+        with pytest.raises(OSError):
+            controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is False
+        server.publish(controller.snapshot())
+        resume()
+        receive('recovery-request')
+        sidecar(config).rmdir()
+        command = server.commands.get_nowait()
+        controller.apply(command)
+        assert app.actions.results[command['id']]['ok'] is True
+        assert owner().load_progress(config)['step'] == 3
+        server.publish(controller.snapshot())
+        resume()
+        worker.join(timeout=15)
+        assert not worker.is_alive()
+        if failures:
+            raise failures[0]
+        assert results[0].returncode == 0, results[0].stderr
+        assert json.loads(results[0].stdout.splitlines()[-1])['event'] == 'passed'
+        assert config.read_bytes() == before
+    finally:
+        (tmp_path / 'stop').touch()
+        worker.join(timeout=46)
+        assert not worker.is_alive()

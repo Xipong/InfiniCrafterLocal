@@ -352,6 +352,9 @@ internal static partial class EngineRuntimeChecks
         Equal(1, source["programs"]!.AsArray().Count, "compatible per-sink source tables coalesce without duplicate methods");
         var original = source["programs"]![0]!.AsObject();
         Equal(2, original["identitySelected"]!["observations"]!.AsArray().Count, "both distinct spawn sites survive exact table union");
+        var methodToken = typeof(EngineRuntimeChecks).GetMethod(nameof(HelperSpawnTwoSites), BindingFlags.Static | BindingFlags.NonPublic)!.MetadataToken;
+        Equal(methodToken, original["metadataToken"]!.GetValue<int>(), "outer certificate preserves actual source method token");
+        Equal(methodToken, original["identitySelected"]!["metadataToken"]!.GetValue<int>(), "selected graph preserves actual source method token");
         var merge = typeof(GeneratorClient).GetMethod("TryMergeProjectileSourcePrograms", BindingFlags.Static | BindingFlags.NonPublic)!;
         bool Merge(JsonObject target, JsonObject addition) => (bool)merge.Invoke(null, new object[] { target, addition })!;
         var duplicate = original.DeepClone().AsObject();
@@ -386,7 +389,7 @@ internal static partial class EngineRuntimeChecks
         Equal(false, Merge(unknownTarget, unknownNamespace), "unrecognized expression fields refuse alias alignment");
         Equal(original.ToJsonString(), unknownTarget.ToJsonString(), "unrecognized schema cannot partly rename baseline");
 
-        foreach (string mismatch in new[] { "identity", "symbol", "observation", "duplicate_row", "missing_offset", "future_wrapper" })
+        foreach (string mismatch in new[] { "identity", "symbol", "observation", "duplicate_row", "missing_offset", "future_wrapper", "method_token", "wrapper_token", "missing_token", "future_graph" })
         {
             var target = original.DeepClone().AsObject(); var addition = original.DeepClone().AsObject();
             var selected = addition["identitySelected"]!.AsObject();
@@ -395,6 +398,10 @@ internal static partial class EngineRuntimeChecks
             if (mismatch == "observation") selected["observations"]![0]!["arguments"]!["Damage"] = "999";
             if (mismatch == "duplicate_row") selected["observations"]!.AsArray().Add(selected["observations"]![0]!.DeepClone());
             if (mismatch == "missing_offset") selected["observations"]![0]!.AsObject().Remove("at");
+            if (mismatch == "method_token") selected["metadataToken"] = methodToken + 1;
+            if (mismatch == "wrapper_token") addition["metadataToken"] = methodToken + 1;
+            if (mismatch == "missing_token") selected.Remove("metadataToken");
+            if (mismatch == "future_graph") selected["futureEffectProvenance"] = "must_remain_literal";
             if (mismatch == "future_wrapper") addition["futureEffectProvenance"] = "must_remain_literal";
             Equal(false, Merge(target, addition), "incompatible source union refused: " + mismatch);
             Equal(original.ToJsonString(), target.ToJsonString(), "refusal cannot partly mutate accepted source tables: " + mismatch);

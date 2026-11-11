@@ -19,10 +19,100 @@ from infini_local.pipelines.context.native_references import known_projectile_re
 
 
 NATIVE_SOURCE_REFERENCE_RULE = (
-    "Read-only native source values may be shared as {sourceSameAs:N}: read the complete value "
-    "at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, "
-    "not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline."
+    "Only when this dossier includes nativeSourceFacts, read {sourceSameAs:N} as the complete value "
+    "at nativeSourceFacts[N], expanding recursively. Without that pool, sourceSameAs is literal source data. "
+    "These are exact repetitions, not inferred mechanics or Author values. "
+    "Literal tooltips and accepted generatedParent packets stay inline."
 )
+_LITERAL_NATIVE_FIELDS = frozenset({"tooltipLines", "tooltipSource", "generatedParent"})
+
+
+def _inline_single_use_native_facts(context: dict[str, Any]) -> dict[str, Any]:
+    """Remove indirection used once in the physical shared-fact DAG.
+
+    Count each pooled body once, even when its parent has several references.
+    Inlining its single-use child therefore never duplicates the child's body.
+    Unrecognized, incomplete or cyclic reference graphs remain unchanged.
+    """
+    original = copy.deepcopy(context)
+    pool, parents = context.get("nativeSourceFacts"), context.get("parents")
+    if (set(context) - {"parents", "nativeSourceFacts"} or not isinstance(pool, list)
+            or not isinstance(parents, dict)):
+        return original
+    roots = {}
+    for label, row in parents.items():
+        packet = row.get("packet") if isinstance(row, dict) else None
+        raw = packet.get("raw") if isinstance(packet, dict) else None
+        if not isinstance(raw, dict):
+            return original
+        if "generatedParent" not in raw:
+            roots[label] = raw
+    counts = [0] * len(pool)
+    visited: set[int] = set()
+    active: set[int] = set()
+
+    def reference(value: dict[str, Any]) -> int | None:
+        if "sourceSameAs" not in value:
+            return None
+        index = value["sourceSameAs"]
+        if set(value) != {"sourceSameAs"} or type(index) is not int or not 0 <= index < len(pool):
+            raise ValueError("unrecognized native fact reference")
+        return index
+
+    def scan(value: Any) -> None:
+        if isinstance(value, list):
+            for child in value:
+                scan(child)
+        elif isinstance(value, dict):
+            index = reference(value)
+            if index is not None:
+                counts[index] += 1
+                if index in active:
+                    raise ValueError("cyclic native fact reference")
+                if index not in visited:
+                    active.add(index)
+                    scan(pool[index])
+                    active.remove(index)
+                    visited.add(index)
+            else:
+                for name, child in value.items():
+                    if name not in _LITERAL_NATIVE_FIELDS:
+                        scan(child)
+
+    try:
+        for raw in roots.values():
+            scan(raw)
+    except ValueError:
+        return original
+    if len(visited) != len(pool):
+        return original
+    # This special string encoding is defined only for a fact-pool entry.
+    retained = [index for index, count in enumerate(counts) if count > 1
+                or isinstance(pool[index], dict) and "sourceTextValueParts" in pool[index]]
+    if len(retained) == len(pool):
+        return original
+    indices = {old: new for new, old in enumerate(retained)}
+
+    def rewrite(value: Any) -> Any:
+        if isinstance(value, list):
+            return [rewrite(child) for child in value]
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        index = reference(value)
+        if index is not None:
+            return {"sourceSameAs": indices[index]} if index in indices else rewrite(pool[index])
+        return {name: copy.deepcopy(child) if name in _LITERAL_NATIVE_FIELDS else rewrite(child)
+                for name, child in value.items()}
+
+    for label, raw in roots.items():
+        original["parents"][label]["packet"]["raw"] = rewrite(raw)
+    if retained:
+        original["nativeSourceFacts"] = [rewrite(pool[index]) for index in retained]
+    else:
+        original.pop("nativeSourceFacts")
+    # Removing one-reference wrappers and densely renumbering retained entries
+    # can only shorten JSON. Do not serialize protected, possibly non-JSON data.
+    return original
 
 
 def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
@@ -30,10 +120,10 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
 
     A subtree is fingerprinted once, not JSON-serialized at every ancestor.
     Lengths use Python's canonical ensure_ascii=False *character* semantics,
-    not UTF-8 bytes. The output format, first-use ordering, exclusions and
-    nested sourceSameAs references are identical to the original JSON-key pass.
+    not UTF-8 bytes. The output format and exclusions match the JSON-key pass;
+    single-use descendants are inlined after shared parents are emitted.
     """
-    literal_keys = {"tooltipLines", "tooltipSource", "generatedParent"}
+    literal_keys = _LITERAL_NATIVE_FIELDS
     shape_ids: dict[tuple[Any, ...], int] = {}
     lengths: list[int] = []
     protected: list[bool] = []
@@ -115,6 +205,7 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
     counts: dict[int, int] = {}
     shared: list[Any] = []
     indices: dict[int, int] = {}
+    existing_source_reference = False
 
     # Preserve the old exclusion BEFORE attempting canonical JSON/fingerprints.
     # In particular, a foreign mapping can contain nested literal tooltips or
@@ -135,35 +226,39 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         literal_presence[identity] = found
         return found
 
-    def candidate(value: Any) -> int | None:
+    def candidate(value: Any, field: str | None = None) -> int | None:
         if not isinstance(value, (dict, list, str)) or contains_literal(value):
             return None
         key = fingerprint(value)
-        return key if not protected[key] and not forbidden[key] and lengths[key] >= 128 else None
+        minimum = 64 if (field == "requiredPredicates" and isinstance(value, list)
+                         and value and all(isinstance(v, str) and re.fullmatch(r"b[0-9]+", v) for v in value)) else 128
+        return key if not protected[key] and not forbidden[key] and lengths[key] >= minimum else None
 
-    def count(value: Any) -> None:
-        key = candidate(value)
+    def count(value: Any, field: str | None = None) -> None:
+        nonlocal existing_source_reference
+        key = candidate(value, field)
         if key is not None:
             counts[key] = counts.get(key, 0) + 1
         if isinstance(value, dict):
+            existing_source_reference |= "sourceSameAs" in value
             for name, child in value.items():
                 if name not in literal_keys:
-                    count(child)
+                    count(child, name)
         elif isinstance(value, list):
             for child in value:
                 count(child)
 
     def children(value: Any) -> Any:
         if isinstance(value, dict):
-            return {name: copy.deepcopy(child) if name in literal_keys else visit(child)
+            return {name: copy.deepcopy(child) if name in literal_keys else visit(child, name)
                     for name, child in value.items()}
         if isinstance(value, list):
             return [visit(child) for child in value]
         return copy.deepcopy(value)
 
-    def visit(value: Any) -> Any:
-        key = candidate(value)
-        if key is not None and counts[key] > 1:
+    def visit(value: Any, field: str | None = None) -> Any:
+        key = candidate(value, field)
+        if key is not None and counts[key] > (2 if lengths[key] < 128 else 1):
             if key not in indices:
                 index = indices[key] = len(shared)
                 shared.append(None)
@@ -176,11 +271,17 @@ def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
         if "generatedParent" not in raw:
             count(raw)
     result = copy.deepcopy(parents)
+    # An input marker may be unfamiliar literal data, not a reference we own.
+    # Emitting a pool could reinterpret it or create a cycle, even without the
+    # singleton cleanup. Keep the complete native context literal in that case.
+    if existing_source_reference:
+        return {"parents": result}
     for label, row in result.items():
         raw = parents[label].get("packet", {}).get("raw", {})
         if "generatedParent" not in raw:
-            row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
-    return {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
+            row["packet"]["raw"] = children(raw)
+    context = {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
+    return _inline_single_use_native_facts(context)
 
 
 _BRIEF_PROPERTIES = (
@@ -432,7 +533,7 @@ def _stage_projectile_profiles(raw: dict[str, Any], *, related: bool) -> Iterato
                     yield from profile_rows(profile, f"ammo.{section}[{index}]")
 
 
-def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str) -> dict[str, Any]:
+def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, stage: str, whole_sources: dict | None = None) -> dict[str, Any]:
     """Same brief layout for every ingredient, followed by technical source facts.
 
     No name/category routing or chosen inheritance roles. Native mechanics source
@@ -540,6 +641,10 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                     refusal = _identity_unresolved(item["parentSourceGraph"])
                     item.pop("parentSourceGraph")
                     raw["parentSourceGraphOmission"] = {"reason": "unrecognized_parent_source_graph_omitted", **refusal}
+        if stage == "author" and whole_sources and whole_sources.get(label):
+            from .whole_method_author import apply_whole_method_author
+            if not apply_whole_method_author(packet["raw"], whole_sources[label]):
+                raise ValueError("Whole-method Author source did not bind to emitted context")
         briefs[label] = brief
     # Author already has the shared-fact transport contract. Presentation stages
     # keep their existing literal wire rather than acquiring another decoding seam.

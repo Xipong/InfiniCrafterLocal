@@ -98,7 +98,7 @@ def test_first_visit_resume_completion_and_new_origin(onboarding_browser):
     wait_progress(page, seen=True)
     page.locator('[data-onboarding-next]').click()
     assert 'мозг' in page.locator('#onboarding-title').inner_text()
-    assert page.locator('a[href="https://openrouter.ai/google/gemma-4-31b-it:free"]').count() == 1
+    assert page.locator('a[href="https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free"]').count() == 1
     page.locator('[data-onboarding-next]').click()
     wait_progress(page, step=2)
     page.keyboard.press('Escape')
@@ -213,7 +213,7 @@ def test_current_step_keeps_readable_hover_and_keyboard_focus(onboarding_browser
 
 
 @pytest.mark.parametrize('language', ['ru', 'en'])
-def test_model_guidance_distinguishes_baseline_from_quality_options(onboarding_browser, language):
+def test_model_guidance_recommends_current_models_and_accurate_setup(onboarding_browser, language):
     page, server, config, original, requests = onboarding_browser
     page.set_viewport_size({'width': 390, 'height': 844})
     page.goto(server.url)
@@ -225,22 +225,39 @@ def test_model_guidance_distinguishes_baseline_from_quality_options(onboarding_b
     welcome = page.locator('#onboarding-dialog').inner_text()
     assert ('Доступный старт' if language == 'ru' else 'Accessible start') in welcome
     assert ('Более сильные модели' if language == 'ru' else 'Stronger models') in welcome
+    assert 'VPN' in welcome and 'Google AI Studio' in welcome and 'OpenRouter' in welcome
+    assert ('запрещает обход' if language == 'ru' else 'prohibits bypassing') in welcome
+    assert page.locator('a[href="https://openrouter.ai/terms"]').count() == 1
     page.locator('[data-onboarding-step="1"]').click()
     text = page.locator('#onboarding-dialog').inner_text()
     assert ('БЕСПЛАТНЫЙ СТАРТ' if language == 'ru' else 'FREE START') in text
     assert ('Более сильный автор механики' if language == 'ru' else 'A stronger mechanics author') in text
     assert 'ChatGPT / Codex' in text
+    assert 'NVIDIA Nemotron 3.5 Super VL' in text
+    assert 'Gemma' not in text and 'XingChen' not in text
+    assert page.locator('a[href="https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free"]').count() == 1
     assert ('бесплатных и платных' if language == 'ru' else 'free and paid') in text
     assert ('не гарантируют качество' if language == 'ru' else 'do not guarantee quality') in text
     page.locator('[data-onboarding-step="2"]').click()
     images = page.locator('#onboarding-dialog').inner_text()
-    assert ('ДОСТУПНЫЙ ЛОКАЛЬНЫЙ СТАРТ' if language == 'ru' else 'ACCESSIBLE LOCAL START') in images
-    assert 'gpt-image-2' in images and 'high' in images
+    assert ('РЕКОМЕНДУЕМ ЛОКАЛЬНО' if language == 'ru' else 'RECOMMENDED LOCAL MODEL') in images
+    assert page.locator('.onboarding-feature h3').inner_text() == 'Microsoft Mage-Flow Turbo'
+    assert 'gpt-image-2' in images and 'medium' in images
+    assert 'high' not in images
+    assert 'Qwen3-VL' in images and 'VAE' in images and 'sd.cpp' in images
     assert ('Доступ зависит от аккаунта' if language == 'ru' else 'Access depends on your account') in images
-    assert ('нет готового встроенного подключения' if language == 'ru' else 'no built-in Studio integration') in images
+    assert 'нет готового встроенного подключения' not in images and 'no built-in Studio integration' not in images
+    assert '2.5' not in images and '2.6' not in images
     assert 'BEST FOR' not in images and 'ЛУЧШЕ ДЛЯ' not in images
     assert page.locator('#onboarding-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
     assert page.locator('.onboarding-content').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+    page.locator('[data-onboarding-step="3"]').click()
+    setup = page.locator('#onboarding-dialog').inner_text()
+    assert 'Mage-Flow Turbo' in setup and 'Qwen3-VL' in setup and 'VAE' in setup
+    assert 'nvidia/nemotron-3.5-super-vl:free' in setup
+    assert page.locator('[data-onboarding-copy="nvidia/nemotron-3.5-super-vl:free"]').count() == 1
+    assert page.locator('.onboarding-content').evaluate('(e)=>e.scrollWidth<=e.clientWidth')
+    page.locator('[data-onboarding-step="2"]').click()
     page.locator('[data-onboarding-field="INFINI_IMAGE_BACKEND"]').click()
     page.locator('#onboarding-dialog').wait_for(state='hidden')
     assert page.locator('#field-INFINI_IMAGE_BACKEND').evaluate('(e)=>document.activeElement===e')

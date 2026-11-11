@@ -26,6 +26,8 @@ internal static partial class EngineRuntimeChecks
             if (aiStyle == 123) { float value = ai[0]; if (value > 30) friendly = true; Opaque(ref value); rotation = value; }
             if (type == 643) damage++;
         }
+        public void CompoundIdentity() { if (aiStyle == 123 && ai[1] > 8f) damage++; }
+        public void CompoundExternalLocal() { float value = ai[0]; Opaque(ref value); if (aiStyle == 123 && value > 8f) damage++; }
         public void ExternalLocal() { float value = ai[0]; if (aiStyle == 123) rotation = value; }
         public string LiteralSource() => "line1\r\nline2\"\\";
         public void ExceptionRegion() { if (aiStyle == 123) { try { rotation++; } finally { damage++; } } }
@@ -43,6 +45,77 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private sealed class TokenFixture
+    {
+        public static int Same(int value) => 1;
+        public static int Same(string value) => 1;
+    }
+
+
+    private static void NativeCSharpCompoundRegionsRetainFullGuardWithoutPruning()
+    {
+        // Independent IL windows: do not obtain admission inputs from the new reader.
+        JsonArray Windows(MethodInfo method)
+        {
+            var ends = (System.Collections.Generic.Dictionary<int, int>)CSharpOwner.GetMethod("CSharpConditionalEnds", CSharpFlags)!
+                .Invoke(null, new object[] { method })!;
+            return new JsonArray(new JsonObject { ["field"] = "aiStyle", ["literal"] = 123,
+                ["guardOffset"] = ends.Keys.Min() });
+        }
+        var method = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.CompoundIdentity))!;
+        var windows = Windows(method);
+        int before = CSharpSourceFixture.Executions;
+        var record = CSharpFixtureRecord(method, true, explicitWindows: windows);
+        Equal("conditional_ast_regions", record["coverage"]!.GetValue<string>(), "compound export is conditional");
+        Equal(windows.ToJsonString(), record["coveredWindows"]!.ToJsonString(), "original IL guard retained");
+        string code = record["code"]!.GetValue<string>();
+        Equal(true, code.Contains("aiStyle == 123 &&") && code.Contains("ai[1] > 8f") && code.Contains("damage++"), "complete original guard and body retained");
+        object Create(Type type, params object?[] args) => Activator.CreateInstance(type, CSharpFlags, null, args, null)!;
+        using var module = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!,
+            method.Module.FullyQualifiedName, File.ReadAllBytes(method.Module.FullyQualifiedName), method.Module.ModuleVersionId);
+        using var document = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpDocument", CSharpFlags)!, method, module, CancellationToken.None);
+        var tree = (SyntaxTree)CSharpFixtureMember(document, "Tree");
+        var branch = tree.Descendants.OfType<IfElseStatement>().First();
+        var ends = CSharpOwner.GetMethod("CSharpConditionalEnds", CSharpFlags)!.Invoke(null, new object[] { method });
+        var reader = CSharpOwner.GetMethod("ReadCSharpRegionGuard", CSharpFlags)!;
+        Equal(true, reader.Invoke(null, new[] { branch, ends }) is not null, "strict reader accepts full compound");
+        Equal(true, CSharpOwner.GetMethod("ReadCSharpGuard", CSharpFlags)!.Invoke(null, new[] { branch, ends }) is null,
+            "identity-only pruning does not accept compound");
+        foreach (bool disjunction in new[] { true, false })
+        {
+            var changed = (IfElseStatement)branch.Clone();
+            var condition = (BinaryOperatorExpression)changed.Condition;
+            if (disjunction) condition.Operator = BinaryOperatorType.ConditionalOr;
+            else
+            {
+                var left = (Expression)condition.Left.Clone();
+                condition.Left = (Expression)condition.Right.Clone(); condition.Right = left;
+            }
+            Equal(true, reader.Invoke(null, new[] { changed, ends }) is null,
+                disjunction ? "OR does not imply identity" : "nonleading identity cannot precede opaque evaluation");
+        }
+        var external = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.CompoundExternalLocal))!;
+        CSharpSourceRefuses(() => CSharpFixtureRecord(external, true, explicitWindows: Windows(external)), "csharp_region_external_local_dependency");
+        Equal(before, CSharpSourceFixture.Executions, "source fixture never executes hooks");
+    }
+
+    private static void NativeCSharpTokenSeparatesOverloads()
+    {
+        var a = typeof(TokenFixture).GetMethod("Same", new[] { typeof(int) })!;
+        var b = typeof(TokenFixture).GetMethod("Same", new[] { typeof(string) })!;
+        var identity = CSharpOwner.GetMethod("MethodSourceIdentity", CSharpFlags)!;
+        var match = CSharpOwner.GetMethod("CSharpProgramMatches", CSharpFlags)!;
+        var row = (JsonObject)identity.Invoke(null, new object[] { a, true })!;
+        Equal(a.MetadataToken, row["metadataToken"]!.GetValue<int>(), "producer captures actual MethodDef");
+        Equal(true, (bool)match.Invoke(null, new object[] { row, a })!, "same definition admitted");
+        Equal(false, (bool)match.Invoke(null, new object[] { row, b })!, "same-IL overload rejected");
+        var otherModule = (JsonObject)row.DeepClone();
+        otherModule["sourceModuleVersionId"] = Guid.NewGuid().ToString();
+        Equal(false, (bool)match.Invoke(null, new object[] { otherModule, a })!, "same name/token from another module rejected");
+        row.Remove("metadataToken");
+        Equal(false, (bool)match.Invoke(null, new object[] { row, a })!, "missing token is not guessed");
+    }
+
     private const BindingFlags CSharpFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
     private static readonly Type CSharpOwner = typeof(GeneratorClient);
 
@@ -51,7 +124,7 @@ internal static partial class EngineRuntimeChecks
             ?? value.GetType().GetField(name, CSharpFlags)!.GetValue(value)!;
 
     private static JsonObject CSharpFixtureRecord(MethodInfo method, bool regions, byte[]? bytes = null,
-        bool extraWindow = false, CancellationToken cancellation = default, bool specialize = false)
+        bool extraWindow = false, CancellationToken cancellation = default, bool specialize = false, JsonArray? explicitWindows = null)
     {
         var moduleType = CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!;
         var documentType = CSharpOwner.GetNestedType("NativeCSharpDocument", CSharpFlags)!;
@@ -64,7 +137,8 @@ internal static partial class EngineRuntimeChecks
             ["sourceModuleVersionId"] = method.Module.ModuleVersionId.ToString(),
             ["sourceMethodSha256"] = Convert.ToHexString(SHA256.HashData(method.GetMethodBody()!.GetILAsByteArray()!)).ToLowerInvariant(),
             ["coverage"] = "fixture_source_only" };
-        if (regions)
+        if (explicitWindows is not null) program["identityWindows"] = explicitWindows.DeepClone();
+        else if (regions)
         {
             var windows = new JsonArray();
             var ends = CSharpOwner.GetMethod("CSharpConditionalEnds", CSharpFlags)!.Invoke(null, new object[] { method });

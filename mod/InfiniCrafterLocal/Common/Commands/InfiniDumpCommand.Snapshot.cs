@@ -17,48 +17,59 @@ namespace InfiniCrafterLocal.Common.Commands;
 public sealed partial class InfiniDumpCommand
 {
     internal const string DumpManifestName = "runtime_dump_manifest.json";
-    internal const long DumpFileByteLimit = 512L * 1024 * 1024;
-    internal const int DumpRowLimit = 100_000;
+    // Bound a single allocation, not the number/size of loaded definitions.
+    internal const int DumpRecordByteLimit = 16 * 1024 * 1024;
+    internal const long DumpDiskReserveBytes = 64L * 1024 * 1024;
+    internal const string DumpIncompleteDirectory = "runtime_dump_incomplete";
+    internal const string DumpIncompleteStateName = "capture.incomplete.json";
     private static readonly JsonSerializerOptions DumpJsonOptions = new() { WriteIndented = false };
 
     // One atomic pointer selects an immutable pair. Never overwrite the pair
     // selected by the previous manifest; a crash/failed capture cannot mix it.
     internal static JsonObject PublishSnapshot(string root, Action<TextWriter> writeItems,
-        Action<TextWriter> writeProjectiles, JsonObject environment, CancellationToken cancellation = default)
+        Action<TextWriter> writeProjectiles, JsonObject environment, CancellationToken cancellation = default,
+        Action<string>? reportIncompleteDirectory = null)
     {
         Directory.CreateDirectory(root);
         string id = Guid.NewGuid().ToString("N");
         string relative = "runtime_dump_snapshots/" + id;
-        string directory = Path.Combine(root, relative);
-        Directory.CreateDirectory(directory);
+        string completeDirectory = Path.Combine(root, relative);
+        string incompleteDirectory = Path.Combine(root, DumpIncompleteDirectory, id);
+        string directory = incompleteDirectory;
         string pending = Path.Combine(root, ".runtime_dump_manifest." + id + ".tmp");
-        bool published = false;
+        Directory.CreateDirectory(directory);
+        reportIncompleteDirectory?.Invoke(directory);
+        string capturedAt = DateTimeOffset.UtcNow.ToString("O");
         try
         {
+            // Written before the first payload. Even a killed process leaves an
+            // explicitly incomplete attempt, never a replacement for the last pair.
+            WriteIncompleteState(directory, id, capturedAt, "capturing", null);
             JsonObject Write(string name, Action<TextWriter> capture)
             {
+                cancellation.ThrowIfCancellationRequested();
                 string path = Path.Combine(directory, name);
-                using (var writer = new BoundedDumpWriter(path))
-                { capture(writer); writer.Flush(); ((FileStream)writer.BaseStream).Flush(flushToDisk: true); }
-                int rows = 0, unavailable = 0;
-                foreach (string line in File.ReadLines(path))
+                int rows, unavailable;
+                using (var writer = new BoundedDumpWriter(path, cancellation))
                 {
-                    using var row = JsonDocument.Parse(line);
-                    if (row.RootElement.ValueKind != JsonValueKind.Object)
-                        throw new InvalidDataException("Dump record must be an object");
-                    rows++;
-                    if (row.RootElement.TryGetProperty("unavailable", out var value)
-                        && value.ValueKind == JsonValueKind.True) unavailable++;
+                    capture(writer);
+                    writer.FlushToDisk();
+                    rows = writer.Rows; unavailable = writer.UnavailableRows;
                 }
                 using var stream = File.OpenRead(path);
+                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = stream.Read(buffer)) != 0)
+                { cancellation.ThrowIfCancellationRequested(); hash.AppendData(buffer, 0, read); }
                 return new JsonObject { ["path"] = relative + "/" + name,
                     ["bytes"] = stream.Length, ["rows"] = rows, ["unavailableRows"] = unavailable,
-                    ["sha256"] = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant() };
+                    ["sha256"] = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant() };
             }
             var manifest = new JsonObject
             {
                 ["schema"] = "infini.runtime-dump.v1", ["snapshotId"] = id,
-                ["capturedAtUtc"] = DateTimeOffset.UtcNow.ToString("O"),
+                ["capturedAtUtc"] = capturedAt,
                 ["capture"] = "loaded_definition_defaults_and_bounded_source_observations; not_AI_execution",
                 ["environment"] = environment.DeepClone(),
                 ["files"] = new JsonObject
@@ -72,20 +83,68 @@ public sealed partial class InfiniDumpCommand
             using (var file = new FileStream(pending, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             { file.Write(bytes); file.Flush(flushToDisk: true); }
             cancellation.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(Path.GetDirectoryName(completeDirectory)!);
+            Directory.Move(directory, completeDirectory);
+            directory = completeDirectory;
+            reportIncompleteDirectory?.Invoke(directory);
+            cancellation.ThrowIfCancellationRequested();
             File.Move(pending, Path.Combine(root, DumpManifestName), overwrite: true);
-            published = true;
+            // Publication is committed. A crash before cleanup can leave a
+            // stale diagnostic marker, but the verified manifest is authoritative.
+            // Cleanup failure must never roll back its now-selected payloads.
+            try { File.Delete(Path.Combine(directory, DumpIncompleteStateName)); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
             return manifest;
+        }
+        catch (Exception error)
+        {
+            // Preserve every byte already written, including a torn final row.
+            // Recovery is inspection of the valid prefix, never automatic resume
+            // or admission as a complete catalog. Diagnostics must not hide the
+            // original disk/cancellation error if the disk is already full.
+            if (directory != incompleteDirectory)
+            {
+                try { Directory.Move(directory, incompleteDirectory); directory = incompleteDirectory; }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            try { WriteIncompleteState(directory, id, capturedAt,
+                error is OperationCanceledException ? "cancelled" : "failed", error.GetType().Name); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            reportIncompleteDirectory?.Invoke(directory);
+            throw;
         }
         finally
         {
-            // Only this attempt's unpublished files can be removed. A previous
-            // successful snapshot is never cleaned up by this command.
-            if (!published)
-            {
-                if (File.Exists(pending)) File.Delete(pending);
-                if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-            }
+            // Only a small unpublished pointer is expendable. No payload is
+            // deleted after failure/cancellation, and previous pairs stay intact.
+            try { if (File.Exists(pending)) File.Delete(pending); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
         }
+    }
+
+    private static void WriteIncompleteState(string directory, string id, string capturedAt, string status, string? error)
+    {
+        var state = new JsonObject
+        {
+            ["schema"] = "infini.runtime-dump.incomplete.v1", ["snapshotId"] = id,
+            ["capturedAtUtc"] = capturedAt, ["complete"] = false, ["status"] = status,
+            ["error"] = error,
+            ["recovery"] = "Diagnostic only. JSONL may end with an incomplete row. The last published manifest remains authoritative."
+        };
+        // The initial marker is durable before any capture. A failed rewrite
+        // cannot erase its explicit incomplete status.
+        string path = Path.Combine(directory, DumpIncompleteStateName);
+        string temporary = path + ".tmp";
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+        {
+            file.Write(Encoding.UTF8.GetBytes(state.ToJsonString(DumpJsonOptions)));
+            file.Flush(flushToDisk: true);
+        }
+        File.Move(temporary, path, overwrite: true);
     }
 
     private static JsonObject CaptureDumpEnvironment() => CaptureDumpEnvironmentCore(includeFileHash: true);
@@ -152,17 +211,65 @@ public sealed partial class InfiniDumpCommand
             Encoding.UTF8.GetBytes(mods.ToJsonString(DumpJsonOptions)))).ToLowerInvariant();
     }
 
-    private sealed class BoundedDumpWriter : StreamWriter
+    internal static long AvailableDumpDiskBytes(string path)
     {
-        private long bytes;
-        private int rows;
-        internal BoundedDumpWriter(string path) : base(path, append: false, new UTF8Encoding(false)) { }
+        // On Unix DriveInfo uses statvfs on this directory. Reducing the path
+        // to "/" would inspect the wrong disk for /home, /mnt and /Volumes.
+        // Windows DriveInfo resolves the supplied directory to its drive.
+        var drive = new DriveInfo(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        return drive.AvailableFreeSpace;
+    }
+
+    private sealed class BoundedDumpWriter : TextWriter
+    {
+        private readonly CancellationToken cancellation;
+        private readonly StreamWriter writer;
+        private readonly Func<long> availableBytes;
+        public override Encoding Encoding => writer.Encoding;
+        private long bytes, nextDiskCheck;
+        internal int Rows { get; private set; }
+        internal int UnavailableRows { get; private set; }
+        internal BoundedDumpWriter(string path, CancellationToken cancellation = default, Func<long>? availableBytes = null)
+        {
+            this.cancellation = cancellation;
+            this.availableBytes = availableBytes ?? (() => AvailableDumpDiskBytes(path));
+            writer = new StreamWriter(path, append: false, new UTF8Encoding(false), bufferSize: 64 * 1024) { NewLine = "\n" };
+        }
+        public override void Write(char value) => throw new InvalidDataException("Dump writes require complete JSONL records.");
+        public override void Flush() => writer.Flush();
+        internal void FlushToDisk() { writer.Flush(); ((FileStream)writer.BaseStream).Flush(flushToDisk: true); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) writer.Dispose();
+            base.Dispose(disposing);
+        }
         public override void WriteLine(string? value)
         {
-            long next = bytes + Encoding.UTF8.GetByteCount(value ?? "") + Encoding.UTF8.GetByteCount(NewLine);
-            if (next > DumpFileByteLimit || rows >= DumpRowLimit)
-                throw new InvalidDataException("Dump file byte or row bound");
-            base.WriteLine(value); bytes = next; rows++;
+            cancellation.ThrowIfCancellationRequested();
+            int size = checked(Encoding.UTF8.GetByteCount(value ?? "") + 1);
+            if (size > DumpRecordByteLimit)
+                throw new InvalidDataException($"Dump record exceeds {DumpRecordByteLimit} UTF-8 bytes; partial export retained.");
+            if (value is null || value.Contains('\n') || value.Contains('\r'))
+                throw new InvalidDataException("Dump record must be one JSONL object.");
+            using var row = JsonDocument.Parse(value);
+            if (row.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidDataException("Dump record must be an object.");
+            int nextRows = checked(Rows + 1);
+            long nextBytes = checked(bytes + size);
+            if (nextBytes >= nextDiskCheck)
+            {
+                // Real free space, not a fixed catalog-size ceiling. Recheck at
+                // bounded intervals and leave room for the OS/recovery marker.
+                FlushToDisk();
+                long needed = DumpDiskReserveBytes + DumpRecordByteLimit;
+                if (availableBytes() < needed)
+                    throw new IOException($"Runtime dump needs at least {needed} bytes of free disk space; partial export retained.");
+                nextDiskCheck = bytes + 4 * 1024 * 1024;
+            }
+            writer.WriteLine(value);
+            bytes = nextBytes; Rows = nextRows;
+            if (row.RootElement.TryGetProperty("unavailable", out var unavailable)
+                && unavailable.ValueKind == JsonValueKind.True) UnavailableRows++;
         }
     }
 }

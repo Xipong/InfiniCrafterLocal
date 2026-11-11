@@ -90,7 +90,10 @@ internal static partial class EngineRuntimeChecks
             Equal(true, cancelled, "cancellation is terminal and visible to completion owner");
             Equal(original, File.ReadAllText(path), "cancelled partial export cannot replace accepted manifest");
             Equal(1, Directory.GetDirectories(Path.Combine(root, "runtime_dump_snapshots")).Length,
-                "cancelled export removes only its own unpublished files");
+                "cancelled export does not enter complete snapshot namespace");
+            Equal(true, job.IncompleteDirectory is not null && Directory.Exists(job.IncompleteDirectory), "cancelled output remains inspectable");
+            var state = JsonNode.Parse(File.ReadAllText(Path.Combine(job.IncompleteDirectory!, InfiniDumpCommand.DumpIncompleteStateName)))!;
+            Equal("cancelled", state["status"]!.GetValue<string>(), "cancellation marker cannot be confused with a completed pair");
             string blocked = Path.Combine(root, "not-a-directory"); File.WriteAllText(blocked, "occupied");
             var failed = new RuntimeDumpExport(blocked, 2, 2, _ => null, _ => null, DumpTestEnvironment());
             bool ioFailure = false;
