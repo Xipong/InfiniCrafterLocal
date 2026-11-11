@@ -288,7 +288,8 @@ def _compact_author_source_text(context: dict[str, Any], *, include_pooled: bool
             facts[slot] = replacement
         changed_facts.update(pooled)
     if not shared:
-        return copy.deepcopy(context)
+        # No accepted group modified this already-detached copy.
+        return result
     result["nativeSourceText"] = shared
     result["sourceTextNotation"] = _SOURCE_TEXT_READING + (_SOURCE_TEXT_VALUE_READING if changed_facts else "")
     return result if _size(result) < _size(context) else copy.deepcopy(context)

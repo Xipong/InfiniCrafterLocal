@@ -205,7 +205,7 @@ def test_full_source_is_only_method_body_and_retains_hook_conditions_and_child()
 
 
 @pytest.mark.parametrize('change', ['mvid','sha','signature','token','code','ambiguous','region','unknown-mechanics',
-    'unknown-graph','missing-members','bad-member','bool-member','complex-argument','missing-argument','static','parameters','duplicate-id','generated'])
+    'unknown-graph','missing-members','bad-member','bool-member','missing-call-input','missing-argument','static','parameters','duplicate-id','generated'])
 def test_uncertainty_keeps_original_graph_and_approximation(change):
     item=whole_method_parent();profile=item['directProjectileRaw'];g=item['parentSourceGraph'];r=profile['attackReference']['nativeCSharpSource']['records'][0]
     if change=='mvid':g['modules'][0]['mvid']='other'
@@ -220,7 +220,7 @@ def test_uncertainty_keeps_original_graph_and_approximation(change):
     elif change=='missing-members':g.pop('members')
     elif change=='bad-member':g['nodes'][0]['method']=999
     elif change=='bool-member':g['nodes'][0]['method']=False
-    elif change=='complex-argument':g['nodes'][0]['values']['9']=['call',{'member':0},[],0]
+    elif change=='missing-call-input':g['nodes'][0]['values']['9']=['call',{'member':0},['absent'],0]
     elif change=='missing-argument':g['nodes'][0]['values'].pop('9')
     elif change=='static':g['nodes'][0]['static']=True
     elif change=='parameters':g['nodes'][0]['arguments']=['int x']

@@ -83,6 +83,49 @@ def test_future_rows_literals_and_insufficient_savings_stay_unchanged():
     assert compact_author_parent_context(small) == small
 
 
+@pytest.mark.parametrize("include_pooled", [False, True])
+@pytest.mark.parametrize("coverage", ["whole_method", "future_method_shape"])
+def test_no_shared_text_keeps_exact_detached_copy(include_pooled, coverage):
+    from infini_local.pipelines.context.author_source_notation import _compact_author_source_text
+    repeated = {"nested": [[1, {"value": [2, 3]}]]}
+    source = {"parents": {"A": {"packet": {"raw": {"records": [
+        {"method": "M", "coverage": coverage, "code": "short first body\n", "context": repeated},
+        {"method": "M", "coverage": coverage, "code": "different body\n", "context": repeated},
+    ], "generatedParent": {"preserved": [repeated]}}}}}, "nativeSourceFacts": [{"nested": [4]}]}
+    before = copy.deepcopy(source)
+    result = _compact_author_source_text(source, include_pooled=include_pooled)
+    assert source == before and result == before
+
+    def mutable_ids(value):
+        if isinstance(value, dict):
+            return {id(value)}.union(*(mutable_ids(child) for child in value.values()))
+        if isinstance(value, list):
+            return {id(value)}.union(*(mutable_ids(child) for child in value))
+        return set()
+
+    assert not (mutable_ids(source) & mutable_ids(result))
+    result["parents"]["A"]["packet"]["raw"]["records"][0]["context"]["nested"][0][1]["value"].append(9)
+    result["nativeSourceFacts"][0]["nested"].append(9)
+    assert source == before
+
+
+def test_rejected_same_pooled_body_group_does_not_modify_detached_result():
+    from infini_local.pipelines.context.author_source_notation import _compact_author_source_text
+    body = "int repeated = 0;\n" * 100
+    record = {"method": "M", "coverage": "whole_method", "code": {"sourceSameAs": 0}}
+    source = {"records": [copy.deepcopy(record), copy.deepcopy(record)], "nativeSourceFacts": [body]}
+    before = copy.deepcopy(source)
+    result = _compact_author_source_text(source, include_pooled=True)
+    assert result == before and source == before
+    assert result is not source and result["records"] is not source["records"]
+    assert result["nativeSourceFacts"] is not source["nativeSourceFacts"]
+    assert all(new is not old and new["code"] is not old["code"]
+               for old, new in zip(source["records"], result["records"]))
+    assert "nativeSourceText" not in result and "sourceTextNotation" not in result
+    result["records"][0]["code"]["sourceSameAs"] = 99
+    assert source == before
+
+
 @pytest.mark.parametrize("invalid", [
     {"ilOffset": True, "startLine": 5, "endLine": 8},
     {"ilOffset": 99, "startLine": 5, "endLine": 8},

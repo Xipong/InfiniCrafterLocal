@@ -100,6 +100,8 @@ internal static partial class EngineRuntimeChecks
             ("audit251 late owner action liveness", LateOwnerActionsRejectDeadAndZeroLife),
             ("audit251 late owner healing cap", LateOwnerHealCapsNativeAmountToMissingLife),
             ("audit251 late owner delayed life boundary", LateOwnerActionsCannotCrossDeathAndRespawn),
+            ("identity reach rows scanning and work-bound parity", IdentityReachRowsMatchScanningOracle),
+            ("identity reach rows bounded allocations", IdentityReachRowsReduceAllocations),
             ("REA guard memo scanning parity", ReaGuardMemoMatchesScanningOracle),
             ("REA Entity accessor decoded-owner parity", ReaEntityMemoTracksDecodedBody),
             ("REA attachment grouping exact identity parity", ReaAttachmentGroupingMatchesScanning),
