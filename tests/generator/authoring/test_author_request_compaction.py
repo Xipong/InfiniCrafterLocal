@@ -166,6 +166,8 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
                 visit(child)
 
     visit(catalog["capabilities"])
+    visit(catalog["bindingActions"])
+    visit(catalog["fieldGuide"]["types"])
     assert nested_references and set(nested_references) <= set(profiles)
     assert set(references + nested_references) == set(profiles)
     expanded = _expand_constraint_references(catalog["capabilities"], profiles)
@@ -287,6 +289,7 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
     checked_descriptions = []
     omitted_root_copies = []
     guide = prompt.sharp_engine_fn_catalog_for_llm()["fieldGuide"]
+    guide = _expand_constraint_references(guide, guide["consumerConstraints"])
     shared_types = guide["types"]
     checked_shared_types = set()
 
@@ -515,3 +518,60 @@ def test_damage_class_provider_gap_cannot_admit_reserved_or_unknown_local_values
         restored_call = next(row for row in restored['runtimeProgram']['calls'] if row['id'] == 'witness_call')
         assert restored_call['params']['damageClass'] == damage_class
         assert validate_runtime_program(restored)['ok'] is valid
+
+
+@pytest.mark.parametrize("source_kind,reverse", [
+    ("plain", False), ("short_source", False), ("short_source", True),
+    ("restored_child", False), ("restored_child", True), ("long_source", False),
+])
+def test_author_reuses_compacted_dossier_without_changing_selection(monkeypatch, source_kind, reverse):
+    """Selection delivers the exact compared bytes, without reprocessing its winner."""
+    import hashlib
+    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
+    from infini_local.pipelines.context.parent_stage import parent_context_for_stage
+    from infini_local.pipelines.context.whole_method_author import prepare_whole_method_author
+    from tests.generator.context.test_author_mechanics_policy import whole_method_parent
+
+    parent = {"name": "Plain source", "damage": 7, "useTime": 20}
+    if source_kind != "plain":
+        parent = whole_method_parent()
+        if source_kind == "long_source":
+            source = parent["directProjectileRaw"]["attackReference"]["nativeCSharpSource"]["records"][0]
+            source["code"] = "/* " + "additional literal source detail " * 1500 + " */\n" + source["code"]
+            source["codeSha256"] = hashlib.sha256(source["code"].encode()).hexdigest()
+        elif source_kind == "restored_child":
+            child = parent["directProjectileRaw"]["referencedProjectiles"]["references"][0]["profile"]
+            child["motionReference"] = {"futureSourceFact": "literal unknown detail " * 1000}
+    inputs = ({}, parent) if reverse else (parent, {})
+    before = copy.deepcopy(inputs)
+    packets = {label: {"packet": raw_parent_card_for_llm(value)} for label, value in zip(("A", "B"), inputs)}
+    compact = prompt.compact_author_parent_context
+    encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    baseline = compact(parent_context_for_stage(packets, stage="author"))
+    prepared = [prepare_whole_method_author(value) for value in inputs]
+    expected = baseline
+    has_candidate = any(choices for _, choices in prepared)
+    assert has_candidate is (source_kind in {"short_source", "restored_child"})
+    if has_candidate:
+        alternatives = {label: {"packet": raw_parent_card_for_llm(value)}
+                        for label, (value, _) in zip(("A", "B"), prepared)}
+        choices = {label: selected for label, (_, selected) in zip(("A", "B"), prepared)}
+        candidate = compact(parent_context_for_stage(alternatives, stage="author", whole_sources=choices))
+        candidate_wins = len(encode(candidate)) < len(encode(baseline))
+        assert candidate_wins is (source_kind == "short_source")
+        expected = candidate if candidate_wins else baseline
+
+    processed = []
+
+    def observed_compaction(value):
+        processed.append(encode(value))
+        return compact(value)
+
+    monkeypatch.setattr(prompt, "compact_author_parent_context", observed_compaction)
+    _, dossier, _ = author.build_initial_author_request(*inputs, "compaction-selection", model_name="offline")
+    packet = json.loads(dossier)
+    actual = {key: packet[key] for key in expected}
+    assert encode(actual) == encode(expected)
+    assert inputs == before
+    # A deterministic work budget, not a host-load-sensitive timing threshold.
+    assert len(processed) == (2 if has_candidate else 1)

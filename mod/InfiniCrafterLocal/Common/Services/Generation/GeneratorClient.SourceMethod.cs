@@ -419,65 +419,12 @@ public sealed partial class GeneratorClient
             var localEvidence = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             var inspectedLocalReads = new HashSet<string>(StringComparer.Ordinal);
             var localEvidenceUnknown = new HashSet<string>(StringComparer.Ordinal);
-            // These are possible source writes, not reaching SSA definitions.
-            // In particular a ref call remains opaque and is never evaluated.
-            HashSet<int> AddressSlots(string id)
-            {
-                var result = new HashSet<int>();
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                var pending = new Stack<string>(); pending.Push(id);
-                while (pending.Count > 0 && seen.Count < 128)
-                {
-                    string next = pending.Pop();
-                    if (!seen.Add(next) || !Values.TryGetValue(next, out var value)) continue;
-                    if (value.Op == "ldloca" && value.Operand is int slot) result.Add(slot);
-                    else if (value.Op is "ldloc" or "stloc" or "predecessor_stack_alternatives")
-                        foreach (string input in value.Inputs) pending.Push(input);
-                    else if (value.Op == "ldflda" && value.Inputs.Count > 0) pending.Push(value.Inputs[0]);
-                }
-                if (pending.Count > 0) localEvidenceUnknown.Add("possible_local_address_bound");
-                return result;
-            }
-            var writesByLocal = new Dictionary<int, List<Value>>();
-            foreach (var statement in Statements)
-            {
-                var slots = new HashSet<int>();
-                if (statement.Op == "stloc" && statement.Operand is int slot) slots.Add(slot);
-                if (statement.Inputs.Count > 0 && (statement.Op.StartsWith("stind", StringComparison.Ordinal)
-                    || statement.Op is "stobj" or "initobj" or "cpobj" or "stfld"))
-                    slots.UnionWith(AddressSlots(statement.Inputs[0]));
-                if (statement.Op is "call" or "callvirt" or "newobj" && statement.Operand is MethodBase call)
-                {
-                    var parameters = call.GetParameters();
-                    for (int index = 0; index < statement.Inputs.Count; index++)
-                    {
-                        int parameter = index - (call.IsStatic || statement.Op == "newobj" ? 0 : 1);
-                        if (parameter < 0 || parameter < parameters.Length && parameters[parameter].ParameterType.IsByRef)
-                            slots.UnionWith(AddressSlots(statement.Inputs[index]));
-                    }
-                }
-                foreach (int local in slots)
-                {
-                    if (!writesByLocal.TryGetValue(local, out var list)) writesByLocal[local] = list = new();
-                    list.Add(statement);
-                }
-            }
+            ProjectionDependencies dependencies = GetProjectionDependencies();
+            if (dependencies.AddressBound) localEvidenceUnknown.Add("possible_local_address_bound");
+            var writesByLocal = dependencies.WritesByLocal;
             bool CanPrecede(Value write, Value read)
                 => write.Id != read.Id && (write.Block != read.Block ? Reach(write.Block).Contains(read.Block)
                     : write.At < read.At || Blocks[write.Block].Next.Any(next => Reach(next).Contains(write.Block)));
-            bool ExceedsDependencyBound(Value value)
-            {
-                if (value.Op is not ("ldloc" or "predecessor_stack_alternatives")) return false;
-                var seen = new HashSet<string>(); var pending = new Stack<string>(value.Inputs);
-                while (pending.Count > 0)
-                {
-                    string next = pending.Pop();
-                    if (!seen.Add(next) || !Values.TryGetValue(next, out var dependency)) continue;
-                    if (seen.Count > 96) return true;
-                    foreach (string input in dependency.Inputs) pending.Push(input);
-                }
-                return false;
-            }
             void Include(string id)
             {
                 var pending = new Stack<string>(); pending.Push(id);
@@ -492,7 +439,7 @@ public sealed partial class GeneratorClient
             foreach (var value in rootRows) Include(value.Id);
             // Close the source slice over control dependencies too. Joins retain
             // the guards of ALL definitions, including ternaries and loop bodies.
-            var branches = Statements.Where(v => v.Op == "switch" || IsBranch(new AmmoIl(v.At, v.Op, v.Operand))).ToArray();
+            var branches = dependencies.Branches;
             var orderedBranches = branches.OrderBy(value => rootRows.Length == 0 ? value.At
                 : rootRows.Min(root => Math.Abs(root.At - value.At))).ToArray();
             var retainedControls = new HashSet<string>();

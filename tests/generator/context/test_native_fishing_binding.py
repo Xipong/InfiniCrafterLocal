@@ -168,10 +168,12 @@ def test_non_use_fishing_is_rejected_without_rewriting_input():
 def test_actual_author_packet_exposes_required_fishing_payload_for_object_mode(monkeypatch,mode):
     import json
     from infini_local.pipelines.author.request import build_initial_author_request
+    from tests.generator.authoring.test_author_request_compaction import _expand_constraint_references
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE',mode)
     request,payload,_=build_initial_author_request({'name':'Wood'},{'name':'Bait'},'fishing-test',model_name='audit-model')
     assert request['response_format']['type']==mode
-    cards=json.loads(payload)['runtimeCapabilityContract']['catalog']['bindingActions']
+    catalog=json.loads(payload)['runtimeCapabilityContract']['catalog']
+    cards=_expand_constraint_references(catalog['bindingActions'],catalog['fieldGuide']['consumerConstraints'])
     fish=next(c for c in cards if c['action']=='native_fishing')
     assert fish['inputs']==['primary_use','alternate_use']
     shape=fish['requiredPayload']['fishing']
