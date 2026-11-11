@@ -977,3 +977,138 @@ def test_navigation_metadata_resolves_existing_owners_and_test_families():
         for path in [*rule.get("entrypoints", []), *rule.get("context", [])]:
             assert (ROOT / path).is_file(), (rule["id"], path)
         agentctl.verification_plan([], areas=[rule["area"]])
+
+
+@pytest.fixture
+def native_ci_inputs(tmp_path):
+    from tools.testing import verify_ci_native_inputs as inputs
+
+    env = {'GITHUB_SHA': '1' * 40, 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '1',
+           'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')}
+    for base, relative in [('refs', 'tModLoader.dll'), ('refs', 'nested/FNA.dll'),
+                           *(('deps', path) for path in inputs.EXTERNAL_DLLS)]:
+        path = tmp_path / base / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(relative.encode())
+    reports = tmp_path / 'reports'
+    reports.mkdir()
+    for role in inputs.ROLES:
+        (reports / f'{role}.json').write_text(json.dumps(inputs.capture(role, env)))
+    return inputs, env, reports
+
+
+def test_parallel_native_receipts_bind_exact_bytes_without_machine_paths(native_ci_inputs, tmp_path):
+    inputs, env, reports = native_ci_inputs
+    inputs.verify(reports, env)
+    native = json.loads((reports / 'native.json').read_text())
+    assert str(tmp_path) not in json.dumps(native)
+    assert native['inputs']['tml/nested/FNA.dll'] != native['inputs']['tml/tModLoader.dll']
+    (tmp_path / 'refs/readme.txt').write_text('Documentation is not a compile/runtime input')
+    assert inputs.capture('native', env) == native
+    (tmp_path / 'deps' / inputs.EXTERNAL_DLLS[1]).write_bytes(b'new upstream DLL')
+    (reports / 'package.json').write_text(json.dumps(inputs.capture('package', env)))
+    with pytest.raises(ValueError, match='different DLL'):
+        inputs.verify(reports, env)
+
+
+@pytest.mark.parametrize('mutation', [
+    'missing', 'extra', 'duplicate-role', 'unknown-role', 'wrong-schema', 'wrong-sha', 'wrong-run',
+    'wrong-attempt', 'missing-dll', 'extra-dll', 'wrong-digest', 'invalid-digest', 'not-object',
+])
+def test_parallel_native_receipts_fail_closed(native_ci_inputs, mutation):
+    inputs, env, reports = native_ci_inputs
+    path = reports / 'package.json'
+    report = json.loads(path.read_text())
+    if mutation == 'missing':
+        path.unlink()
+    elif mutation == 'extra':
+        (reports / 'copy.json').write_text(json.dumps(report))
+    else:
+        if mutation == 'duplicate-role':
+            report['role'] = 'native'
+        elif mutation == 'unknown-role':
+            report['role'] = 'other'
+        elif mutation == 'wrong-schema':
+            report['schema'] = 'other'
+        elif mutation.startswith('wrong-') and mutation in {'wrong-sha', 'wrong-run', 'wrong-attempt'}:
+            key = {'wrong-sha': 'GITHUB_SHA', 'wrong-run': 'GITHUB_RUN_ID', 'wrong-attempt': 'GITHUB_RUN_ATTEMPT'}[mutation]
+            report['run'][key] = '2' * 40 if mutation == 'wrong-sha' else '2'
+        elif mutation == 'missing-dll':
+            del report['inputs']['tml/tModLoader.dll']
+        elif mutation == 'extra-dll':
+            report['inputs']['tml/new.dll'] = '2' * 64
+        elif mutation == 'wrong-digest':
+            report['inputs']['tml/tModLoader.dll'] = '2' * 64
+        elif mutation == 'invalid-digest':
+            report['inputs']['tml/tModLoader.dll'] = 'not a digest'
+        elif mutation == 'not-object':
+            report = []
+        path.write_text(json.dumps(report))
+    with pytest.raises(ValueError):
+        inputs.verify(reports, env)
+
+
+@pytest.mark.parametrize('missing', ['INFINI_TML_REFERENCE_DIR', 'INFINI_TML_DEPS_SRC', 'GITHUB_SHA', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'])
+def test_native_identity_capture_requires_known_inputs(native_ci_inputs, missing):
+    inputs, env, _ = native_ci_inputs
+    del env[missing]
+    with pytest.raises(ValueError):
+        inputs.capture('native', env)
+
+
+def test_hosted_windows_gates_run_in_parallel_and_preserve_aggregate_check():
+    native = '\n'.join(_workflow_section('tml-native', indent=2))
+    package = '\n'.join(_workflow_section('tml-package', indent=2))
+    aggregate = '\n'.join(_workflow_section('tml-build', indent=2))
+    assert 'needs:' not in native and 'needs:' not in package
+    assert 'python tools/validate_release.py --group build --require-build' in native
+    assert './tools/build/package_tmod.ps1' in package
+    assert 'StudioBundleChecks.csproj' in package
+    assert 'InfiniCrafterLocal-tmod' in package
+    for leg in (native, package):
+        assert 'runs-on: windows-latest' in leg
+        assert 'uses: ./.github/actions/setup-native-ci' in leg
+        assert 'continue-on-error:' not in leg
+    assert 'name: Windows tModLoader/dotnet build smoke' in aggregate
+    assert 'needs: [tml-native, tml-package]' in aggregate and 'if: always()' in aggregate
+    assert 'NATIVE_RESULT: ${{ needs.tml-native.result }}' in aggregate
+    assert 'PACKAGE_RESULT: ${{ needs.tml-package.result }}' in aggregate
+    assert 'test "$NATIVE_RESULT" = success && test "$PACKAGE_RESULT" = success' in aggregate
+    assert 'verify_ci_native_inputs.py --verify artifacts/native-inputs' in aggregate
+    # REST download sees successful-leg receipts retained from earlier attempts.
+    assert 'github-token: ${{ github.token }}' in aggregate
+    assert 'run-id: ${{ github.run_id }}' in aggregate
+    for leg in (native, package):
+        assert leg.count('overwrite: true') == leg.count('uses: actions/upload-artifact@v4')
+
+
+@pytest.mark.parametrize('native', ['success', 'failure', 'cancelled', 'skipped'])
+@pytest.mark.parametrize('package', ['success', 'failure', 'cancelled', 'skipped'])
+def test_parallel_windows_aggregate_rejects_any_unsuccessful_leg(native, package):
+    import os
+    import shutil
+    import subprocess
+
+    shell = shutil.which('bash')
+    if shell is None:
+        pytest.skip('The aggregate executes on the Ubuntu GitHub runner')
+    block = _workflow_section('tml-build', indent=2)
+    commands = [line.strip().removeprefix('run: ') for line in block
+                if line.strip().startswith('run: test ')]
+    assert len(commands) == 1
+    result = subprocess.run([shell, '-c', commands[0]],
+                            env={**os.environ, 'NATIVE_RESULT': native, 'PACKAGE_RESULT': package},
+                            capture_output=True, text=True, timeout=10, check=False)
+    assert (result.returncode == 0) is (native == package == 'success')
+
+
+
+def test_parallel_native_receipts_allow_successful_leg_from_previous_attempt(native_ci_inputs):
+    inputs, env, reports = native_ci_inputs
+    env['GITHUB_RUN_ATTEMPT'] = '2'
+    # Re-run failed jobs leaves the successful native leg/receipt at attempt 1.
+    (reports / 'package.json').write_text(json.dumps(inputs.capture('package', env)))
+    inputs.verify(reports, env)
+    # A rerun of all jobs replaces both artifacts under the same canonical names.
+    (reports / 'native.json').write_text(json.dumps(inputs.capture('native', env)))
+    inputs.verify(reports, env)

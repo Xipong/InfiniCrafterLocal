@@ -114,133 +114,19 @@ jobs:
           git archive --format=tar HEAD | tar -xf - -C "$archive_root"
           (cd "$archive_root" && python tools/checks/check_project_hygiene.py --strict-archive)
 
-  tml-build:
-    name: Windows tModLoader/dotnet build smoke
+  tml-native:
+    name: Windows compilation and native CPU checks
     runs-on: windows-latest
     steps:
       - name: Preserve Git blob bytes for cross-platform release verification
         shell: pwsh
         run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: ./.github/actions/setup-native-ci
         with:
-          dotnet-version: '8.0.x'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      # Match ParticleLibrary's declared modReferences version (3.2.1.0).
-      # Luminance recommends using its latest GitHub release DLL for project references.
-      - name: Download tML mod reference DLLs
-        shell: pwsh
-        run: |
-          $depsRoot = Join-Path $env:RUNNER_TEMP "infinicrafter-compile-deps"
-          $particleLibraryDll = Join-Path $depsRoot "ParticleLibrary\ParticleLibrary.dll"
-          $luminanceDll = Join-Path $depsRoot "Luminance\bin\Debug\net8.0\Luminance.dll"
-          New-Item -ItemType Directory -Force -Path (Split-Path $particleLibraryDll), (Split-Path $luminanceDll) | Out-Null
-
-          $particleLibraryUrl = "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll"
-          $luminanceUrl = "https://github.com/LucilleKarma/Luminance/releases/latest/download/Luminance.dll"
-
-          & curl.exe --fail --location --retry 3 --silent --show-error --output $particleLibraryDll $particleLibraryUrl
-          if ($LASTEXITCODE -ne 0) { throw "Failed to download ParticleLibrary.dll (curl exit $LASTEXITCODE)." }
-          & curl.exe --fail --location --retry 3 --silent --show-error --output $luminanceDll $luminanceUrl
-          if ($LASTEXITCODE -ne 0) { throw "Failed to download Luminance.dll (curl exit $LASTEXITCODE)." }
-
-          foreach ($dll in @($particleLibraryDll, $luminanceDll)) {
-            $header = [System.IO.File]::ReadAllBytes($dll)
-            if ($header.Length -lt 2 -or $header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
-              throw "Downloaded dependency is not a Windows DLL: $dll"
-            }
-          }
-
-          "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      # tml-build currently queries the unauthenticated GitHub API to resolve version aliases.
-      # Seed its expected cache with the workflow token so CI does not depend on the shared anonymous rate limit.
-      - name: Seed tML SDK release cache
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          $headers = @{
-            Accept = "application/vnd.github+json"
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            "X-GitHub-Api-Version" = "2022-11-28"
-          }
-          $apiReleases = Invoke-RestMethod -Uri "https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100" -Headers $headers
-          $apiReleases = @($apiReleases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)
-
-          $entries = @()
-          foreach ($release in $apiReleases) {
-            $version = $null
-            $versionText = ([string]$release.tag_name) -replace "^v", ""
-            if (-not [Version]::TryParse($versionText, [ref]$version)) { continue }
-
-            $asset = @($release.assets | Where-Object { $_.name -eq "tModLoader.zip" } | Select-Object -First 1)
-            if ($asset.Count -eq 0) { continue }
-
-            $entries += [pscustomobject]@{
-              Version = $version
-              DownloadUrl = [string]$asset[0].browser_download_url
-              PreRelease = [bool]$release.prerelease
-            }
-          }
-
-          $stable = $entries | Where-Object { -not $_.PreRelease } | Select-Object -First 1
-          $preview = $entries | Where-Object { $_.PreRelease } | Select-Object -First 1
-          if ($null -eq $stable -or $null -eq $preview) {
-            throw "Could not find stable and preview tModLoader releases with tModLoader.zip assets."
-          }
-
-          $cacheRoot = Join-Path $env:APPDATA "tml-build"
-          New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
-          $cachePath = Join-Path $cacheRoot "cached_versions"
-          $stream = [System.IO.File]::Create($cachePath)
-          $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::UTF8)
-          try {
-            $writer.Write([DateTime]::Now.ToBinary())
-            $writer.Write([Int32]$entries.Count)
-            foreach ($entry in $entries) {
-              $version = $entry.Version
-              $writer.Write([Int32]$version.Major)
-              $writer.Write([Int32]$version.Minor)
-              $writer.Write([Int32]$version.Build)
-              $writer.Write([Int32]$version.Revision)
-              $writer.Write([string]$entry.DownloadUrl)
-            }
-            foreach ($version in @($stable.Version, $preview.Version)) {
-              $writer.Write([Int32]$version.Major)
-              $writer.Write([Int32]$version.Minor)
-              $writer.Write([Int32]$version.Build)
-              $writer.Write([Int32]$version.Revision)
-            }
-          }
-          finally {
-            $writer.Dispose()
-          }
-
-      # The tML SDK fills its local package feed/alias cache during restore.
-      # Resolve that first so the subsequent build sees tModLoader reference assemblies.
-      - name: Restore tML SDK references
-        shell: pwsh
-        run: |
-          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
-          exit $LASTEXITCODE
-      - name: Locate restored references for native CPU regressions
-        shell: pwsh
-        run: |
-          # The first SDK restore creates the version-alias props; reevaluate
-          # the graph so the exact tML package appears in project.assets.json.
-          dotnet restore mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $assets = Get-Content mod/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
-          $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
-          if ($tml.Count -ne 1) { throw 'Expected one resolved tModLoader package for native checks.' }
-          $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
-            $candidate = Join-Path $_ ($tml[0].Value.path + '/lib/net8.0')
-            if (Test-Path (Join-Path $candidate 'tModLoader.dll')) { $candidate }
-          })
-          if ($references.Count -ne 1) { throw 'Could not locate the resolved native tModLoader references.' }
-          "INFINI_TML_REFERENCE_DIR=$($references[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          github-token: ${{ github.token }}
+      - name: Record native check dependency identities
+        run: python tools/testing/verify_ci_native_inputs.py --write-role native --output artifacts/native-inputs/native.json
       # Compile/native gates run separately from official release packaging.
       - name: Attempt tML project build
         id: tml
@@ -279,10 +165,34 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tml-build-logs
+          overwrite: true
           path: |
             artifacts/validation/
           if-no-files-found: warn
 
+      - name: Upload native input identity receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ci-inputs
+          overwrite: true
+          path: artifacts/native-inputs/native.json
+          if-no-files-found: error
+
+  # The full native suite and the complete release source-pack generation are
+  # independent. Isolated runners avoid races in generated resources/obj/bin.
+  tml-package:
+    name: Windows package and Studio lifecycle smoke
+    runs-on: windows-latest
+    steps:
+      - name: Preserve Git blob bytes for cross-platform release verification
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-native-ci
+        with:
+          github-token: ${{ github.token }}
+      - name: Record packaging dependency identities
+        run: python tools/testing/verify_ci_native_inputs.py --write-role package --output artifacts/native-inputs/package.json
       - name: Package Release mod and self-contained Studio with official tModLoader
         shell: pwsh
         env:
@@ -298,6 +208,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: InfiniCrafterLocal-tmod
+          overwrite: true
           path: artifacts/package/
           if-no-files-found: error
       - name: Upload packaging diagnostics
@@ -305,5 +216,43 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tmod-packaging-diagnostics
+          overwrite: true
           path: artifacts/package/*.log
           if-no-files-found: ignore
+      - name: Upload package input identity receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-ci-inputs
+          overwrite: true
+          path: artifacts/native-inputs/package.json
+          if-no-files-found: error
+
+  # Keep the existing check name and fail closed if either parallel leg failed,
+  # was skipped/cancelled, or resolved different mutable upstream references.
+  tml-build:
+    name: Windows tModLoader/dotnet build smoke
+    needs: [tml-native, tml-package]
+    permissions:
+      contents: read
+      actions: read
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require both Windows gates
+        env:
+          NATIVE_RESULT: ${{ needs.tml-native.result }}
+          PACKAGE_RESULT: ${{ needs.tml-package.result }}
+        run: test "$NATIVE_RESULT" = success && test "$PACKAGE_RESULT" = success
+      - name: Download this run's native input receipts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-ci-inputs'
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+          path: artifacts/native-inputs
+      - name: Require identical tested and packaged native inputs
+        run: python tools/testing/verify_ci_native_inputs.py --verify artifacts/native-inputs
