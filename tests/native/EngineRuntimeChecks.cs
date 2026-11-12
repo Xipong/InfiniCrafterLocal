@@ -113,6 +113,7 @@ internal static partial class EngineRuntimeChecks
             ("hook output selection reaches native fact capture", ParentHookOutputsReachNativeFactCapture),
             ("mechanics source preserves effects and unknowns", MechanicsSourcePreservesEffectsAndUnknowns),
             ("mechanics source binds explicit native roots", MechanicsSourceBindsExplicitNativeRoots),
+            ("mechanics source binds immutable boolean aliases", MechanicsSourceBindsBooleanAliases),
             ("mechanics source excludes only unreachable identity writes", MechanicsSourceExcludesOnlyUnreachableIdentityWrites),
             ("projectile identity initialization continuation is contextual", ProjectileIdentityInitializationContinuationIsContextual),
             ("mechanics source call index scanning parity", MechanicsCallIndexMatchesScanningOracle),

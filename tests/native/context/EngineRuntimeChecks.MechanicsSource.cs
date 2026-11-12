@@ -12,6 +12,56 @@ internal static partial class EngineRuntimeChecks
 {
     private sealed class MechanicsSourceFixture : Projectile
     {
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolAlias()
+        {
+            bool selected = type >= 178 && type <= 179;
+            if (selected) damage += 981;
+            if (!selected) damage += 982;
+            if (Touch() && selected) damage += 983;
+            if (selected || Touch()) damage += 984;
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolReassigned()
+        {
+            bool selected = type == 178;
+            if (Touch()) selected = true;
+            if (selected) damage += 985;
+        }
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void Flip(ref bool value) { Executions++; value = true; }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolRef()
+        {
+            bool selected = type == 178;
+            Flip(ref selected);
+            if (selected) damage += 986;
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolLoop()
+        {
+            bool selected = type == 178;
+            while (Touch()) { if (selected) damage += 987; }
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolNested()
+        {
+            while (Touch()) { bool selected = type == 178; if (selected) damage += 988; if (!selected) damage += 991; }
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolException()
+        {
+            bool selected = type == 178;
+            try { if (selected) damage += 989; } finally { Executions++; }
+        }
+        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+        public void BoolCapture()
+        {
+            bool selected = type == 178;
+            Action change = () => selected = true;
+            change();
+            if (selected) damage += 990;
+        }
         internal static int Executions;
         public void OverloadedIdentity(int unused) { if (type == 177) damage++; }
         public void OverloadedIdentity(float unused) { if (type == 177) damage++; }
