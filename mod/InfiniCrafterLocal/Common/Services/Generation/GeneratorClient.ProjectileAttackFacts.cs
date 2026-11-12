@@ -535,6 +535,10 @@ public sealed partial class GeneratorClient
         private int expressionCount;
         internal Action? AdditionalExpressionWork;
         internal int ExpressionLimit = 12000;
+        // Give captured-identity and explicit effect slices more room, not the
+        // unspecialized all-actor method. The latter can contain unrelated AI
+        // arms even when a small certified actor slice is already available.
+        private int DependencyLimit => selection is not null || explicitRoots ? 384 : 192;
         internal AttackSourceObservation(ParentSourceMethod body, string role, IEnumerable<ParentSourceMethod.Value>? selected = null, AttackIdentitySelection? selection = null)
         {
             this.body = body; this.role = role; this.selection = selection; explicitRoots = selected is not null;
@@ -649,7 +653,7 @@ public sealed partial class GeneratorClient
         {
             AdditionalExpressionWork?.Invoke();
             if (++expressionCount > ExpressionLimit) throw new NotSupportedException("connected_source_expression_work_bound:" + expressionCount + ">" + ExpressionLimit);
-            if (dependencies.Count > 192) throw new NotSupportedException("connected_source_dependency_count_bound:" + dependencies.Count + ">192");
+            if (dependencies.Count > DependencyLimit) throw new NotSupportedException("connected_source_dependency_count_bound:" + dependencies.Count + ">" + DependencyLimit);
             if (!body.Values.TryGetValue(id, out var value)) return "unresolved(" + id + ")";
             if (value.Op is "ldloca" or "address_exposed_local") return AddressLocal(value);
             // Local() installs its named dependency before walking connected

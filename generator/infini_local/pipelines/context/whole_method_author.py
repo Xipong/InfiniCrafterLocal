@@ -95,7 +95,8 @@ def _edge_bindings(graph: dict, node: dict) -> dict[int, Any] | None:
         if not isinstance(context, list):
             # Only this producer-owned child dispatch context is independent
             # of the caller's values namespace. Unknown contexts can hide refs.
-            if (edge.get('kind') == 'certified_native_projectile_source_windows'
+            if (edge.get('kind') in {'certified_native_projectile_source_windows',
+                                     'conditional_native_projectile_spawn_source'}
                     and isinstance(context, dict) and set(context) == {'projectileId', 'aiStyle', 'entryAndOmittedFlow'}
                     and type(context['projectileId']) is int and type(context['aiStyle']) is int
                     and context['entryAndOmittedFlow'] == 'unresolved'):

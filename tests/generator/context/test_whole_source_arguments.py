@@ -107,3 +107,21 @@ def test_modified_edge_dependencies_after_prepare_refuse_atomically():
     before = copy.deepcopy(raw)
     assert not apply_whole_method_author(raw, choices)
     assert raw == before
+
+@pytest.mark.parametrize('kind', [
+    'certified_native_projectile_source_windows',
+    'conditional_native_projectile_spawn_source',
+])
+def test_native_child_provenance_preserves_namespace_independent_context(kind):
+    from infini_local.pipelines.context.whole_method_author import _edge_bindings
+    node = {'id': 0, 'values': {}, 'static': False}
+    context = {'projectileId': 601, 'aiStyle': 75, 'entryAndOmittedFlow': 'unresolved'}
+    graph = {'edges': [{'from': 0, 'to': 1, 'kind': kind, 'context': context}]}
+    original = copy.deepcopy(graph)
+    assert _edge_bindings(graph, node) == {}
+    assert graph == original  # Neither relabel conditional provenance nor resolve it.
+    context['hiddenSourceILValue'] = 123
+    assert _edge_bindings(graph, node) is None
+    del context['hiddenSourceILValue']
+    context['entryAndOmittedFlow'] = 'executed'
+    assert _edge_bindings(graph, node) is None
