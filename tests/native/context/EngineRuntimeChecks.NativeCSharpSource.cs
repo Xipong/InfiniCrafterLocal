@@ -31,6 +31,21 @@ internal static partial class EngineRuntimeChecks
         public void ExternalLocal() { float value = ai[0]; if (aiStyle == 123) rotation = value; }
         public string LiteralSource() => "line1\r\nline2\"\\";
         public void ExceptionRegion() { if (aiStyle == 123) { try { rotation++; } finally { damage++; } } }
+        public void ClosedExceptionDescriptors()
+        {
+            if (aiStyle == 123)
+            {
+                int value = damage;
+                try { if (value < 0) throw new ArgumentException("fixture"); rotation += value; }
+                catch (ArgumentException error) when (error.ParamName is not null) { value = 8; }
+                catch (InvalidOperationException) { value = 9; }
+                finally { Executions++; }
+                velocity.X = value;
+            }
+            damage += 444;
+        }
+        public void EnclosingException() { try { if (aiStyle == 123) damage++; damage += 445; } finally { Executions++; } }
+        public void ExternalExceptionLocal() { int value = damage; if (aiStyle == 123) { try { rotation += value; } finally { Executions++; } } damage += 446; }
         public void OtherExceptionRegion()
         {
             if (aiStyle == 123) rotation++;
@@ -377,6 +392,46 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void NativeCSharpClosedExceptionRegions()
+    {
+        int executions = CSharpSourceFixture.Executions;
+        var method = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ClosedExceptionDescriptors))!;
+        var record = CSharpFixtureRecord(method, true);
+        string code = record["code"]!.GetValue<string>();
+        var parsed = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(code);
+        Equal(false, parsed.GetDiagnostics().Any(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error), "closed conditional source is syntactically complete");
+        var islands = parsed.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.TryStatementSyntax>().ToArray();
+        Equal(1, islands.Length, "one complete exception island");
+        Equal(2, islands[0].Catches.Count, "all catch clauses remain");
+        Equal(true, islands[0].Catches[0].Filter is not null && islands[0].Finally is not null, "filter and finally remain");
+        Equal(true, code.Contains("velocity.X =") && code.Contains("rotation +=") && code.Contains("aiStyle == 123"), "guard common tail and local effects retained");
+        CSharpSourceRefuses(() => CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.EnclosingException))!, true), "csharp_region_nonlocal_control_unsupported");
+        CSharpSourceRefuses(() => CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ExternalExceptionLocal))!, true), "csharp_region_external_local_dependency");
+        // Removing a lexical handler cannot pass solely because a coarse IL annotation survives.
+        object Create(Type type, params object?[] args) => Activator.CreateInstance(type, CSharpFlags, null, args, null)!;
+        using var module = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpModule", CSharpFlags)!, method.Module.FullyQualifiedName, File.ReadAllBytes(method.Module.FullyQualifiedName), method.Module.ModuleVersionId);
+        using var document = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpDocument", CSharpFlags)!, method, module, CancellationToken.None);
+        var tree = (SyntaxTree)CSharpFixtureMember(document, "Tree");
+        var branch = tree.Descendants.OfType<IfElseStatement>().First();
+        var island = branch.TrueStatement.DescendantsAndSelf.OfType<TryCatchStatement>().First();
+        island.CatchClauses.First().Remove();
+        Equal("csharp_region_exception_scope_not_closed", (string)CSharpOwner.GetMethod("CSharpClosedRegionRefusal", CSharpFlags)!.Invoke(null, new object[] { branch.TrueStatement, method })!, "missing handler is refused");
+        Equal(executions, CSharpSourceFixture.Executions, "no source fixture execution");
+        foreach (var fixture in new[] { (Type: 378, Style: 14), (Type: 928, Style: 14) })
+        {
+            var capture = GeneratorClient.CaptureProjectileAttackReference(new Projectile { type = fixture.Type, aiStyle = fixture.Style });
+            var strict = capture["nativeCSharpSource"]!["records"]!.AsArray().OfType<JsonObject>().Single(r => r["method"]!.GetValue<string>() == "Terraria.Projectile.VanillaAI");
+            Equal("conditional_ast_regions", strict["coverage"]!.GetValue<string>(), "real source is conditional, not certified CFG");
+            Equal(true, strict["code"]!.GetValue<string>().Contains("catch"), "real handler remains in strict source");
+            var mechanics = (JsonObject)CSharpOwner.GetMethod("CaptureProjectileMechanicsSource", CSharpFlags)!.Invoke(null, new object[] { new Projectile { type = fixture.Type, aiStyle = fixture.Style } })!;
+            var readable = mechanics["records"]!.AsArray().OfType<JsonObject>().Single(r => r["method"]!.GetValue<string>() == "Terraria.Projectile.VanillaAI");
+            Equal("approximate_identity_ast_regions", readable["coverage"]!.GetValue<string>(), "readable view keeps conditional scope");
+            Equal(1, readable["preservedExceptionIslandCount"]!.GetValue<int>(), "real readable exception island remains");
+            Equal(false, readable.ContainsKey("spawnTypeCandidates"), "exception region does not guess child types from normal flow");
+            Equal(true, capture.ToJsonString().Contains("exception_regions"), "independent CFG refusal still present");
+        }
+    }
+
     private static void NativeCSharpRegionsKeepAllWindowsAndRefuseNonlocalDependencies()
     {
         var method = typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.Closed))!;
@@ -387,7 +442,9 @@ internal static partial class EngineRuntimeChecks
         Equal(true, record["code"]!.GetValue<string>().Contains("Source method on", StringComparison.Ordinal), "region text retains method/parameter binding header");
         CSharpSourceRefuses(() => CSharpFixtureRecord(method, true, extraWindow: true), "csharp_region_does_not_cover_all_identity_windows");
         CSharpSourceRefuses(() => CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ExternalLocal))!, true), "csharp_region_external_local_dependency");
-        CSharpSourceRefuses(() => CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ExceptionRegion))!, true), "csharp_region_nonlocal_control_unsupported");
+        var closedException = CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.ExceptionRegion))!, true);
+        Equal(true, closedException["code"]!.GetValue<string>().Contains("finally"), "closed exception region retains complete finally");
+        Equal(true, closedException["unresolved"]!.AsArray().Any(value => value!.GetValue<string>().Contains("exceptional_execution_not_evaluated")), "closed exception region is source-only");
         var other = CSharpFixtureRecord(typeof(CSharpSourceFixture).GetMethod(nameof(CSharpSourceFixture.OtherExceptionRegion))!, true);
         Equal(1, other["coveredWindows"]!.AsArray().Count, "unrelated dispatcher EH does not erase a closed region");
         var body = new BlockStatement(); body.Statements.Add(new GotoStatement("Done"));
