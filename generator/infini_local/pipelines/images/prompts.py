@@ -49,9 +49,10 @@ def visual_background_transport_rule() -> str:
     if uses_key_background():
         return final + (
             f"The local sprite_keyer creates final transparency from a raw image on a solid {chroma_name()} key background. "
-            "Author item/entity/overlay prompts for that raw image background, not raw transparency; preserve all authored foreground colors."
+            "Author item/entity/overlay prompts for that raw image background, not raw transparency; preserve all authored foreground colors. "
+            "A checkerboard is opaque image content, not transparency; do not draw a transparency-preview pattern."
         )
-    return final + "Local background removal is disabled; request a transparent background in the raw image, not a solid key."
+    return final + "Local background removal is disabled; request real alpha transparency in the raw image, not a solid key or a painted checkerboard."
 
 
 def role_contract_prompt_clause(role: str, canvas: int) -> str:

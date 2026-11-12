@@ -162,7 +162,7 @@ public partial class GeneratedItem
 
     public override bool CanUseItem(Player player)
     {
-        ResetPureMobilityUseOutcome();
+        ResetPureUseEffectOutcome();
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null || !GeneratedQuickUseSystem.AcceptsBinding(player, binding, Data.EffectsForBinding(binding))) return false;
@@ -199,6 +199,16 @@ public partial class GeneratedItem
         {
             mobilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText(
                 "MobilityCooldown", mobilityOwner.GeneratedMobilityCooldownSeconds));
+            return false;
+        }
+        // Exhaustion can make a pure utility activation a no-op. Native admission
+        // precedes both PayMana and stack consumption; reject here, not after payment.
+        // Companion effects/events keep their authored activation and cost.
+        if (IsPureUtilityBuffUse(binding)
+            && player.GetModPlayer<InfiniCraftPlayer>() is { } utilityOwner
+            && utilityOwner.HasGeneratedItemExhaustion(Data))
+        {
+            utilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText("UtilityExhaustion"));
             return false;
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
@@ -272,13 +282,13 @@ public partial class GeneratedItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null)
         {
-            ResetPureMobilityUseOutcome();
+            ResetPureUseEffectOutcome();
             return false;
         }
-        bool pureMobility = IsPureMobilityUse(binding);
-        bool mobilitySucceeded = ConsumePureMobilityUseOutcome(player, binding);
-        if (pureMobility)
-            return binding.UsePolicy.StackCost == 1 && mobilitySucceeded && ConsumeStackChance(player, binding);
+        bool pureEffect = IsPureMobilityUse(binding) || IsPureUtilityBuffUse(binding);
+        bool effectSucceeded = ConsumePureUseEffectOutcome(player, binding);
+        if (pureEffect)
+            return binding.UsePolicy.StackCost == 1 && effectSucceeded && ConsumeStackChance(player, binding);
         // This hook owns direct-use stack consumption only. Item.consumable can also be
         // true because the item is ammunition (vanilla PickAmmo requires that), so the
         // binding stackCost stays the single owner of whether a direct use spends a stack.
@@ -295,17 +305,17 @@ public partial class GeneratedItem
 
     public override bool? UseItem(Player player)
     {
-        ResetPureMobilityUseOutcome();
+        ResetPureUseEffectOutcome();
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null) return false;
         RuntimeEntitySpec itemEntity = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!;
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects)
         {
-            bool mobilitySucceeded = ApplyItemEffects(player, binding);
-            if (IsPureMobilityUse(binding))
+            bool effectSucceeded = ApplyItemEffects(player, binding);
+            if (IsPureMobilityUse(binding) || IsPureUtilityBuffUse(binding))
             {
-                _pureMobilityUseOutcome = (player, Item, Data, binding, Main.GameUpdateCount, mobilitySucceeded);
+                _pureUseEffectOutcome = (player, Item, Data, binding, Main.GameUpdateCount, effectSucceeded);
             }
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
@@ -321,7 +331,7 @@ public partial class GeneratedItem
         }
         // true means the use attempt is complete, not that mobility succeeded.
         // Keeping native itemTime avoids retrying mixed buffs/events when mobility
-        // refuses; pure mobility's stack debit is separately gated by its outcome.
+        // refuses; pure effect's stack debit is separately gated by its outcome.
         return true;
     }
 
@@ -342,20 +352,41 @@ public partial class GeneratedItem
         return body is not null && body.Events.Length == 0;
     }
 
-    private void ResetPureMobilityUseOutcome()
+    private bool IsPureUtilityBuffUse(RuntimeBindingSpec binding)
     {
-        _pureMobilityUseOutcome = default;
+        IItemEffectsSpec effects = Data.EffectsForBinding(binding);
+        if (binding.UsePolicy.Action.Kind != RuntimeBindingAction.ApplyItemEffects
+            || effects.GeneratedBuff?.HasAnyEffect != true
+            || !string.IsNullOrWhiteSpace(effects.MobilityMode)
+            || binding.UsePolicy.ContactDamage || Item.shoot > ProjectileID.None
+            || Item.healLife > 0 || Item.healMana > 0 || Item.buffType > 0)
+            return false;
+        foreach (BuffEntrySpec buff in effects.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
+            if (buff.BuffCode > 0 && buff.BuffTime > 0)
+                return false;
+        RuntimeEntitySpec? body = Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId);
+        if (body is null) return false;
+        foreach (RuntimeEventActionSpec action in body.ActionsFor(RuntimeEventKind.OnUse))
+            if (action.ActionCode != RuntimeEventActionCode.ApplyNpcEffect
+                && RuntimeUseInputScope.Matches(action.UseInput, binding.Input))
+                return false;
+        return true;
+    }
+
+    private void ResetPureUseEffectOutcome()
+    {
+        _pureUseEffectOutcome = default;
         _stackChanceUseOutcome = default;
     }
 
-    private bool ConsumePureMobilityUseOutcome(Player player, RuntimeBindingSpec binding)
+    private bool ConsumePureUseEffectOutcome(Player player, RuntimeBindingSpec binding)
     {
-        var outcome = _pureMobilityUseOutcome;
+        var outcome = _pureUseEffectOutcome;
         bool succeeded = outcome.Succeeded
             && ReferenceEquals(outcome.Player, player) && ReferenceEquals(outcome.Item, Item)
             && ReferenceEquals(outcome.Data, Data) && ReferenceEquals(outcome.Binding, binding)
             && outcome.Tick == Main.GameUpdateCount;
-        _pureMobilityUseOutcome = default;
+        _pureUseEffectOutcome = default;
         return succeeded;
     }
 
@@ -380,13 +411,13 @@ public partial class GeneratedItem
         foreach (BuffEntrySpec buff in gp.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
             if (buff.BuffCode > 0 && buff.BuffTime > 0)
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
-        if (gp.GeneratedBuff?.HasAnyEffect == true)
-            player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer, source: Data);
-        if (string.IsNullOrWhiteSpace(gp.MobilityMode)) return false;
+        bool utilitySucceeded = gp.GeneratedBuff?.HasAnyEffect == true
+            && player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer, source: Data);
+        if (string.IsNullOrWhiteSpace(gp.MobilityMode)) return utilitySucceeded;
         var owner = player.GetModPlayer<InfiniCraftPlayer>();
         bool succeeded = owner.TryRunGeneratedMobility(gp);
         if (!succeeded) owner.NotifyGeneratedUseRefusal(owner.LastGeneratedMobilityFailureMessage);
-        return succeeded;
+        return succeeded || utilitySucceeded;
     }
 
     // Root binding shots are not event actions: their immediate capacity is the

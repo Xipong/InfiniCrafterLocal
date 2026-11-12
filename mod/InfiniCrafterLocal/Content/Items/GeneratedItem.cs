@@ -37,7 +37,7 @@ public partial class GeneratedItem : ModItem
     // Only pure apply_item_effects mobility needs an outcome-gated stack debit.
     // Native direct use calls UseItem before ConsumeItem in the same world tick.
     private (Player? Player, Item? Item, GeneratedItemData? Data,
-        RuntimeBindingSpec? Binding, uint Tick, bool Succeeded) _pureMobilityUseOutcome;
+        RuntimeBindingSpec? Binding, uint Tick, bool Succeeded) _pureUseEffectOutcome;
     private (Player? Player, Item? Item, GeneratedItemData? Data,
         RuntimeBindingSpec? Binding, uint Tick, bool Completed) _stackChanceUseOutcome;
     private (Player? Player, Item? Item, GeneratedItemData? Data,
@@ -63,7 +63,7 @@ public partial class GeneratedItem : ModItem
         clone._nativeUseSnapshot=null;clone._invalidNativeUseSnapshot=false;
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
         clone._periodicItemEvents = default;
-        clone.ResetPureMobilityUseOutcome();
+        clone.ResetPureUseEffectOutcome();
         CopyNativePrefixLifecycleTo(clone);
         return clone;
     }
@@ -73,7 +73,7 @@ public partial class GeneratedItem : ModItem
     private void SetData(GeneratedItemData data, bool ensureAssets, bool registerLocal, bool notifyNetState = true)
     {
         NativeHeldSourceData = null;
-        ResetPureMobilityUseOutcome();
+        ResetPureUseEffectOutcome();
         _itemEventBudget = new RuntimeSpawnBudget(0);
         _periodicItemEvents = default;
         if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;_saveRecoveryDefinition=null;}
@@ -109,7 +109,7 @@ public partial class GeneratedItem : ModItem
     public override void SetDefaults()
     {
         NativeHeldSourceData = null;
-        ResetPureMobilityUseOutcome();
+        ResetPureUseEffectOutcome();
         _nativeToolPowersSuppressed = false;
         ResetNativePrefixLifecycle();
         Data ??= GeneratedItemData.Placeholder();

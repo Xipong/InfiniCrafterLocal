@@ -805,6 +805,10 @@ internal static partial class EngineRuntimeChecks
             ("mobility bounds native consumption", MobilityBoundsRejectBeforeNativeConsumption),
             ("mobility event bounds and unsafe semantics", EventMobilityBoundsPreserveCooldownAndUnsafeSolids),
             ("mobility recall native bed validity", RecallUsesNativeBedValidityAndRejectsInvalidSpawn),
+            ("utility use costs native exhaustion", UtilityExhaustionRefusesNativeCosts),
+            ("utility use costs mixed effects", UtilityRefusalPreservesMixedActions),
+            ("utility use costs actual outcome", UtilityUseStackFollowsActualOutcome),
+            ("utility use costs input scope", UtilityExhaustionRespectsEventInputScope),
             ("mobility consumption pure native outcome", NativePureMobilityConsumptionFollowsUseOutcome),
             ("mobility consumption mixed native effects once", NativeMixedMobilityRefusalPreservesOtherEffectsOnce),
             ("named item effects select native use and quick use", NamedItemEffectsSelectNativeUseAndQuickUse),
@@ -922,6 +926,9 @@ internal static partial class EngineRuntimeChecks
             ("beam live damage, collision ramps and explicit body width", BeamRampsConsumeLiveDamageAndSharedBodyGeometry),
             ("beam native mana cadence and world clock", BeamSustainUsesNativeManaAndWorldClock),
             ("beam failed mana and control loss terminate", BeamManaFailureAndControlLossTerminateBeforeFurtherPayment),
+            ("generated channel child death preserves root ownership", GeneratedChannelChildDeathDoesNotCancelAndRootDeathDoes),
+            ("generated channel retired root never cancels new use", GeneratedChannelRetiredRootCannotCancelNewUse),
+            ("generated channel native control and mana termination", GeneratedChannelNativeTerminationPreservesControlAndMana),
             ("beam native scan clips collision body and VFX endpoints", BeamLaserScanClipsCollisionBodyAndVfxPathTogether),
         };
         checks = System.Linq.Enumerable.ToArray(

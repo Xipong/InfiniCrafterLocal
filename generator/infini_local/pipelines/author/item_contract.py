@@ -17,7 +17,8 @@ from infini_local.core.provider_schema import _provider_strict_projection, proje
 
 AUTHOR_DESIGN_QUALITY_RULE = (
     "Create a new Terraria item based on the combination of these parents. Freely choose how they influence the result. Aim for a coherent concept and interesting gameplay use. "
-    "Choose a worthwhile gameplay use, considering the functions and resources the player gives up in this craft and the effort, resources and opportunities its use costs. Strengths and tradeoffs should make sense together; a different role need not retain every parental function. "
+    "Aim for a result worth using at the parents' progression tier. Judge its payoff across a complete use cycle, including preparation, recovery, resource cost and the conditions needed to deliver its effects, rather than damage per hit alone. "
+    "The parents' distinctive behavior is evidence for this judgment, not a required template. A new role is welcome; added restrictions and lost functions are not goals in themselves. "
     "Design the actual play sequence: where the player and targets are, what inputs the player uses, how effects reach them, and what visible motion communicates the action. "
     "Make the relationship between the player and the visible item or effect intentional: a held body, an independently moving object or a detached effect should read as that choice throughout its motion. "
     "Choose geometry for its executed motion and contact shape; later art and VFX dress that motion rather than replace it."
