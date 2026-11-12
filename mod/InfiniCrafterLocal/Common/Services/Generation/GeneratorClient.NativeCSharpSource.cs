@@ -625,30 +625,67 @@ public sealed partial class GeneratorClient
     }
 
     private static string? CSharpRegionRefusal(Statement body, MethodInfo method)
+        => CSharpRegionRefusalCore(body, method, allowCompleteExceptionIslands: false);
+
+    // A source-only normalization, not an EH CFG implementation. Admission keeps
+    // the complete lexical body, original condition and all exception islands.
+    // There is no offset crop, handler removal, control-flow proof or execution.
+    private static string? CSharpClosedRegionRefusal(Statement body, MethodInfo method)
+        => CSharpRegionRefusalCore(body, method, allowCompleteExceptionIslands: true);
+
+    private static string? CSharpRegionRefusalCore(Statement body, MethodInfo method, bool allowCompleteExceptionIslands)
     {
-        // A region is a complete lexical body, never an offset min/max crop.
-        // Shared returns can legitimately map to an earlier native ret offset.
         if (body.Ancestors.Any(node => node is TryCatchStatement or UsingStatement or LockStatement)
             || body.DescendantsAndSelf.Any(node => node is GotoStatement or GotoCaseStatement or LabelStatement
-            or TryCatchStatement or UsingStatement or LockStatement or LambdaExpression or AnonymousMethodExpression or YieldReturnStatement or YieldBreakStatement
-            or UnaryOperatorExpression { Operator: UnaryOperatorType.Await } or LocalFunctionDeclarationStatement)) return "csharp_region_nonlocal_control_unsupported";
-        // Other dispatcher branches can contain handlers. Refuse only a selected
-        // region intersecting protected/handler/filter IL, including transformed
-        // using/foreach syntax; do not reject unrelated EH elsewhere in a method.
+            or UsingStatement or LockStatement or LambdaExpression or AnonymousMethodExpression or YieldReturnStatement or YieldBreakStatement
+            or UnaryOperatorExpression { Operator: UnaryOperatorType.Await } or LocalFunctionDeclarationStatement
+            || !allowCompleteExceptionIslands && node is TryCatchStatement)) return "csharp_region_nonlocal_control_unsupported";
         var ranges = body.DescendantsAndSelf.SelectMany(node => node.Annotations.OfType<ILInstruction>())
             .SelectMany(instruction => instruction.ILRanges).Where(range => range.End > range.Start).ToArray();
-        foreach (var clause in method.GetMethodBody()!.ExceptionHandlingClauses)
-            if (ranges.Any(range => range.Start < clause.TryOffset + clause.TryLength && range.End > clause.TryOffset
+        var clauses = method.GetMethodBody()!.ExceptionHandlingClauses.Cast<ExceptionHandlingClause>().Where(clause =>
+            ranges.Any(range => range.Start < clause.TryOffset + clause.TryLength && range.End > clause.TryOffset
                 || range.Start < clause.HandlerOffset + clause.HandlerLength && range.End > clause.HandlerOffset
-                || clause.Flags == ExceptionHandlingClauseOptions.Filter && range.Start < clause.HandlerOffset && range.End > clause.FilterOffset))
-                return "csharp_region_exception_flow_unsupported";
+                || clause.Flags == ExceptionHandlingClauseOptions.Filter && range.Start < clause.HandlerOffset && range.End > clause.FilterOffset)).ToArray();
+        if (clauses.Length > 0 && !allowCompleteExceptionIslands) return "csharp_region_exception_flow_unsupported";
+        var islands = body.DescendantsAndSelf.OfType<TryCatchStatement>().ToArray();
+        if (clauses.Length > 0 || islands.Length > 0)
+        {
+            // Only a complete TryCatch/TryFinally instruction can witness an
+            // island. Descendant ranges or a min/max span cannot stand in for a
+            // missing handler/filter. Metadata/IL/EH already match the exact PE.
+            var islandRanges = islands.SelectMany(island => island.Annotations.OfType<ILInstruction>()
+                .Where(instruction => instruction is TryCatch or TryFinally)
+                // ILSpy gives TryFinally only its protected-body range. The
+                // structured FinallyBlock owns the handler's exact range.
+                .SelectMany(instruction => instruction is TryFinally finallyInstruction
+                    ? instruction.ILRanges.Concat(finallyInstruction.FinallyBlock.ILRanges)
+                    : instruction.ILRanges)).Where(range => range.End > range.Start).OrderBy(range => range.Start).ToArray();
+            bool Covered(int start, int end)
+            {
+                int covered = start;
+                foreach (var range in islandRanges)
+                {
+                    if (range.Start > covered) break;
+                    if (range.End > covered) covered = range.End;
+                    if (covered >= end) return true;
+                }
+                return false;
+            }
+            if (clauses.Any(clause => clause.Flags == ExceptionHandlingClauseOptions.Fault
+                    || !Covered(clause.TryOffset, clause.TryOffset + clause.TryLength)
+                    || !Covered(clause.HandlerOffset, clause.HandlerOffset + clause.HandlerLength)
+                    || clause.Flags == ExceptionHandlingClauseOptions.Filter && !Covered(clause.FilterOffset, clause.HandlerOffset))
+                || islands.Sum(island => island.CatchClauses.Count + (island.FinallyBlock.IsNull ? 0 : 1)) != clauses.Length)
+                return "csharp_region_exception_scope_not_closed";
+        }
         var declared = body.DescendantsAndSelf.OfType<VariableInitializer>().Select(node => node.GetILVariable())
-            .Concat(body.DescendantsAndSelf.OfType<ForeachStatement>().Select(node => node.GetILVariable())).Where(variable => variable is not null).ToHashSet();
+            .Concat(body.DescendantsAndSelf.OfType<ForeachStatement>().Select(node => node.GetILVariable()))
+            .Concat(body.DescendantsAndSelf.OfType<CatchClause>().Select(node => (node.GetResolveResult() as ILVariableResolveResult)?.Variable))
+            .Where(variable => variable is not null).ToHashSet();
         var used = body.DescendantsAndSelf.OfType<IdentifierExpression>().Select(node => node.GetILVariable())
             .Where(variable => variable is not null).ToHashSet();
         if (used.Any(variable => variable!.Kind != VariableKind.Parameter && !declared.Contains(variable)))
             return "csharp_region_external_local_dependency";
-        // break/continue must retain their enclosing loop/switch inside the body.
         foreach (var exit in body.DescendantsAndSelf.Where(node => node is BreakStatement or ContinueStatement))
         {
             bool bound = exit.Ancestors.TakeWhile(ancestor => ancestor != body).Any(ancestor => ancestor is ForStatement
@@ -694,7 +731,7 @@ public sealed partial class GeneratorClient
         => new()
         {
             ["type"] = type, ["style"] = style, ["capturedReceiverBound"] = capturedReceiverBound,
-            ["mechanicsPolicyVersion"] = 2, // Producer receipt + preserved exception islands.
+            ["mechanicsPolicyVersion"] = 3, // Closed conditional exception islands retain source-only unknowns.
             ["windows"] = new JsonArray(CSharpIdentityWindows(programs).Select(window => (JsonNode?)window.DeepClone()).ToArray()),
             ["linkOffsets"] = new JsonArray(linkOffsets.Order().Select(offset => (JsonNode?)JsonValue.Create(offset)).ToArray()),
         };
@@ -751,12 +788,15 @@ public sealed partial class GeneratorClient
                 // A candidate's ancestors never contain its own true statement.
                 // Indexed membership replaces quadratic candidate scans.
                 if (candidate.Branch.Ancestors.Any(selectedTrueArms.Contains)) continue;
-                string? refusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, method);
+                string? refusal = CSharpClosedRegionRefusal(candidate.Branch.TrueStatement, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 var excerpt = CloneCSharpTrueArm(candidate.Branch);
-                refusal = CSharpRegionRefusal(excerpt, method);
+                refusal = CSharpClosedRegionRefusal(excerpt, method);
                 if (refusal is not null) { unresolved.Add(refusal + "@" + candidate.Offset); continue; }
                 guards.Add(candidate); rendered.Add(RenderOwnedCSharp(excerpt));
+                if (excerpt.DescendantsAndSelf.OfType<TryCatchStatement>().Any()
+                    && !unresolved.Any(value => value?.GetValue<string>() == "exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated"))
+                    unresolved.Add("exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated");
             }
             // Cover every original identity window represented by this graph.
             // Matching one method hash or the first useful guard is insufficient.

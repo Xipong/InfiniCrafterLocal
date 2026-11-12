@@ -365,7 +365,7 @@ public sealed partial class GeneratorClient
             declaration.Body = new BlockStatement();
             foreach (var candidate in candidates)
             {
-                string? regionRefusal = CSharpRegionRefusal(candidate.Branch.TrueStatement, document.Method)
+                string? regionRefusal = CSharpClosedRegionRefusal(candidate.Branch.TrueStatement, document.Method)
                     ?? MechanicsPruningRefusal(document, candidate.Branch.TrueStatement, type, style);
                 if (regionRefusal is not null) throw new NotSupportedException(regionRefusal);
                 var branch = CloneCSharpTrueArm(candidate.Branch);
@@ -460,6 +460,8 @@ public sealed partial class GeneratorClient
         // Local reaching-definition extraction does not model exceptional flow.
         // Keep those calls unresolved rather than infer types across an EH edge.
         bool hasExceptionIslands = tree.Descendants.OfType<TryCatchStatement>().Any();
+        if (conditional && hasExceptionIslands)
+            gaps.Add("exception_regions_preserved_in_source; control_flow_and_exceptional_execution_not_evaluated");
         var spawnTypes = refusal is null && !hasExceptionIslands
             ? MechanicsSpawnTypeCandidates(tree, callIndex, gaps) : new JsonArray();
         var rendered = RenderCSharp(tree, includeLocations: false);
