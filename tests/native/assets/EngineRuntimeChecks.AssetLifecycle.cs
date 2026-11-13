@@ -186,6 +186,60 @@ internal static partial class EngineRuntimeChecks
         } finally { Terraria.Main.worldID = oldWorld; }
     }
 
+    private static void AssetLifecycleReferenceHydrationDuringDraw()
+    {
+        int oldWorld = Terraria.Main.worldID, oldMode = Terraria.Main.netMode;
+        uint oldTick = Terraria.Main.GameUpdateCount;
+        var property = typeof(InfiniMod).GetProperty("GeneratedItems")!;
+        object? oldRegistry = property.GetValue(null);
+        var hydrate = typeof(GeneratedItem).GetMethod("EnsureRuntimeHydration", AssetOwnerInstance)!;
+        var drawRequest = typeof(GeneratedItem).GetMethod("QueueRuntimeHydration", AssetOwnerInstance)!;
+        try {
+            Terraria.Main.worldID = 42003; Terraria.Main.netMode = 0;
+            foreach (string route in new[] { "save", "network" })
+            foreach (bool withDraw in new[] { false, true }) {
+                MaterialClock(0);
+                using var registry = new GeneratedItemRegistryService(); property.SetValue(null, registry);
+                var data = NativeFishingFixture(alternate: true);
+                data.Id = $"hydration_{route}_{withDraw}"; data.SourceMode = "test_fixture";
+                data.Gameplay.Damage = 11; GeneratedItemRegistryService.StampCurrentWorld(data);
+                var item = ReviewItem(GeneratedItemData.Placeholder());
+                string reference = data.ToPlayerSaveJson();
+                if (route == "save")
+                    item.LoadData(new Terraria.ModLoader.IO.TagCompound { { "infiniJson", reference } });
+                else {
+                    using var wire = new MemoryStream();
+                    using (var writer = new BinaryWriter(wire, Encoding.UTF8, true)) {
+                        writer.Write(7); writer.Write(reference); writer.Write(0);
+                    }
+                    wire.Position = 0; item.NetReceive(new BinaryReader(wire));
+                }
+                hydrate.Invoke(item, new object?[] { null });
+                Equal(true, GeneratedItemData.IsPlayerSaveReferenceOnly(item.Data), "cold reference has no definition");
+                Equal(0, item.Item.damage, "cold reference stays inert");
+                long token = item.PresentationToken;
+                registry.RegisterLocal(data, persist: false, ensureAssets: false);
+                for (uint tick = 0; tick < 360; tick++) {
+                    if (tick > 0) hydrate.Invoke(item, new object?[] { null });
+                    // Native DoUpdateInWorld increments GameUpdateCount AFTER Player.Update;
+                    // the following Draw can win every shared 90-tick request boundary.
+                    MaterialClock(tick + 1);
+                    if (withDraw) drawRequest.Invoke(item, null);
+                }
+                string context = $"route={route}, draw={withDraw}";
+                Equal(false, GeneratedItemData.IsPlayerSaveReferenceOnly(item.Data), "published gameplay definition hydrates; " + context);
+                Equal(2, item.Data.RuntimeProgram.Bindings.Length, "both accepted input bindings restored; " + context);
+                Equal(11, item.Item.damage, "native damage restored; " + context);
+                Equal(true, ReferenceEquals(data, item.Data), "exact canonical definition adopted; " + context);
+                Equal(token, item.PresentationToken, "hydration preserves instance presentation identity; " + context);
+                Console.WriteLine("DETAIL: saved-reference hydration " + context);
+            }
+        } finally {
+            property.SetValue(null, oldRegistry); MaterialClock(oldTick);
+            Terraria.Main.worldID = oldWorld; Terraria.Main.netMode = oldMode;
+        }
+    }
+
     private static void AssetLifecycleReferenceWorldFence()
     {
         int oldWorld = Terraria.Main.worldID, oldMode = Terraria.Main.netMode;

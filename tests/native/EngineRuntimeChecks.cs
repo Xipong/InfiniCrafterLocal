@@ -642,6 +642,7 @@ internal static partial class EngineRuntimeChecks
             ("server asset preparation current external indexed store", () => ServerAssetsPrepareCurrentGeneratorStoreAsync().GetAwaiter().GetResult()),
             ("server asset preparation invalid cancellation and world retirement", () => ServerAssetsRefuseInvalidAndRetiredDownloadsAsync().GetAwaiter().GetResult()),
             ("server asset preparation fresh and cached generation boundary", () => ServerCraftAwaitsAssetsOnFreshAndCachePathsAsync().GetAwaiter().GetResult()),
+            ("asset lifecycle saved-reference gameplay hydration under Draw", AssetLifecycleReferenceHydrationDuringDraw),
             ("asset lifecycle reference world fence", AssetLifecycleReferenceWorldFence),
             ("asset lifecycle world scoped persistence", AssetLifecycleWorldScopedPersistence),
             ("asset lifecycle certified hydration coalesces", AssetLifecycleCertifiedHydrationCoalesces),

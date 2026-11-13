@@ -235,8 +235,11 @@ public partial class GeneratedItem : ModItem
         string id = (Data?.Id ?? "").Trim();
         if (id.Length == 0 || id == "placeholder") return;
         int now = (int)Main.GameUpdateCount;
-        if (now - _lastHydrationTick < 90) return;
-        _lastHydrationTick = now;
+        bool requestDue = now - _lastHydrationTick >= 90;
+        // Draw shares the request clock, but must not delay adoption of a full
+        // definition already in memory. Resolved instances retain the fast path.
+        if (!requestDue && !GeneratedItemData.IsPlayerSaveReferenceOnly(Data)) return;
+        if (requestDue) _lastHydrationTick = now;
         try
         {
             var registry = global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems;
@@ -246,11 +249,13 @@ public partial class GeneratedItem : ModItem
             {
                 if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
                     SetData(canonical, ensureAssets: false, registerLocal: false, notifyNetState: false);
+                if (!requestDue) return;
                 var assetSync = global::InfiniCrafterLocal.InfiniCrafterLocalMod.AssetSync;
                 if (assetSync?.NeedsRemoteDescriptorRefresh(canonical, forceRetry: false) == true)
                     registry.RequestOneFromServer(id, forceAssetRetry: false, forceDefinitionRefresh: true);
                 else assetSync?.EnsureAssetsForData(canonical, forceRetry: false);
             }
+            else if (!requestDue) return;
             else if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data) && _saveRecoveryDefinition is not null
                 && GeneratedItemData.FromJson(System.Text.Encoding.UTF8.GetString(_saveRecoveryDefinition)) is { } recovery
                 && recovery.Id == id && GeneratedItemRegistryService.IsCurrentWorldData(recovery))
