@@ -505,3 +505,34 @@ def test_neutral_omission_never_creates_an_owner_effect_or_return_trigger(fn, pa
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
     assert doc == before
+
+
+@pytest.mark.parametrize("tile_collide", [False, True])
+@pytest.mark.parametrize("return_on_wall", [False, True])
+def test_collision_bounce_omission_requires_inactive_tile_collision(tile_collide, return_on_wall):
+    # A return trigger is independent of the collision choice, not a legacy
+    # movement alias that silently supplies a bounce count.
+    doc = build_capability_witness("return_when")
+    _call(doc, "return_when")["params"] = {"afterSeconds": 1, "onTileCollision": return_on_wall}
+    collision = _call(doc, "projectile_collision")
+    collision["params"]["tileCollide"] = tile_collide
+    collision["params"]["bounceCount"] = 2
+    assert validate_runtime_program(doc)["ok"]
+    explicit_wire = compile_runtime_program(doc)
+    assert validate_runtime_wire(explicit_wire)["ok"]
+    del collision["params"]["bounceCount"]
+    report = validate_runtime_program(doc)
+    if tile_collide:
+        assert not report["ok"]
+        assert any(e.get("path", "").endswith(".bounceCount") for e in report["errors"]), report
+        with pytest.raises(ValueError):
+            compile_runtime_program(doc)
+    else:
+        assert report["ok"], report
+        wire = compile_runtime_program(doc)
+        assert validate_runtime_wire(wire)["ok"]
+        receipts = wire["runtimeContract"]["finalWireReceipts"]
+        rows = [r for r in receipts if r.get("callId") == collision["id"]
+                and r["authoredPath"].endswith(".bounceCount")]
+        assert len(rows) == 1 and rows[0]["status"] == "declared_neutral_omission"
+        assert _audit(doc, wire, receipts)["ok"]

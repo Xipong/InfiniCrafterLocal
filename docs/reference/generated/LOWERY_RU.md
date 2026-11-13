@@ -238,7 +238,7 @@ Typed structured choices и конечные enum-отображения так�
 | turn_velocity.window.phase | 'always' | all timing absent: startDelay, duration, window |
 | homing.window.phase | 'always' | all timing absent: startDelay, duration, window |
 | attract_npcs.window.phase | 'always' | all timing absent: startDelay, duration, window |
-| projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
+| projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ()} |
 | projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
 | target_and_fire.count | 1 | unconditional declared neutral |
 | target_and_fire.spreadRadians | 0.0 | unconditional declared neutral |

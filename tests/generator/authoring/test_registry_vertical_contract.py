@@ -218,3 +218,33 @@ def test_author_event_metadata_omission_does_not_drop_false_or_exact_zero():
     # The complete registry view is still available for non-prompt consumers.
     assert "producedByBindingInputs" in replace(event, producer_binding_inputs=()).prompt_card()
     assert "producedByBindingInputs" not in replace(event, producer_binding_inputs=()).author_prompt_card()
+
+
+def test_current_contract_capability_references_resolve():
+    # These references drive validator/Repair admission and model-facing cards.
+    # A removed name must not remain an impossible prerequisite or escape hatch.
+    references = []
+    def parameters(owner, params):
+        for name, spec in params.items():
+            path = f"{owner}.{name}"
+            if spec.omission_condition:
+                references.extend((path, ref) for ref in spec.omission_condition.target_capabilities)
+            parameters(path, spec.properties)
+            for index, alternative in enumerate(spec.alternatives):
+                parameters(path, {str(index): alternative})
+    for name, cap in CAPABILITY_REGISTRY.items():
+        references.extend((name, ref) for ref in cap.dependencies)
+        for rule in cap.requirements:
+            if rule.capability:
+                references.append((name, rule.capability))
+            if rule.kind == "capability_group_present":
+                references.extend((name, ref) for ref in rule.any_of)
+        parameters(name, cap.params)
+    for name, event in EVENT_KIND_REGISTRY.items():
+        references.extend((name, ref) for ref in event.producer_capabilities)
+        references.extend((name, ref) for ref in event.producer_exact_params)
+    for registry in (INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY):
+        for name, spec in registry.items():
+            references.extend((name, ref) for ref in spec.required_item_capabilities_any_of)
+    assert references
+    assert [(owner, ref) for owner, ref in references if ref not in CAPABILITY_REGISTRY] == []

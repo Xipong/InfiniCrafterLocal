@@ -174,6 +174,8 @@ internal static partial class EngineRuntimeChecks
                 ["limits"] = new JsonObject { ["nodes"] = NodeLimit, ["edges"] = EdgeLimit, ["helperDepth"] = DepthLimit,
                     ["characters"] = CharacterLimit, ["allocatedCharacters"] = characterBudget + CatalogCoverageReserve,
                     ["reservedCatalogCoverageCharacters"] = CatalogCoverageReserve, ["discoveryNodes"] = DiscoveryNodeLimit, ["discoveryEdges"] = DiscoveryEdgeLimit },
+                ["externalPlayerContext"] = new JsonObject { ["unlinkedHookCount"] = 0,
+                    ["scope"] = "Unlinked registered player effects are outside parent-owned mechanics, not proven inactive. Hook outputs, item/projectile-conditioned candidates and parent-state consumers remain conditional source." },
                 ["omittedNodeCount"] = omittedNodes, ["omittedRootCount"] = omittedRoots, ["omittedBodyCount"] = omittedBodies,
                 ["omittedEdgeCount"] = candidateEdges.Count,
                 ["completeness"] = "partial_source_graph",

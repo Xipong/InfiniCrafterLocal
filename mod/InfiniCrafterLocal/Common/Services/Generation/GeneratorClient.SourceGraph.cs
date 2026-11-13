@@ -293,7 +293,7 @@ public sealed partial class GeneratorClient
             if (item.GlobalsUnavailable) Gap("attached_GlobalItem_roster_unavailable");
             ReadRoster();
             foreach (var owner in consumers.Where(o => o.Base == typeof(ModPlayer)).OrderBy(o => o.Type.FullName, StringComparer.Ordinal))
-                Defer(() => Hooks(owner.Type, owner.Base, PlayerEvents, "registered_ModPlayer_candidate", "event_signature"));
+                Defer(() => PlayerContextHooks(owner.Type));
             if (item.Shoot > ProjectileID.None) Projectile(item.Shoot, null, null, "item.shoot_field_candidate");
             if (item.Buff > InfiniTerrariaSentinels.NoBuffType) Buff(item.Buff, "player", null, null);
             if (item.Tile is not null) Hooks(item.Tile, typeof(ModTile), new HashSet<string>(StringComparer.Ordinal)
