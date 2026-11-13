@@ -36,6 +36,12 @@
 Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Import isolation/order проверяет `test_runtime_import_boundaries.py`; это не замена behavioral tests.
 
 <a id="tree"></a>
+## Родительский граф: общие эффекты игрока
+
+`Common/Services/Generation/GeneratorClient.SourceGraph.cs::Item` передаёт зарегистрированные ModPlayer combat hooks в `GeneratorClient.SourceGraph.PlayerContext.cs`. Этот bounded read-only анализ отделяет несвязанные общие эффекты игрока от механик родителя. Возвращаемое значение/ref-выход игрового hook, чтение Item/Projectile, HeldItem и непрозрачные зависимости сохраняет условный candidate; неизвестный dispatch не доказывает отсутствие связи. `Consumers` в основном partial по-прежнему допускает hooks, связанные с состоянием, которое пишет родитель (например, аксессуар). Отбор не проверяет имена предметов или damage/shoot.
+
+`GeneratorClient.SourceGraph.Export.cs` выдаёт `externalPlayerContext.unlinkedHookCount`: это исключённый внешний контекст, **не доказательство**, что эффект не работает в игре. Регрессии: `tests/native/context/EngineRuntimeChecks.SourceGraphPlayerContext.cs`, native filter `player context`. Старые сохранённые recipes от изменения анализа не регенерируются.
+
 ## Репозиторий
 
 ```text
