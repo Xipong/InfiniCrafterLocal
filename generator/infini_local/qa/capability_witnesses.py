@@ -244,9 +244,6 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
     else:
         if not any(row["fn"] == "item_use" for row in calls):
             item_use = deepcopy(_ITEM_BASE_USE)
-            if fn in {"channel_beam", "charge_then_release", "move_flail_tether", "move_yoyo_hover"}:
-                item_use["channel"] = True
-                item_use["hideUseGraphic"] = False
             calls.append(_call("item_use", "item_use", "item", item_use))
         if fn == "target_and_fire":
             kind = "stationary_projectile"
@@ -287,12 +284,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", child_params))
             calls.append(_call("child_motion", "move_straight", "witness_child", {}))
 
-        if fn in MOVEMENT_CAPABILITIES or fn in {"channel_beam", "charge_then_release", "target_and_fire"}:
-            # Charge/release owns charge positioning but the authored post-release
-            # trajectory remains explicit. Channel beam and target/fire own their
-            # complete position lifecycle and do not require a movement component.
-            if fn == "charge_then_release":
-                calls.append(_call("base_motion", "move_straight", witness_target, {}))
+        if fn in MOVEMENT_CAPABILITIES or fn == "target_and_fire":
             if not any(row["id"] == "witness_call" for row in calls):
                 calls.append(_call("witness_call", fn, witness_target))
         else:
@@ -301,18 +293,6 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
                 calls.append(_call("base_motion", "move_straight", witness_target, {}))
             if not any(row["id"] == "witness_call" for row in calls):
                 calls.append(_call("witness_call", fn, witness_target))
-
-    if fn == "move_front_hand":
-        # An explicit test composition, not compiler-created dependencies.
-        next(row for row in calls if row["fn"] == "item_use")["params"].pop("handPose", None)
-        next(row for row in calls if row["fn"] == "spawn")["params"].update(
-            velocity={"speed": 0}, count=1, spreadRadians=0)
-        next(row for row in calls if row["fn"] == "projectile_collision")["params"]["tileCollide"] = False
-        calls.append(_call("hand_singleton", "projectile_limit", witness_target, {"maxActive": 1}))
-
-    if fn == "orient_whip_to_owner_gravity":
-        base_motion = next(row for row in calls if row["id"] == "base_motion")
-        base_motion.update(fn="move_whip_lash", params={"range": 8, "segments": 12})
 
     if cap.category == "motion_primitive":
         pending = [cap]
