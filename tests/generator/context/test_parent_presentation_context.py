@@ -91,6 +91,9 @@ def test_actual_vfx_request_retains_child_light_even_without_parent_design_conte
     child = _accepted_visual_data("workbench_blade")
     entity = next(row for row in child["runtimeProgram"]["entities"] if row["kind"] != "item_body")
     entity["light"] = {"strength": strength, "color": "yellow"}
+    # Readability advice must not widen accepted collision or rewrite charge timing.
+    entity["beamGeometry"] = {"lengthPx": 1040, "widthPx": 14, "raycastTiles": True}
+    entity["beamRamp"] = {"warmupTicks": 72, "initialWidthMultiplier": 0.2}
     before = copy.deepcopy(child)
     captured = []
     _capture_stage(monkeypatch, transport, captured)
@@ -100,6 +103,9 @@ def test_actual_vfx_request_retains_child_light_even_without_parent_design_conte
         vfx_stage._request(transport.call_llm_vfx_director, vfx_prompt._prompt_packet(child, {}, {}), **kwargs)
     packet = request_dossier(captured[0])
     rows = packet["acceptedRuntimeProgramReadOnly"]["entities"]
+    actual = next(row for row in rows if row["id"] == entity["id"])
+    assert actual["beamGeometry"] == entity["beamGeometry"]
+    assert actual["beamRamp"] == entity["beamRamp"]
     assert next(row for row in rows if row["id"] == entity["id"])["light"] == {"strength": strength, "color": "yellow"}
     if repair:
         assert "parentFactsReadOnly" not in packet

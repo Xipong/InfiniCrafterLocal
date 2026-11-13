@@ -64,6 +64,18 @@ public sealed partial class InfiniCraftPlayer
             && row.Remaining(Main.GameUpdateCount) > 0);
     }
 
+    internal string GeneratedUtilityAdmissionRefusal(GeneratedBuffSpec buff, GeneratedItemData source)
+    {
+        if (HasGeneratedItemExhaustion(source)) return "UtilityExhaustion";
+        // Read-only preflight before native PayMana. Expired entries need not be
+        // pruned here; activation remains the owner of mutation and network sync.
+        if (buff.ExhaustionTicks is > 0
+            && _generatedItemExhaustion.Count(row => row.Remaining(Main.GameUpdateCount) > 0)
+                >= MaxGeneratedItemExhaustionEntries)
+            return "UtilityExhaustionCapacity";
+        return "";
+    }
+
     private bool CanApplyGeneratedBuff(GeneratedBuffSpec buff, GeneratedItemData? source,
         uint? activationTick, out GeneratedItemExhaustion? start)
     {

@@ -1,7 +1,11 @@
-# Сохранённые отчёты
+# Source reports и сертификаты
 
-Это исторические receipts прежних проверок, не инструкции запуска и не проверка текущего архива. Исходные байты сохранены. `SHA256SUMS_SOURCE.txt` относится к прежнему source snapshot: не используй его для проверки нынешней поставки. Актуальные checksums должны поставляться вместе с конкретным архивом релиза.
+`native_*_sources.generated.json` — действующие source reports: их читают generators, проверки и producer native-сертификатов. Они не являются одноразовыми логами тестов и не удаляются при очистке результатов кампаний. Producers и refresh-команды — [generated sources](../../docs/reference/GENERATED_RU.md).
 
-Некоторые прежние orphaned `*.generated.json` без действующего producer сохранены здесь как `contract_parity_report.historical.json`, `runtime_impact_report.historical.json`, `sandbox_validation.historical.json`. Их counts/schema/вердикты относятся только к исходному snapshot; current projections находятся в `contracts/schemas/` и у действующих audit tools.
+`native_ammo_sources.md` и `native_buff_effect_contract.md` описывают соответствующие source contracts. `parent_source_coverage_audit.md` сохраняет отдельный аудит с указанным baseline, не объявляет текущую игровую приёмку.
 
-Пользовательские инструкции — [установка](../../docs/user/START_RU.md); текущие команды проверки — [тестирование](../../docs/development/TESTING_RU.md).
+## Удалённые устаревшие receipts
+
+Одноразовые проверки версии 0.4.241, orphaned parity/impact/sandbox receipts и старый `SHA256SUMS_SOURCE.txt` удалены из текущей поставки. У них нет действующего producer/consumer; их старые counts, PASS и checksums не описывают нынешний код. Полные исходные данные доступны в [снимке до очистки](https://github.com/Xipong/InfiniCrafterLocal/tree/3d0b437745d90c4bdc6c6f26a67bab1e31d3f99f/contracts/reports).
+
+Актуальные checksums публикуются вместе с конкретным релизом. Пользовательские инструкции — [установка](../../docs/user/START_RU.md); текущие команды проверки — [тестирование](../../docs/development/TESTING_RU.md).

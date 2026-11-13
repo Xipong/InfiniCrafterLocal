@@ -362,10 +362,10 @@ public sealed partial class GeneratorClient
                     if (owner.Base == typeof(GlobalProjectile)) Defer(Admit);
                     else Admit();
                 }
-            if (snapshot.Vanilla) NativeProjectile(snapshot.Type, snapshot.Style, from, at);
+            if (snapshot.Vanilla) NativeProjectile(snapshot.Type, snapshot.Style, from, at, kind);
         }
 
-        private void NativeProjectile(int type, int style, int? from, int? at)
+        private void NativeProjectile(int type, int style, int? from, int? at, string admissionKind)
         {
             foreach (string name in new[] { "VanillaAI", "Kill" })
             {
@@ -400,7 +400,12 @@ public sealed partial class GeneratorClient
                     int? node = Add(method, 0, invocation: invocation);
                     if (node is int primary) principalNodes.Add(primary);
                     if (changed && existing) pending.Enqueue((method, existingNode, 0, null));
-                    Edge(from, node, "certified_native_projectile_source_windows", at, new JsonObject
+                    // A registered sample certifies the source body's identity, not
+                    // execution of the caller's conditional spawn. Keep that
+                    // distinction even when the caller is omitted by export bounds.
+                    string edgeKind = admissionKind == "conditional_projectile_spawn_candidate"
+                        ? "conditional_native_projectile_spawn_source" : "certified_native_projectile_source_windows";
+                    Edge(from, node, edgeKind, at, new JsonObject
                         { ["projectileId"] = type, ["aiStyle"] = style, ["entryAndOmittedFlow"] = "unresolved" }, node is null ? "graph_limit" : null);
                 }
                 catch { Gap("native_projectile_source_outside_bound"); }

@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Runtime;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
@@ -100,6 +101,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
         // The proxy type can be used as a held projectile. This stable tModLoader set
         // prevents player gfxOffY from being applied twice to held-projectile drawing.
         ProjectileID.Sets.HeldProjDoesNotUsePlayerGfxOffY[Type] = true;
+        // Native channel tracking uses a projectile type and the last spawned index.
+        // All runtime entities share this proxy type, so a child must not cancel its
+        // owner's channel on death. Exact primary-root lifecycle is owned below.
+        ProjectileID.Sets.DontCancelChannelOnKill[Type] = true;
     }
 
     public override void SetDefaults()
@@ -206,6 +211,11 @@ public sealed partial class GeneratedProjectile : ModProjectile
             if(_vfxState.SourceKey.Length==0)_vfxState.SourceKey=$"net:{Projectile.owner}:{VfxSourceToken()}:{data.Id}:{entity.Id}";
         }
         _configured = true;
+        if (!preserveSyncedState && _childDepth == 0 && IsPrimaryRuntimeEntity
+            && data.RuntimeProgram.ItemUse.Channel
+            && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
+            && Main.player[Projectile.owner].TryGetModPlayer<InfiniCraftPlayer>(out var channelOwner))
+            channelOwner.TrackGeneratedChannelRoot(Projectile, data);
         _pendingHydrationTicks = 0;
         ApplyEntityStats();
         if (!preserveSyncedState)
