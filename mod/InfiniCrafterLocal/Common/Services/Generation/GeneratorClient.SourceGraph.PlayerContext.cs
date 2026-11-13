@@ -28,7 +28,7 @@ public sealed partial class GeneratorClient
                     continue;
                 }
                 Hooks(owner, typeof(ModPlayer), new HashSet<string>(StringComparer.Ordinal) { method.Name },
-                    "registered_ModPlayer_candidate", "parent_output_or_source_dependency; applicability_unresolved");
+                    "registered_ModPlayer_candidate", "event_signature");
             }
         }
 
