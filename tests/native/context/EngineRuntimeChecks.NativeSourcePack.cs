@@ -91,6 +91,8 @@ internal static partial class EngineRuntimeChecks
             using var scope = sourceCache.Enter();
             var itemCapture = typeof(GeneratorClient).GetMethod("CaptureNativeItemDispatchReference",
                 BindingFlags.Static | BindingFlags.NonPublic)!.CreateDelegate<Func<int, JsonObject>>();
+            var sharedDefaultsCapture = typeof(GeneratorClient).GetMethod("CaptureSharedProjectileDefaults",
+                BindingFlags.Static | BindingFlags.NonPublic)!.CreateDelegate<Func<int, JsonObject?>>();
             GeneratorClient.BeginNativeSourcePackRecording(output);
             recording = true;
             Console.WriteLine("NATIVE_SOURCE_PACK start=" + output);
@@ -103,8 +105,12 @@ internal static partial class EngineRuntimeChecks
                     projectile.SetDefaults(id);
                     if (projectile.type != id || projectile.ModProjectile is not null)
                         throw new InvalidOperationException("Native defaults changed the requested projectile identity.");
-                    Record("projectile", id, projectile.aiStyle,
-                        GeneratorClient.VerifiedProjectileAttackReference(projectile, moduleVerified: true));
+                    var reference = GeneratorClient.VerifiedProjectileAttackReference(projectile, moduleVerified: true);
+                    // Record shared defaults separately from attack source; null
+                    // results also have cached projections, not guessed profiles.
+                    var defaults = sharedDefaultsCapture(id);
+                    if (defaults is not null) reference["conditionalDefaults"] = defaults;
+                    Record("projectile", id, projectile.aiStyle, reference);
                 }
                 catch (Exception error) when (error is not OperationCanceledException and not OutOfMemoryException)
                 { Failure("projectile", id, error); }

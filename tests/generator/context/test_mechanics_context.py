@@ -717,3 +717,38 @@ def test_author_and_repair_keep_verified_whole_body_beside_same_named_region(mon
         assert "unresolvedNativeCSharpSourceRef" not in location
         assert rows[location["mechanicsSourceIndex"]] == whole
         assert location["predicates"][0]["id"] == "b3"
+
+
+def test_conditional_defaults_remain_literal_source_not_executed_profiles():
+    raw = _raw()
+    evidence = {
+        "source": "conditional_shared_projectile_defaults", "version": 1,
+        "relevanceType": 31,
+        "scope": "Conditional source, not executed defaults or segment identity",
+        "records": [{"method": "Projectile.SetDefaults", "code":
+            "if (type == 31 || type == 32) { if (type == 31) minionSlots = .5f; else minionSlots = 1f; }"}],
+        "unresolved": ["enclosing_control_not_evaluated"],
+    }
+    baseline = mechanics_context(copy.deepcopy(raw))
+    raw["directProjectile"]["mechanicsSource"]["conditionalDefaults"] = evidence
+    before = copy.deepcopy(raw)
+    compact = compact_projectile_profile(raw["directProjectile"])
+    assert compact["mechanicsSource"]["conditionalDefaults"] == evidence
+    result = mechanics_context(raw)
+    mechanics = result["mechanics"]
+    assert mechanics["projectiles"] == baseline["mechanics"]["projectiles"]
+    assert mechanics["source"] == baseline["mechanics"]["source"]
+    facts = mechanics["uncertainty"]["sourceFacts"]
+    assert any(fact["value"].get("conditionalDefaults") == evidence for fact in facts)
+    output = parent_context_for_stage({"A": {"packet": {"raw": raw}}}, stage="author")
+    def expand(value):
+        if isinstance(value, dict):
+            if set(value) == {"sourceSameAs"}:
+                return expand(output["nativeSourceFacts"][value["sourceSameAs"]])
+            return {key: expand(item) for key, item in value.items()}
+        return [expand(item) for item in value] if isinstance(value, list) else value
+    author = expand(output["parents"]["A"]["packet"]["raw"])["mechanics"]
+    assert author["projectiles"] == baseline["mechanics"]["projectiles"]
+    assert any(fact["value"].get("conditionalDefaults") == evidence
+               for fact in author["uncertainty"]["sourceFacts"])
+    assert raw == before

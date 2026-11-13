@@ -52,6 +52,14 @@ def main():
         construction = "\n".join(r["code"] for x in dispatch["roots"] for r in x["records"])
         for fact in ("projToShoot + 1", "projToShoot + 2", "projToShoot + 3", "else if"):
             assert fact in construction, fact
+        original_defaults = p["itemA"]["directProjectileRaw"]["mechanicsSource"]["conditionalDefaults"]
+        delivered_defaults = [fact["value"]["conditionalDefaults"]
+                              for fact in mechanics["uncertainty"]["sourceFacts"]
+                              if "conditionalDefaults" in fact.get("value", {})]
+        assert any(mechanical(value) == mechanical(original_defaults) for value in delivered_defaults), "conditional defaults source lost in actual Author/Repair"
+        defaults_code = "\n".join(record["code"] for root in original_defaults["roots"] for record in root["records"])
+        assert "minionSlots = 0.5f" in defaults_code, "conditional body/tail slot cost is missing"
+        assert all("conditionalDefaults" not in profile["defaults"] for profile in mechanics["projectiles"]), "conditional defaults became an executed profile"
         assert p == before, "source packet mutated"
         report.append(
             dict(
@@ -59,6 +67,7 @@ def main():
                 itemDispatchMechanicalFieldsExact=True,
                 followerSourceRetained=True,
                 repairParentExact=True,
+                conditionalDefaultsSourceExact=True,
                 parentChars=len(json.dumps(raw, ensure_ascii=False, separators=(",", ":"))),
                 profileTypes=[x["defaults"].get("type") for x in mechanics["projectiles"]],
             )

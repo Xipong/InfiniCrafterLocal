@@ -57,7 +57,7 @@ def pack(tmp_path, monkeypatch):
         "decompilerSha256": sha(b"fixture decompiler"), "nativeAssemblySha256": sha(b"fixture native"),
         "entries": [["a" * 64, "projectile_method", 0], ["b" * 64, "projectile_method", 0],
                     ["c" * 64, "projectile_lifecycle", 0], ["d" * 64, "item_dispatch", 0],
-                    ["e" * 64, "projectile_interaction", 0]],
+                    ["e" * 64, "projectile_interaction", 0], ["f" * 64, "projectile_shared_defaults", 0]],
         "blobs": [{"sha256": digest, "bytes": len(payload)}],
     }
     pin_index(manifest)
@@ -175,9 +175,9 @@ def test_duplicate_json_properties_are_not_silently_normalized(pack):
 
 
 def test_full_key_bound_does_not_depend_on_unique_blob_count(pack):
-    pack[1]["entries"] = [[f"{index:064x}", "projectile_method", 0] for index in range(30000)]
+    pack[1]["entries"] = [[f"{index:064x}", "projectile_method", 0] for index in range(35000)]
     pin_index(pack[1])
-    assert len(check(pack)["entries"]) == 30000
+    assert len(check(pack)["entries"]) == 35000
     pack[1]["entries"].append(["f" * 64, "projectile_method", 0])
     with pytest.raises(ValueError, match="entry index"):
         check(pack)
