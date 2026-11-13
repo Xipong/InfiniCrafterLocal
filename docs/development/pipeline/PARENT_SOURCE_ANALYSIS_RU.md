@@ -110,3 +110,26 @@ GeneratorClient gzip-кодирует UTF-8 craft JSON только свыше �
 Python tests проверяют reversible notation, mappings/unknowns, source order, ammo observations и CFG alternatives. `test_author_payload_headroom.py` проверяет warning boundary и полный HTTP Chat/Responses request без truncation. Native checks отдельно проверяют identity, helper/inline effects, fingerprints, inventory/fallback, cache/cancellation, gzip и managed dependency packaging.
 
 Размеры должны относиться к итоговому main-based DLL и свежим captures; старые weapon-only measurements не являются результатом main integration. Full C# completeness, произвольные modded hooks/detours, graphics/game-loop/MP и качество генерации не следуют из offline tests. Dependency-count bound профиля 635 остаётся explicit unknown, не доказательством отсутствия поведения.
+
+### Условные общие defaults
+
+`GeneratorClient.SharedDefaultsSource.cs` читает общие ветви native
+`Projectile.SetDefaults`, `SetDefaults1`, `SetDefaults2`. Конечный диапазон или
+объединение `Projectile.type` служит только свидетельством релевантности:
+исходное условие и полное true-тело сохраняются без специализации. Неизвестные
+конъюнкты остаются в коде; неизвестная дизъюнкция не доказывает конечный диапазон.
+Интервалы нормализуются, пересечение линейное, отмена проверяется внутри обхода.
+
+`CaptureProjectileMechanicsSource` доставляет результат как
+`mechanicsSource.conditionalDefaults`. Python сохраняет его в
+`mechanics.uncertainty.sourceFacts`, а не в фактических defaults. Это не создаёт
+профилей тела/хвоста, не доказывает identity результата hook/spawn и не исполняет
+native код. Внешние условия, прочие ветви и hooks остаются неизвестными. При
+лимите пропускается целая область с явным отказом, не усечённый фрагмент.
+
+Проекция `projectile_shared_defaults` входит в штатный native source pack;
+ключ учитывает метод, IL, MVID, type и версию политики. Collector обходит все
+положительные native projectile ID, включая пустые результаты. Проверки:
+`EngineRuntimeChecks.SharedDefaultsSource.cs`,
+`test_conditional_defaults_remain_literal_source_not_executed_profiles` и
+`tools/workbench/tests/check_native_composite_context.py` (actual Author/Repair).

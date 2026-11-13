@@ -86,7 +86,7 @@ def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict
         raise ValueError("Native source pack archive exceeds the runtime bound")
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
-        if len(names) > 30001 or len(names) != len(set(names)) or names.count("manifest.json") != 1:
+        if len(names) > 35001 or len(names) != len(set(names)) or names.count("manifest.json") != 1:
             raise ValueError("Native source pack has duplicate or excessive archive entries")
         metadata = archive.getinfo("manifest.json")
         if metadata.file_size > 4 * 1024 * 1024:
@@ -102,7 +102,7 @@ def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict
         if native is not None and manifest.get("nativeAssemblySha256") != file_hash(native):
             raise ValueError("Native source pack tModLoader bytes differ from the selected target")
         rows, blobs = manifest.get("entries"), manifest.get("blobs")
-        if not isinstance(rows, list) or not 1 <= len(rows) <= 30000:
+        if not isinstance(rows, list) or not 1 <= len(rows) <= 35000:
             raise ValueError("Native source pack has no valid entry index")
         if not isinstance(blobs, list) or not 1 <= len(blobs) <= len(rows) or len(names) != len(blobs) + 1:
             raise ValueError("Native source pack has no valid content index")
@@ -126,7 +126,7 @@ def check_pack(path: Path, fingerprint: str, native: Path | None = None) -> dict
         keys, used = set(), set()
         for row in rows:
             if (not isinstance(row, list) or len(row) != 3 or not _sha256_valid(row[0])
-                    or row[1] not in ("projectile_method", "projectile_lifecycle", "projectile_interaction", "item_dispatch")
+                    or row[1] not in ("projectile_method", "projectile_lifecycle", "projectile_interaction", "item_dispatch", "projectile_shared_defaults")
                     or type(row[2]) is not int or not 0 <= row[2] < len(blobs) or row[0] in keys):
                 raise ValueError("Native source pack has an invalid or duplicate input key")
             keys.add(row[0])

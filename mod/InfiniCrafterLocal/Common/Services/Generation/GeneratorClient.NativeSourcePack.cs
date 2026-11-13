@@ -20,7 +20,9 @@ public sealed partial class GeneratorClient
     // A miss runs the same live reader; it cannot replace missing evidence.
     private const int NativeSourcePackVersion = 2;
     private const int NativeSourcePackMinimumIlBytes = 1;
-    private const int NativeSourcePackEntryLimit = 30000;
+    // Includes three shared-default roots per native projectile, plus existing
+    // method/lifecycle/interaction/item projections. Byte bounds stay separate.
+    private const int NativeSourcePackEntryLimit = 35000;
     private const int NativeSourcePackEntryBytes = 4 * 1024 * 1024;
     private const int NativeSourcePackArchiveBytes = 128 * 1024 * 1024;
     private const string NativeSourcePackPath = "Data/native-source-pack.zip";
@@ -156,7 +158,7 @@ public sealed partial class GeneratorClient
         => CSharpHash(Encoding.UTF8.GetBytes(rows.ToJsonString() + "\n" + blobs.ToJsonString()));
 
     private static bool NativeSourcePackKindValid(string kind)
-        => kind is "projectile_method" or "projectile_lifecycle" or "projectile_interaction" or "item_dispatch";
+        => kind is "projectile_method" or "projectile_lifecycle" or "projectile_interaction" or "item_dispatch" or "projectile_shared_defaults";
 
     private sealed class NativeSourcePackReader : IDisposable
     {

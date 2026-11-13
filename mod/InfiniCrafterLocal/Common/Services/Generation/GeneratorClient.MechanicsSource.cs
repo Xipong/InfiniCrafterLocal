@@ -492,8 +492,14 @@ public sealed partial class GeneratorClient
     {
         if (projectile.ModProjectile is not null || projectile.type <= Terraria.ID.ProjectileID.None || projectile.type >= Terraria.ID.ProjectileID.Count) return null;
         int type = projectile.type, style = projectile.aiStyle;
-        JsonObject Analyze() => ProjectileAttackSource(type, style).CloneMechanics()
-            ?? new JsonObject { ["source"] = "native_mechanics_source", ["version"] = 1, ["identity"] = new JsonObject { ["type"] = type, ["aiStyle"] = style }, ["approximation"] = MechanicsIdentityAssumption, ["records"] = new JsonArray(), ["unresolved"] = new JsonArray("mechanics_source_unavailable") };
+        JsonObject Analyze()
+        {
+            var source = ProjectileAttackSource(type, style).CloneMechanics()
+                ?? new JsonObject { ["source"] = "native_mechanics_source", ["version"] = 1, ["identity"] = new JsonObject { ["type"] = type, ["aiStyle"] = style }, ["approximation"] = MechanicsIdentityAssumption, ["records"] = new JsonArray(), ["unresolved"] = new JsonArray("mechanics_source_unavailable") };
+            var defaults = CaptureSharedProjectileDefaults(type);
+            if (defaults is not null) source["conditionalDefaults"] = defaults;
+            return source;
+        }
         return currentParentAnalysis is { } analysis ? analysis.Defer(Analyze) : Analyze();
     }
 }
