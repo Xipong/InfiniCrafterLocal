@@ -29,64 +29,23 @@ public sealed partial class GeneratorClient
         name = field.Name; return true;
     }
 
-    // Only top-level declarations whose every use is a read-only boolean leaf
-    // in a later if-condition qualify. No general local dataflow: assignment,
-    // ref/address escape, capture, nested declarations and other roles refuse.
-    // Identity stability remains the explicit readable-view assumption above.
-    private static Dictionary<ILVariable, bool> MechanicsBooleanAliases(SyntaxTree tree, int type, int style)
-    {
-        var result = new Dictionary<ILVariable, bool>();
-        var method = tree.Descendants.OfType<MethodDeclaration>().Single();
-        var statements = method.Body.Statements.ToArray();
-        foreach (var declaration in tree.Descendants.OfType<VariableInitializer>())
-        {
-            if (declaration.GetILVariable() is not { } variable || variable.Kind == VariableKind.Parameter
-                || declaration.Parent is not VariableDeclarationStatement statement
-                || statement.Parent != method.Body || statement.Variables.Count != 1) continue;
-            bool? value = MechanicsCondition(declaration.Initializer, type, style);
-            if (value is null) continue;
-            if (tree.Descendants.OfType<VariableInitializer>().Count(node => node.GetILVariable() == variable) != 1) continue;
-            int position = Array.IndexOf(statements, statement);
-            bool valid = true;
-            var uses = tree.Descendants.OfType<IdentifierExpression>().Where(node => node.GetILVariable() == variable).ToArray();
-            foreach (var use in uses)
-            {
-                AstNode leaf = use;
-                while (leaf.Parent is ParenthesizedExpression
-                    || leaf.Parent is UnaryOperatorExpression { Operator: UnaryOperatorType.Not }
-                    || leaf.Parent is BinaryOperatorExpression { Operator: BinaryOperatorType.ConditionalAnd or BinaryOperatorType.ConditionalOr })
-                    leaf = leaf.Parent;
-                if (leaf.Parent is not IfElseStatement branch || branch.Condition != leaf) { valid = false; break; }
-                var top = use.Ancestors.OfType<Statement>().FirstOrDefault(node => node.Parent == method.Body);
-                if (top is null || Array.IndexOf(statements, top) <= position
-                    || use.Ancestors.Any(node => node is LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement
-                        or ForStatement or ForeachStatement or WhileStatement or DoWhileStatement or TryCatchStatement))
-                { valid = false; break; }
-            }
-            if (valid && uses.Length > 0) result.Add(variable, value.Value);
-        }
-        return result;
-    }
-
-    // Deliberately no evaluation of calls, getters, arbitrary locals, tables or arithmetic.
+    // Deliberately no evaluation of calls, getters, locals, tables or arithmetic.
     // Unknown left operands remain unknown even when an algebraic result seems
     // constant: their side effects must execute before short-circuit selection.
-    private static bool? MechanicsCondition(Expression expression, int type, int style, IReadOnlyDictionary<ILVariable, bool>? aliases = null)
+    private static bool? MechanicsCondition(Expression expression, int type, int style)
     {
-        if (expression is ParenthesizedExpression parens) return MechanicsCondition(parens.Expression, type, style, aliases);
+        if (expression is ParenthesizedExpression parens) return MechanicsCondition(parens.Expression, type, style);
         if (expression is PrimitiveExpression { Value: bool value }) return value;
-        if (expression is IdentifierExpression identifier && identifier.GetILVariable() is { } local
-            && aliases is not null && aliases.TryGetValue(local, out bool known)) return known;
         if (expression is UnaryOperatorExpression { Operator: UnaryOperatorType.Not } unary)
-        { var inner = MechanicsCondition(unary.Expression, type, style, aliases); return inner is null ? null : !inner.Value; }
+        { var inner = MechanicsCondition(unary.Expression, type, style); return inner is null ? null : !inner.Value; }
         if (expression is not BinaryOperatorExpression binary) return null;
         if (binary.Operator is BinaryOperatorType.ConditionalAnd or BinaryOperatorType.ConditionalOr)
         {
-            bool? left = MechanicsCondition(binary.Left, type, style, aliases);
+            bool? left = MechanicsCondition(binary.Left, type, style);
             if (left is null) return null;
             if (binary.Operator == BinaryOperatorType.ConditionalAnd && !left.Value) return false;
             if (binary.Operator == BinaryOperatorType.ConditionalOr && left.Value) return true;
-            return MechanicsCondition(binary.Right, type, style, aliases);
+            return MechanicsCondition(binary.Right, type, style);
         }
         int? Integer(Expression item)
         {
@@ -107,21 +66,21 @@ public sealed partial class GeneratorClient
     // The outcome of a completed condition can be fixed even when an opaque
     // prefix must still run. Use this only to empty the impossible arm, never
     // to erase or reorder the original condition (including calls/throws).
-    private static bool? MechanicsConditionOutcome(Expression expression, int type, int style, IReadOnlyDictionary<ILVariable, bool>? aliases = null)
+    private static bool? MechanicsConditionOutcome(Expression expression, int type, int style)
     {
-        if (expression is ParenthesizedExpression parens) return MechanicsConditionOutcome(parens.Expression, type, style, aliases);
+        if (expression is ParenthesizedExpression parens) return MechanicsConditionOutcome(parens.Expression, type, style);
         if (expression is UnaryOperatorExpression { Operator: UnaryOperatorType.Not } unary)
-        { var value = MechanicsConditionOutcome(unary.Expression, type, style, aliases); return value is null ? null : !value.Value; }
+        { var value = MechanicsConditionOutcome(unary.Expression, type, style); return value is null ? null : !value.Value; }
         if (expression is BinaryOperatorExpression binary
             && binary.Operator is BinaryOperatorType.ConditionalAnd or BinaryOperatorType.ConditionalOr)
         {
-            bool? left = MechanicsConditionOutcome(binary.Left, type, style, aliases);
-            bool? right = MechanicsConditionOutcome(binary.Right, type, style, aliases);
+            bool? left = MechanicsConditionOutcome(binary.Left, type, style);
+            bool? right = MechanicsConditionOutcome(binary.Right, type, style);
             if (binary.Operator == BinaryOperatorType.ConditionalAnd)
                 return left == false || right == false ? false : left == true && right == true ? true : null;
             return left == true || right == true ? true : left == false && right == false ? false : null;
         }
-        return MechanicsCondition(expression, type, style, aliases);
+        return MechanicsCondition(expression, type, style);
     }
 
     // A direct identity access is irrelevant only inside a typed, false
@@ -420,7 +379,6 @@ public sealed partial class GeneratorClient
         var removedInvocations = new HashSet<InvocationExpression>();
         if (refusal is null)
         {
-            var aliases = conditional ? new Dictionary<ILVariable, bool>() : MechanicsBooleanAliases(tree, type, style);
             // Postorder rewrites retained children before their parent. The
             // tree is private: move the selected arm instead of cloning it again.
             // Switch containers stay in place, so break targets do not change.
@@ -436,10 +394,10 @@ public sealed partial class GeneratorClient
                 if (node is IfElseStatement branch)
                 {
                     if (retainedGuards.Contains(branch)) continue;
-                    bool? condition = MechanicsCondition(branch.Condition, type, style, aliases);
+                    bool? condition = MechanicsCondition(branch.Condition, type, style);
                     if (condition is null)
                     {
-                        bool? outcome = MechanicsConditionOutcome(branch.Condition, type, style, aliases);
+                        bool? outcome = MechanicsConditionOutcome(branch.Condition, type, style);
                         if (outcome is null) continue;
                         var impossible = outcome.Value ? branch.FalseStatement : branch.TrueStatement;
                         removedInvocations.UnionWith(impossible.DescendantsAndSelf.OfType<InvocationExpression>());
