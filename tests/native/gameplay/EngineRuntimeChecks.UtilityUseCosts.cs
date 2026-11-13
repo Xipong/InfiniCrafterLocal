@@ -55,6 +55,49 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    private static void UtilityCapacityRefusesNativeCosts()
+    {
+        using var scope = new MobilityConsumptionNativeScope();
+        foreach (bool named in new[] { false, true })
+        WithPlayer((player, generated) => {
+            PrepareMobilityConsumptionPlayer(player); MaterialClock(1000);
+            player.statMana = 100; player.manaCost = 1f;
+            int limit = (int)typeof(InfiniCrafterLocal.Common.Players.InfiniCraftPlayer)
+                .GetField("MaxGeneratedItemExhaustionEntries", MobilityConsumptionFlags)!.GetRawConstantValue()!;
+            for (int i = 0; i < limit; i++)
+            {
+                var prior = ExhaustionData("utility-capacity-" + i, 120);
+                Equal(true, ExhaustionApply(generated, prior.Gameplay.GeneratedBuff, prior), "fill active fatigue table");
+            }
+            var data = UtilityCostFixture(named, 1);
+            var host = MobilityConsumptionHost(data); player.inventory[0] = host.Item;
+            host.Item.stack = 3; player.altFunctionUse = named ? 2 : 0;
+            Equal(false, generated.HasGeneratedItemExhaustion(data), "new source itself is not exhausted");
+            Equal(false, UtilityNativeAdmission(player, host.Item), "full fatigue table refuses before native mana payment");
+            Equal(100, player.statMana, "capacity refusal preserves mana");
+            Equal(3, host.Item.stack, "capacity refusal preserves stack");
+            Equal(limit, ExhaustionRows(generated).Count, "admission does not evict live timers");
+            // Full fatigue storage does not block a buff that requests no timer,
+            // nor an authored mixed use whose healing remains executable.
+            var free = UtilityCostFixture(false, 0);
+            free.Gameplay.GeneratedBuff.ExhaustionTicks = 0;
+            var freeHost = MobilityConsumptionHost(free); player.inventory[0] = freeHost.Item;
+            player.altFunctionUse = 0;
+            Equal(true, freeHost.CanUseItem(player), "zero fatigue policy needs no storage slot");
+            var mixed = UtilityCostFixture(false, 0); mixed.Gameplay.HealLife = 7;
+            var mixedHost = MobilityConsumptionHost(mixed); player.inventory[0] = mixedHost.Item;
+            Equal(true, mixedHost.CanUseItem(player), "capacity pressure does not deny companion healing");
+            Equal(limit, ExhaustionRows(generated).Count, "read-only admission preserves active rows");
+            player.inventory[0] = host.Item; player.altFunctionUse = named ? 2 : 0;
+            MaterialClock(1120);
+            Equal(true, UtilityNativeAdmission(player, host.Item), "expired rows do not block new activation");
+            Equal(90, player.statMana, "accepted activation pays exactly once");
+            scope.RunNativeSuffix(player);
+            Equal(2, host.Item.stack, "accepted activation consumes once");
+            Equal(60, ExhaustionBuffTicks(generated), "accepted activation applies utility");
+        });
+    }
+
     private static void UtilityRefusalPreservesMixedActions()
     {
         using var scope = new MobilityConsumptionNativeScope();

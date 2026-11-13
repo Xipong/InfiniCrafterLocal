@@ -11,6 +11,7 @@ Keybinds: {
 
 UseFeedback: {
 	UtilityExhaustion: "Усиление предмета ещё на перезарядке"
+	UtilityExhaustionCapacity: "Слишком много усилений на перезарядке; дождитесь окончания одной из них"
 	GroundRequired: "Нужна твёрдая опора"
 	Wet: "Нельзя использовать в воде"
 	LifeRequired: "Нужно {0} здоровья"

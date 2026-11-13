@@ -206,9 +206,9 @@ public partial class GeneratedItem
         // Companion effects/events keep their authored activation and cost.
         if (IsPureUtilityBuffUse(binding)
             && player.GetModPlayer<InfiniCraftPlayer>() is { } utilityOwner
-            && utilityOwner.HasGeneratedItemExhaustion(Data))
+            && utilityOwner.GeneratedUtilityAdmissionRefusal(Data.EffectsForBinding(binding).GeneratedBuff!, Data) is { Length: > 0 } utilityRefusal)
         {
-            utilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText("UtilityExhaustion"));
+            utilityOwner.NotifyGeneratedUseRefusal(InfiniCraftPlayer.GeneratedUseFeedbackText(utilityRefusal));
             return false;
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)

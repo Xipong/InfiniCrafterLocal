@@ -11,6 +11,7 @@ Keybinds: {
 
 UseFeedback: {
 	UtilityExhaustion: "This item is still recovering from its utility buff"
+	UtilityExhaustionCapacity: "Too many utility buffs are still recovering; wait for a cooldown to finish"
 	GroundRequired: "Requires solid ground"
 	Wet: "Cannot be used while wet"
 	LifeRequired: "Requires {0} life"
