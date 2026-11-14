@@ -12,8 +12,6 @@ public sealed partial class GeneratorClient
 {
     private sealed partial class ParentSourceGraph
     {
-        private readonly HashSet<string> externalPlayerHooks = new(StringComparer.Ordinal);
-
         private void PlayerContextHooks(Type owner)
         {
             foreach (MethodInfo method in Overrides(owner, typeof(ModPlayer)).Where(m => PlayerEvents.Contains(m.Name)))
@@ -24,7 +22,6 @@ public sealed partial class GeneratorClient
                 {
                     // The field-consumer fixed point may still admit this hook
                     // later, when a parent writes the state that activates it.
-                    externalPlayerHooks.Add(InvocationKey(method, Captured(owner)));
                     continue;
                 }
                 Hooks(owner, typeof(ModPlayer), new HashSet<string>(StringComparer.Ordinal) { method.Name },

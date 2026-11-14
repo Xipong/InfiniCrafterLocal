@@ -184,8 +184,10 @@ internal static partial class EngineRuntimeChecks
             "an unused Item argument is not parent-specific evidence for global healing");
         Equal(true, SelectionNode(graph, "PlayerContextNoise.OnHitNPCWithProj(") is null,
             "projectile ownership only is authority context, not parent mechanics");
-        Equal(2, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
-            "excluded global hooks remain explicitly counted as external context");
+        Equal(false, graph.ContainsKey("externalPlayerContext"), "no counter-only player context in the source budget");
+        Equal(true, graph["scope"]!.GetValue<string>().Contains(
+            "Unlinked player effects are outside parent mechanics, not proven inactive.", StringComparison.Ordinal),
+            "the shared graph scope preserves the distinction between exclusion and inactivity");
         Equal(0, PlayerContextSourceExecutions, "relevance analysis never executes global hooks");
         Equal(graph.ToJsonString(), SelectionCapture(typeof(PlayerContextEmptyItem), consumer: typeof(PlayerContextNoise)).ToJsonString(),
             "global context exclusion is deterministic");
@@ -196,8 +198,6 @@ internal static partial class EngineRuntimeChecks
             && SelectionNode(actual, "InfiniCraftPlayer.OnHitNPCWithProj(") is null
             && !actual.ToJsonString().Contains("ReduceHealingPotionCooldown", StringComparison.Ordinal),
             "captured Ebonstone healing chain is external player context, not material mechanics");
-        Equal(true, (actual["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? 0) >= 2,
-            "real excluded player hooks have an explicit external-context receipt");
         AssertSelectionReferences(actual);
     }
 
@@ -234,8 +234,6 @@ internal static partial class EngineRuntimeChecks
             && text.Contains(".statDefense", StringComparison.Ordinal), "state and live predicate reach their exact guarded effect");
         Equal(false, text.Contains(".Unrelated", StringComparison.Ordinal) || text.Contains(".statManaMax2", StringComparison.Ordinal),
             "field-focused discovery excludes independent player effects");
-        Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? 0,
-            "a later admitted field consumer is not counted as excluded external context");
         Equal(0, PlayerContextSourceExecutions, "state discovery never runs the accessory or its consumer");
         AssertSelectionReferences(graph);
     }
@@ -252,8 +250,6 @@ internal static partial class EngineRuntimeChecks
             Equal(true, text.Contains("Terraria.Entity.get_Center(", StringComparison.Ordinal)
                 && text.Contains(".statDefense", StringComparison.Ordinal),
                 "inherited projectile geometry and its guarded mechanical effect remain inspectable");
-            Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
-                "a projectile-dependent hook is not reported as excluded global context");
             AssertSelectionReferences(graph);
         }
         Equal(0, PlayerContextSourceExecutions, "inherited geometry discovery never executes the hit hook");
@@ -271,8 +267,6 @@ internal static partial class EngineRuntimeChecks
             foreach (string method in new[] { ".RightOfOrigin(", ".Named(" })
                 Equal(true, SelectionNode(graph, consumer.Name + method)?["values"] is JsonObject,
                     "retained candidate preserves inspectable helper source: " + consumer.Name + method);
-            Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
-                "erased parent arguments do not become excluded global context");
             Equal(true, graph["unresolved"]!.ToJsonString().Contains("player_context_dependency_unresolved", StringComparison.Ordinal),
                 "erased/indirect argument admission remains an unresolved candidate, not a proven parent effect");
             AssertSelectionReferences(graph);
@@ -290,8 +284,6 @@ internal static partial class EngineRuntimeChecks
             "unknown delegate target remains unresolved rather than proven parent-independent");
         Equal(true, SelectionNode(graph, "PlayerContextOpaqueDelegate.SetParent(") is null,
             "conditional admission does not invent a delegate binding or execute setup");
-        Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
-            "opaque parent dependencies do not become excluded global context");
         Equal(0, PlayerContextSourceExecutions, "delegate discovery never invokes the callback");
         AssertSelectionReferences(graph);
     }
@@ -303,8 +295,6 @@ internal static partial class EngineRuntimeChecks
         foreach (string hook in new[] { "PlayerContextOtherEntity.OnHitNPCWithProj(", "PlayerContextOtherEntity.OnHitNPCWithItem(" })
             Equal(true, SelectionNode(graph, hook) is null,
                 "other-actor geometry and a typed ownership-only helper remain external context: " + hook);
-        Equal(2, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
-            "independent player and NPC effects remain explicitly excluded");
         Equal(0, PlayerContextSourceExecutions, "negative relevance analysis never executes hooks");
         AssertSelectionReferences(graph);
     }
