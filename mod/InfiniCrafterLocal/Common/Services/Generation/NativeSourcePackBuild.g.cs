@@ -3,5 +3,5 @@ namespace InfiniCrafterLocal.Common.Services;
 
 internal static class NativeSourcePackBuild
 {
-    internal const string ProjectionSha256 = "4f5d3eae608eab466fccce330aa19fb331b204030195a9167d14aa0e6895ba67";
+    internal const string ProjectionSha256 = "4c3ab890b6e857cb172822f80b1c982f8e89856f564e3cbf6d08eafa2656e12e";
 }

@@ -30,7 +30,7 @@ _DIAGNOSTICS = {"attackReference", "referencedProjectiles", "mechanicsSource", "
 
 _GRAPH_FIELDS = {"source", "version", "roots", "nodes", "members", "modules", "edges", "unresolved", "scope", "limits",
                  "omittedNodeCount", "omittedRootCount", "omittedBodyCount", "omittedEdgeCount", "completeness",
-                 "nativeCatalogCoverage", "selection", "selectedEdgeCount"}
+                 "nativeCatalogCoverage", "selection", "selectedEdgeCount", "externalPlayerContext"}
 _GRAPH_ROW_FIELDS = {
     "roots": {"event", "node", "owner", "receiver", "receiverType", "originReceiverType"},
     "nodes": {"static", "arguments", "values", "statements", "blocks", "coverage", "unresolved", "method", "sha256",
@@ -47,7 +47,7 @@ _GRAPH_NESTED_FIELDS = {"member", "projectileId", "projectileType", "aiStyle", "
                         "admission", "grantImmunityWith", "shoot", "contactStatus", "equipment", "environment", "nodes",
                         "edges", "helperDepth", "characters", "allocatedCharacters", "reservedCatalogCoverageCharacters", "discoveryNodes", "discoveryEdges", "sourceModuleVersionId",
                         "selection", "selectedEdgeCount", "selectionUnavailable", "blockedIdentityReadCount", "blockedIdentityReads",
-                        "blockedIdentityReadsOmitted", "fragments"}
+                        "blockedIdentityReadsOmitted", "fragments", "unlinkedHookCount"}
 
 _LOCAL_WRITES_READING = (
     "possibleLocalWrites are candidate source writes to an address-exposed local, not reaching definitions or executed values. "

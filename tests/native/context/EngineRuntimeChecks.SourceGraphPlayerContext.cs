@@ -59,6 +59,103 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private sealed class PlayerContextInheritedEntity : ModPlayer
+    {
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (projectile.Center.X > 100f) Player.statDefense += 37;
+        }
+    }
+
+    private sealed class PlayerContextCastEntity : ModPlayer
+    {
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            object actor = projectile;
+            if (((Entity)actor).Center.X > 100f) Player.statDefense += 39;
+        }
+    }
+
+    private sealed class PlayerContextErasedHelpers : ModPlayer
+    {
+        private static bool RightOfOrigin(Entity entity) => entity.Center.X > 100f;
+        private static bool Named(object value) => value.GetType().Name.Length > 4;
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (RightOfOrigin(projectile)) Player.statDefense += 41;
+        }
+        public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (Named(item)) Player.statDefense += 43;
+        }
+    }
+
+    private sealed class PlayerContextByRefHelpers : ModPlayer
+    {
+        private static bool RightOfOrigin(ref Entity entity) => entity.Center.X > 100f;
+        private static bool Named(ref object value) => value.GetType().Name.Length > 4;
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            Entity actor = projectile;
+            if (RightOfOrigin(ref actor)) Player.statDefense += 61;
+        }
+        public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            object actor = item;
+            if (Named(ref actor)) Player.statDefense += 67;
+        }
+    }
+
+    private sealed class PlayerContextTypedByRefHelpers : ModPlayer
+    {
+        private static bool RightOfOrigin(ref Projectile projectile) => projectile.Center.X > 100f;
+        private static bool Named(ref Item item) => item.GetType().Name.Length > 4;
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (RightOfOrigin(ref projectile)) Player.statDefense += 71;
+        }
+        public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (Named(ref item)) Player.statDefense += 73;
+        }
+    }
+
+    private sealed class PlayerContextOpaqueDelegate : ModPlayer
+    {
+        public Func<bool> ParentCondition = null!;
+        internal void SetParent(Item item) => ParentCondition = () => item.damage > 0;
+        public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (ParentCondition()) Player.statDefense += 47;
+        }
+    }
+
+    private sealed class PlayerContextOtherEntity : ModPlayer
+    {
+        private static bool OwnedBy(Projectile projectile, int owner) => projectile.owner == owner;
+        private static bool RightOfTarget(ref Player player, ref NPC target) => player.Center.X > target.Center.X;
+        public override void OnHitNPCWithItem(Item item, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            Player player = Player;
+            if (RightOfTarget(ref player, ref target)) Player.statDefense += 53;
+        }
+        public override void OnHitNPCWithProj(Projectile projectile, NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            PlayerContextSourceExecutions++;
+            if (OwnedBy(projectile, Player.whoAmI) && Player.Center.X > target.Center.X) Player.statDefense += 59;
+        }
+    }
+
     private sealed class PlayerContextStateItem : ModItem
     {
         public override void UpdateAccessory(Player player, bool hideVisual)
@@ -140,6 +237,75 @@ internal static partial class EngineRuntimeChecks
         Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? 0,
             "a later admitted field consumer is not counted as excluded external context");
         Equal(0, PlayerContextSourceExecutions, "state discovery never runs the accessory or its consumer");
+        AssertSelectionReferences(graph);
+    }
+
+    private static void ParentSourceGraphPreservesInheritedProjectileContext()
+    {
+        PlayerContextSourceExecutions = 0;
+        foreach (Type consumer in new[] { typeof(PlayerContextInheritedEntity), typeof(PlayerContextCastEntity) })
+        {
+            JsonObject graph = SelectionCapture(typeof(PlayerContextEmptyItem), consumer: consumer);
+            Equal(true, SelectionNode(graph, consumer.Name + ".OnHitNPCWithProj(")?["values"] is JsonObject,
+                "a void hit hook conditioned on the projectile's inherited Center property remains parent source");
+            string text = graph.ToJsonString();
+            Equal(true, text.Contains("Terraria.Entity.get_Center(", StringComparison.Ordinal)
+                && text.Contains(".statDefense", StringComparison.Ordinal),
+                "inherited projectile geometry and its guarded mechanical effect remain inspectable");
+            Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
+                "a projectile-dependent hook is not reported as excluded global context");
+            AssertSelectionReferences(graph);
+        }
+        Equal(0, PlayerContextSourceExecutions, "inherited geometry discovery never executes the hit hook");
+    }
+
+    private static void ParentSourceGraphPreservesErasedParentContext()
+    {
+        PlayerContextSourceExecutions = 0;
+        foreach (Type consumer in new[] { typeof(PlayerContextErasedHelpers), typeof(PlayerContextByRefHelpers), typeof(PlayerContextTypedByRefHelpers) })
+        {
+            JsonObject graph = SelectionCapture(typeof(PlayerContextEmptyItem), consumer: consumer);
+            foreach (string method in new[] { ".OnHitNPCWithProj(", ".OnHitNPCWithItem(" })
+                Equal(true, SelectionNode(graph, consumer.Name + method)?["values"] is JsonObject,
+                    "passing a parent actor through a broader helper parameter cannot prove irrelevance: " + consumer.Name + method);
+            foreach (string method in new[] { ".RightOfOrigin(", ".Named(" })
+                Equal(true, SelectionNode(graph, consumer.Name + method)?["values"] is JsonObject,
+                    "retained candidate preserves inspectable helper source: " + consumer.Name + method);
+            Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
+                "erased parent arguments do not become excluded global context");
+            Equal(true, graph["unresolved"]!.ToJsonString().Contains("player_context_dependency_unresolved", StringComparison.Ordinal),
+                "erased/indirect argument admission remains an unresolved candidate, not a proven parent effect");
+            AssertSelectionReferences(graph);
+        }
+        Equal(0, PlayerContextSourceExecutions, "erased helper analysis never executes hooks");
+    }
+
+    private static void ParentSourceGraphPreservesOpaqueDelegateContext()
+    {
+        PlayerContextSourceExecutions = 0;
+        JsonObject graph = SelectionCapture(typeof(PlayerContextEmptyItem), consumer: typeof(PlayerContextOpaqueDelegate));
+        Equal(true, SelectionNode(graph, "PlayerContextOpaqueDelegate.OnHitNPCWithItem(")?["values"] is JsonObject,
+            "a void hook's opaque delegate may capture parent state and remains conditional source");
+        Equal(true, graph["unresolved"]!.ToJsonString().Contains("player_context_dependency_unresolved", StringComparison.Ordinal),
+            "unknown delegate target remains unresolved rather than proven parent-independent");
+        Equal(true, SelectionNode(graph, "PlayerContextOpaqueDelegate.SetParent(") is null,
+            "conditional admission does not invent a delegate binding or execute setup");
+        Equal(0, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
+            "opaque parent dependencies do not become excluded global context");
+        Equal(0, PlayerContextSourceExecutions, "delegate discovery never invokes the callback");
+        AssertSelectionReferences(graph);
+    }
+
+    private static void ParentSourceGraphStillExcludesOtherEntityContext()
+    {
+        PlayerContextSourceExecutions = 0;
+        JsonObject graph = SelectionCapture(typeof(PlayerContextEmptyItem), consumer: typeof(PlayerContextOtherEntity));
+        foreach (string hook in new[] { "PlayerContextOtherEntity.OnHitNPCWithProj(", "PlayerContextOtherEntity.OnHitNPCWithItem(" })
+            Equal(true, SelectionNode(graph, hook) is null,
+                "other-actor geometry and a typed ownership-only helper remain external context: " + hook);
+        Equal(2, graph["externalPlayerContext"]?["unlinkedHookCount"]?.GetValue<int>() ?? -1,
+            "independent player and NPC effects remain explicitly excluded");
+        Equal(0, PlayerContextSourceExecutions, "negative relevance analysis never executes hooks");
         AssertSelectionReferences(graph);
     }
 

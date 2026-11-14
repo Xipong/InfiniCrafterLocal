@@ -527,6 +527,34 @@ def _request_parent_views(monkeypatch, parent, mode):
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("with_mechanics_source", [False, True])
+def test_production_requests_keep_external_player_context_receipt(monkeypatch, mode, with_mechanics_source):
+    receipt = {
+        "unlinkedHookCount": 0 if with_mechanics_source else 2,
+        "scope": "Unlinked registered player effects are outside parent-owned mechanics, not proven inactive. "
+                 "Hook outputs, item/projectile-conditioned candidates and parent-state consumers remain conditional source.",
+    }
+    graph = {
+        "source": "parent_reachable_compiled_source_graph", "version": 1,
+        "nodes": [], "unresolved": ["player_context_dependency_unresolved"],
+        "externalPlayerContext": {**receipt, "diagnosticSecretMarker": "not for Author"},
+        "diagnosticSecretMarker": "not for Author",
+    }
+    parent = {"name": "Source-scoped parent", "parentSourceGraph": graph}
+    if with_mechanics_source:
+        parent["directProjectileRaw"] = _profile()
+    before = copy.deepcopy(parent)
+    requests = _request_parent_views(monkeypatch, parent, mode)
+    graphs = [raw["item"]["parentSourceGraph"] for raw in requests]
+    assert [projected.get("externalPlayerContext") for projected in graphs] == [receipt, receipt]
+    for raw, projected in zip(requests, graphs):
+        assert projected["unresolved"] == graph["unresolved"]
+        assert projected["transportOmissions"]["unknownFieldCount"] == 2
+        assert "diagnosticSecretMarker" not in json.dumps(raw)
+    assert parent == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("role", ["collision", "motion", "motionDispatch", "motionDispatchEffects", "positionIntegration"])
 def test_production_requests_keep_ordered_caller_arguments_and_control_flow(monkeypatch, mode, role):
     for raw in _request_parent_views(monkeypatch, _caller_parent(role), mode):
