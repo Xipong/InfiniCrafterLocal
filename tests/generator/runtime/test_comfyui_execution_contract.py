@@ -117,14 +117,13 @@ def test_comfyui_workflow_interpolation_preserves_literal_prompt_tokens():
     assert template["inputs"]["seed"] == " {{SEED}} "
 
 
-def test_comfyui_variants_queue_independent_workflows_and_keep_every_image(tmp_path, monkeypatch):
+@pytest.mark.parametrize("saved_type", [None, "output"])
+def test_comfyui_queues_one_workflow_and_downloads_first_saved_image(tmp_path, monkeypatch, saved_type):
     workflow = tmp_path / "workflow.json"
     workflow.write_text(json.dumps({"sampler": {"inputs": {"seed": "{{SEED}}", "text": "{{PROMPT}}"}}}))
     monkeypatch.setattr(backends, "resolve_comfyui_workflow_path", lambda: workflow)
-    monkeypatch.setattr(backends, "GENERATE_VARIANTS", 3)
     monkeypatch.setattr(backends, "COMFYUI_TRIGGER", "")
-    seeds = iter([11, 22, 33])
-    monkeypatch.setattr(backends.random, "randint", lambda *args: next(seeds))
+    monkeypatch.setattr(backends.random, "randint", lambda *args: 11)
     queued = []
 
     def queue(url, payload, **kwargs):
@@ -132,23 +131,44 @@ def test_comfyui_variants_queue_independent_workflows_and_keep_every_image(tmp_p
         return {"prompt_id": f"pid-{len(queued)}"}
 
     monkeypatch.setattr(backends, "http_json", queue)
+    saved = {"filename": "saved-0.png", **({"type": saved_type} if saved_type else {})}
     monkeypatch.setattr(backends, "poll_comfyui_history", lambda pid, *args: {pid: {"outputs": {
-        "save": {"images": [{"filename": f"{pid}-0.png"}, {"filename": f"{pid}-1.png"}]},
+        "preview": {"images": [{"filename": "preview.png", "type": "temp"}]},
+        "save": {"images": [saved, {"filename": "saved-1.png", "type": "output"}]},
+        "extra-save": {"images": [{"filename": "other-node.png", "type": "output"}]},
     }}})
 
+    downloaded = []
     def fetch(meta, path):
+        downloaded.append(meta)
         path.write_bytes(meta["filename"].encode())
         return str(path)
 
     monkeypatch.setattr(backends, "fetch_comfyui_image", fetch)
-    paths = backends.generate_comfyui("exact literal prompt", "", "variant-test", output_dir=tmp_path)
-    assert len(queued) == 3
-    assert [row["prompt"]["sampler"]["inputs"]["seed"] for row in queued] == [11, 22, 33]
+    path = backends.generate_comfyui("exact literal prompt", "", "single-image-test", output_dir=tmp_path)
+    assert len(queued) == 1
+    assert [row["prompt"]["sampler"]["inputs"]["seed"] for row in queued] == [11]
     assert all(row["prompt"]["sampler"]["inputs"]["text"] == "exact literal prompt" for row in queued)
-    assert len(set(paths)) == 6
-    assert [Path(path).read_bytes() for path in paths] == [
-        f"pid-{variant}-{image}.png".encode() for variant in range(1, 4) for image in range(2)
-    ]
+    assert downloaded == [{**saved, "nodeId": "save"}]
+    assert Path(path).read_bytes() == b"saved-0.png"
+    assert list(tmp_path.glob("*.png")) == [Path(path)]
+
+
+def test_comfyui_does_not_deliver_preview_only_history(tmp_path, monkeypatch):
+    from infini_local.core.images.errors import ImageBackendError
+
+    workflow = tmp_path / "workflow.json"
+    workflow.write_text("{}")
+    monkeypatch.setattr(backends, "resolve_comfyui_workflow_path", lambda: workflow)
+    monkeypatch.setattr(backends, "http_json", lambda *args, **kwargs: {"prompt_id": "pid"})
+    monkeypatch.setattr(backends, "poll_comfyui_history", lambda *args: {"pid": {"outputs": {
+        "preview": {"images": [{"filename": "preview.png", "type": "temp"}]},
+    }}})
+    monkeypatch.setattr(backends, "fetch_comfyui_image", lambda *args: pytest.fail("Preview was downloaded"))
+    with pytest.raises(ImageBackendError, match="without downloadable images") as failed:
+        backends.generate_comfyui("literal", "", "preview-only", output_dir=tmp_path)
+    assert failed.value.category == "no_image"
+    assert not list(tmp_path.glob("*.png"))
 
 
 @pytest.mark.parametrize("explicit_kind", ["missing", "directory"])

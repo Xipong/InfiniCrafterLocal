@@ -5,45 +5,6 @@
     {
       "declarations": [
         {
-          "default": 1,
-          "file": "generator/infini_local/core/images/config.py",
-          "maximum": 16,
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "default": {
-            "expression": "A1111_BATCH_SIZE"
-          },
-          "file": "generator/infini_local/pipelines/images/backends.py",
-          "maximum": 16,
-          "minimum": 1,
-          "type": "integer"
-        }
-      ],
-      "default": [
-        1,
-        {
-          "expression": "A1111_BATCH_SIZE"
-        }
-      ],
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": 16,
-      "minimum": 1,
-      "name": "INFINI_A1111_BATCH_SIZE",
-      "owners": [
-        "generator/infini_local/core/images/config.py",
-        "generator/infini_local/pipelines/images/backends.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": 5.5,
           "file": "generator/infini_local/pipelines/images/backends.py",
           "maximum": null,
@@ -1589,30 +1550,6 @@
       "secret": false,
       "type": "boolean",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": 1,
-          "file": "generator/infini_local/core/images/config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 1,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_IMAGE_VARIANTS",
-      "owners": [
-        "generator/infini_local/core/images/config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -5091,8 +5028,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 207,
-  "fingerprint": "b92559a6ad50af4f82d9c8ff5048a3bcb6fe571d09ae197d278d9eea896f8fdb",
+  "fieldCount": 205,
+  "fingerprint": "1f3b92ba937904367c08c7b79793e235e8ab9629300d5ee664209a3ee442bdb4",
   "generatedFrom": [
     "env_* calls in generator/infini_local and tools",
     "generator/infini_local/desktop/settings_schema.py",

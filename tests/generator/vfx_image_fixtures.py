@@ -102,7 +102,7 @@ def offline_backend(monkeypatch, tmp_path):
         calls.append({"id": asset_id, "prompt": prompt, "negative": negative, "canvas": canvas})
         layout = "strip" if "preserve the full authored frame" in prompt else "cutout"
         path = (output_dir if output_dir is not None else tmp_path) / f"{asset_id}_offline_fixture_raw_sdcpp.png"
-        return [_raw_fixture(path, layout=layout, alpha=255 if "_vfx_" not in asset_id else 144)]
+        return _raw_fixture(path, layout=layout, alpha=255 if "_vfx_" not in asset_id else 144)
 
     for module in (sprite_postprocess, visual_asset_manifest, visual_sprite_generation, visual_delivery_gate):
         monkeypatch.setattr(module, "SPRITE_DIR", tmp_path)

@@ -345,7 +345,7 @@ def synthetic_no_image_execution_control(
         maybe_generate_sprite=synthetic_item,
         generate_visual_asset=synthetic_asset,
         _generate_independent_images=lambda *_args, **_kwargs: {},
-        _generate_backend_variants=forbidden,
+        _generate_backend_image=forbidden,
         write_visual_manifest=lambda *_args, **_kwargs: None,
         VISUAL_ASSET_MODE="full",
     )

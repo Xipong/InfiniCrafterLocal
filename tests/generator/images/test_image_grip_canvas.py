@@ -36,7 +36,7 @@ def _backend(monkeypatch, tmp_path, *, width=128, removable=True):
         path = output_dir / (asset_id + "_raw_sdcpp_server_0.png")
         raw.save(path)
         calls.append((prompt, path, path.read_bytes()))
-        return [str(path)]
+        return str(path)
     monkeypatch.setattr(stage, "generate_sdcpp", generate)
     return calls
 

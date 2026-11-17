@@ -358,7 +358,7 @@ combine.world_storage.attach_recipe_health = attach_recipe_health
 def forbidden_backend(*_args: Any, **_kwargs: Any) -> Any:
     raise AssertionError('IMAGE BACKEND WAS CALLED DURING NO-IMAGE LIVE TEST')
 
-sprites._generate_backend_variants = forbidden_backend
+sprites._generate_backend_image = forbidden_backend
 sprites.generate_visual_asset = forbidden_backend
 
 def capture_image_boundary(data: dict[str, Any], pending: Any = None) -> dict[str, Any]:

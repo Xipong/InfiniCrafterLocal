@@ -482,12 +482,12 @@ def test_real_backend_dispatch_owns_gate_and_releases_it_after_failure(monkeypat
             entered.set()
             assert release.wait(5), "test did not release the backend"
             raise failure
-        return [asset_id + ".png"]
+        return asset_id + ".png"
 
     def dispatch(asset_id):
         if asset_id == "healthy":
             queued.set()
-        return visual_sprite_generation._generate_backend_variants(
+        return visual_sprite_generation._generate_backend_image(
             {}, prompt="literal " + asset_id, negative="authored negative",
             asset_id=asset_id, canvas=32, role="item",
         )
@@ -514,7 +514,7 @@ def test_real_backend_dispatch_owns_gate_and_releases_it_after_failure(monkeypat
             with pytest.raises(RuntimeError) as caught:
                 first.result(timeout=5)
             assert caught.value is failure
-            assert second.result(timeout=5) == ["healthy.png"]
+            assert second.result(timeout=5) == "healthy.png"
         finally:
             release.set()
             # Even a missing-release regression must not strand an executor

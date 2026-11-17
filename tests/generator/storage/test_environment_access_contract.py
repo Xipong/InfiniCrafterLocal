@@ -87,7 +87,7 @@ for alias in json.loads(sys.argv[1]):
     for name in ("generate_sdcpp", "generate_a1111", "generate_comfyui", "generate_image_api", "generate_openai_codex"):
         setattr(stage, name, forbidden_io)
     try:
-        stage._generate_backend_variants({}, prompt="test", negative="", asset_id="test", canvas=32, role="item")
+        stage._generate_backend_image({}, prompt="test", negative="", asset_id="test", canvas=32, role="item")
     except stage.ImageBackendConfigurationError as error:
         errors.append(str(error))
     else:

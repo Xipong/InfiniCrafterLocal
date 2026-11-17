@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import traceback
 import json
-import hashlib
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -29,10 +27,6 @@ from infini_local.core.images.config import (
     SPRITE_PROCESSING_PROFILE,
 )
 from infini_local.storage.trace_runtime import log_event
-from infini_local.pipelines.images.geometry import (
-    sprite_bbox_stats,
-)
-from infini_local.pipelines.images import keyer
 from infini_local.pipelines.images.keyer import (
     apply_background_removal,
     estimate_sprite_key_profile,
@@ -43,7 +37,6 @@ from infini_local.pipelines.images.keyer import (
 from infini_local.core.images.contracts import (
     SPRITE_MIN_TRANSPARENT_PCT,
     final_sprite_canvas,
-    sprite_contract_for,
     sprite_uses_soft_alpha,
     uses_key_background,
 )
@@ -58,7 +51,7 @@ from infini_local.pipelines.images.pixels import (
     resize_rgba_premultiplied,
     sprite_resample_filter,
 )
-from infini_local.pipelines.images.validation import alpha_stats, edge_touch_ratio, sprite_validation_fatal, validate_processed_sprite
+from infini_local.pipelines.images.validation import alpha_stats, sprite_validation_fatal, validate_processed_sprite
 
 
 class RawSpriteFrameError(ValueError):
@@ -82,89 +75,6 @@ def _exterior_clear_fraction(img: Any) -> float:
     ImageDraw.floodfill(mask, (0, 0), 1)
     padding = (width + 2) * (height + 2) - width * height
     return (mask.histogram()[1] - padding) / max(1, width * height)
-
-
-@dataclass(frozen=True)
-class PreparedKeyer:
-    """One selected candidate's untouched keyer output; never a global cache."""
-    source_sha256: str
-    source_pixels_sha256: str
-    settings: tuple[Any, ...]
-    pixels: Any
-
-
-@dataclass(frozen=True)
-class SpriteSelection:
-    path: str
-    score: float
-    prepared: PreparedKeyer | None = None
-
-
-def _source_sha256(path: str) -> str | None:
-    try:
-        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-    except OSError:
-        # Hashing is reuse admission, not a new reason to reject decoded artwork.
-        return None
-
-
-def _pixels_sha256(image: Any) -> str:
-    return hashlib.sha256(str((image.mode, image.size)).encode() + image.tobytes()).hexdigest()
-
-
-def _keyer_settings(role: str) -> tuple[Any, ...]:
-    keyed = uses_key_background()
-    return (role, sprite_uses_soft_alpha(role), keyed, keyer.BG_REMOVE_MODE,
-            keyer.ALPHA_THRESHOLD, keyer.CHROMA_TOLERANCE,
-            keyer.SPRITE_KEYER_RESIDUE_STEPS, keyer.SPRITE_KEYER_SPILL_RADIUS,
-            keyer.chroma_rgb() if keyed else None)
-
-
-def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> SpriteSelection:
-    if Image is None:
-        return SpriteSelection(paths[0], 0.5)
-    best = paths[0]
-    best_score = -9999.0
-    best_prepared = None
-    spec = sprite_contract_for(role, canvas)
-    target_fill = float(spec["targetFill"])
-    for p in paths:
-        try:
-            source_hash = _source_sha256(p)
-            img = load_image_input(p, Image)
-            pixels_hash = _pixels_sha256(img)
-            settings = _keyer_settings(role)
-            keyed = apply_background_removal(img, preserve_alpha=sprite_uses_soft_alpha(role))
-            # Candidate scoring has a different cleanup order than final baking.
-            # Retain only the common keyer step, before either pipeline mutates it.
-            prepared = (PreparedKeyer(source_hash, pixels_hash, settings, keyed)
-                        if source_hash is not None and source_hash == _source_sha256(p)
-                        and settings == _keyer_settings(role) else None)
-            img = cleanup_alpha(keyed.copy(), role)
-            if not sprite_uses_soft_alpha(role):
-                img = denoise_alpha_singletons(img)
-            s = sprite_bbox_stats(img, role, canvas)
-            if not s.get("effect_bbox"):
-                score = -999.0
-            else:
-                core_fill = float(s.get("core_fill") or 0.0)
-                effect_fill = float(s.get("effect_fill") or 0.0)
-                cx, cy = s.get("core_center_norm") or (0.5, 0.5)
-                center_penalty = abs(cx - 0.5) + abs(cy - 0.5) if role in {"item", "equip_overlay"} else 0.0
-                edge_ratio = edge_touch_ratio(img.getchannel("A"))
-                fill_penalty = abs(core_fill - target_fill) * 2.1
-                effect_penalty = max(0.0, effect_fill - 0.98) * 1.2
-                edge_penalty = max(0.0, edge_ratio - float(spec.get("maxEdgeTouch") or 0.1)) * 3.0
-                score = 1.0 - fill_penalty - effect_penalty - center_penalty - edge_penalty
-            if score > best_score:
-                best_score = score
-                best = p
-                best_prepared = prepared
-        except ImageOutputIOError:
-            raise
-        except Exception:
-            continue
-    return SpriteSelection(best, round(max(0.0, min(1.0, best_score)), 3), best_prepared)
 
 
 def save_stage(img: Any, sprite_id: str, stage: str, *, output_dir: Path | None = None) -> str:
@@ -211,7 +121,6 @@ def postprocess_sprite(
     part_count_max: int = 0,
     output_dir: Path | None = None,
     master_output: Path | None = None,
-    prepared: PreparedKeyer | None = None,
     preserve_frame: bool = False,
 ) -> str:
     """Process an authored image through the selected technical role contract.
@@ -248,12 +157,7 @@ def postprocess_sprite(
         # final downscale.  This does not change semantics; it only removes the
         # requested key background, normalizes the canvas and bakes a clean PNG.
         key_profile = estimate_sprite_key_profile(raw) if keyed else None
-        reuse_keyer = (prepared is not None
-                       and prepared.source_sha256 == _source_sha256(path)
-                       and prepared.source_pixels_sha256 == _pixels_sha256(raw)
-                       and prepared.settings == _keyer_settings(role))
-        bg_removed = (prepared.pixels.copy() if reuse_keyer
-                      else apply_background_removal(raw, preserve_alpha=sprite_uses_soft_alpha(role)))
+        bg_removed = apply_background_removal(raw, preserve_alpha=sprite_uses_soft_alpha(role))
         # Single supported background-removal protocol: sprite_keyer.  The following
         # steps are technical cleanup only, not an alternate semantic/image mode.
         # Layer 2 removes key-colored pockets that are enclosed by the generated object

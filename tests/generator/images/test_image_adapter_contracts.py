@@ -185,7 +185,6 @@ def adapter_transport(offline, monkeypatch, tmp_path):
     raw = png((220, 100, 20))
     b64 = base64.b64encode(raw).decode('ascii')
     requests = []
-    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 2)
     monkeypatch.setattr(backend.random, 'randint', lambda low, high: 91023)
     monkeypatch.setattr(backend, 'IMAGE_API_BASE_URL', 'https://offline.invalid')
     monkeypatch.setattr(backend, 'IMAGE_API_KEY', 'offline-fixture-not-a-secret')
@@ -203,10 +202,16 @@ def adapter_transport(offline, monkeypatch, tmp_path):
         requests.append((url, payload))
         if url.endswith('/prompt'):
             return {'prompt_id': 'pid'}
-        return {'images': [b64]}
+        return {'images': [b64, 'invalid surplus image must not be decoded']}
 
     def urlopen(req, **kwargs):
         requests.append((req.full_url, json.loads(req.data) if req.data else {}))
+        if req.full_url == backend.image_api_url():
+            response = Response(json.dumps({'data': [
+                {'b64_json': b64}, {'b64_json': 'invalid surplus image must not be decoded'},
+            ]}).encode())
+            response.headers = {'Content-Type': 'application/json'}
+            return response
         return Response(raw)
 
     monkeypatch.setattr(backend, 'http_json', http_json)
@@ -228,15 +233,15 @@ def test_every_real_adapter_writes_only_to_the_explicit_private_owner(adapter_tr
     private = tmp_path / 'owned-private'
     private.mkdir()
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', name)
-    paths = generation._generate_backend_variants(
+    path = generation._generate_backend_image(
         {}, prompt='Literal authored brass fixture', negative='literal authored negative',
         asset_id='owner_probe', canvas=32, role='item', output_dir=private,
     )
-    assert paths and all(Path(path).parent == private for path in paths)
-    assert all(Path(path).read_bytes() == raw for path in paths)
+    assert Path(path).parent == private and Path(path).read_bytes() == raw
+    assert list(private.iterdir()) == [Path(path)]
     assert not list(root.glob('*.png'))
     assert not list(root.glob('*.part'))
-    assert requests
+    assert len(requests) == (2 if name == 'comfyui' else 1)
     if name == 'comfyui':
         queued = next(payload for url, payload in requests if url.endswith('/prompt'))
         inputs = queued['prompt']['node']['inputs']
@@ -245,7 +250,11 @@ def test_every_real_adapter_writes_only_to_the_explicit_private_owner(adapter_tr
         assert inputs['negative'] == 'literal authored negative'
         assert inputs['text'].endswith('Literal authored brass fixture')
     elif name == 'sdcpp':
-        assert [payload['seed'] for url, payload in requests] == [731, 732]
+        assert [payload['seed'] for url, payload in requests] == [731]
+    elif name == 'a1111':
+        assert requests[0][1]['batch_size'] == requests[0][1]['n_iter'] == 1
+    elif name == 'image_api':
+        assert requests[0][1]['n'] == 1
     elif name == 'openai_codex':
         assert all(payload['prompt'] == 'Literal authored brass fixture\n\nAvoid: literal authored negative' for url, payload in requests)
 
@@ -509,7 +518,6 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
         monkeypatch.setattr(backend, 'urlopen_no_redirect', open_request)
         monkeypatch.setattr(backend, 'SDCPP_SERVER_URL', f'http://127.0.0.1:{server.server_port}')
         monkeypatch.setattr(backend, 'SDCPP_SERVER_REQUEST_TIMEOUT', overall_timeout)
-        monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
         monkeypatch.setattr(backend, '_effective_sdcpp_lora_prompt_tags', lambda: '<lora:fixture:1>')
         private = tmp_path / 'private'
         private.mkdir()
@@ -519,9 +527,9 @@ def test_lora_catalog_subdeadline_does_not_cancel_remaining_image_budget(offline
                     backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
                 assert not posts and not list(private.iterdir())
             else:
-                paths = backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
-                assert len(posts) == len(paths) == 1
-                assert Path(paths[0]).read_bytes() == raw
+                path = backend.generate_sdcpp_server('literal fixture', '', 'budget', output_dir=private)
+                assert len(posts) == 1
+                assert Path(path).read_bytes() == raw
                 assert post_deadlines == outer_deadlines, 'continuation must not reset the original image budget'
             # A whole deadline may expire before the server thread accepts GET. The
             # refusal/no-POST/no-file oracle above still proves the total-budget path;
@@ -570,8 +578,8 @@ def test_private_output_ownership_never_becomes_a_seed_input(adapter_transport, 
     two.mkdir()
     for owner in (one, two):
         backend.generate_sdcpp('authored prompt', 'authored negative', 'same_logical_id', 32, output_dir=owner)
-    assert [payload['seed'] for url, payload in requests] == ([seed, seed + 1] * 2 if seed >= 0 else [91023] * 4)
-    assert [payload['prompt'] for url, payload in requests] == ['authored prompt'] * 4
+    assert [payload['seed'] for url, payload in requests] == ([seed] * 2 if seed >= 0 else [91023] * 2)
+    assert [payload['prompt'] for url, payload in requests] == ['authored prompt'] * 2
     assert one != two and sorted(path.name for path in one.iterdir()) == sorted(path.name for path in two.iterdir())
 
 @pytest.mark.parametrize('layout', ['cutout', 'strip'])
@@ -586,9 +594,6 @@ def test_vfx_comfy_placeholder_preserves_the_accepted_nonce_digest_calls(adapter
     monkeypatch.setattr(generation.uuid, 'uuid4', lambda: SimpleNamespace(hex=nonce))
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', 'comfyui')
     monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
-    # This case isolates retry identity; best-of-N variants are a separate
-    # contract and can salvage the first attempt without triggering a retry.
-    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
     downloads = []
 
     def corrupt_then_valid(req, **kwargs):
@@ -631,20 +636,19 @@ def test_real_adapter_retry_keeps_raw_evidence_unique_and_configured_seeds(offli
 
     def offline_urlopen(request, **kwargs):
         requests.append(json.loads(request.data))
-        return FixtureResponse(fixtures[(len(requests) - 1) // 2])
+        return FixtureResponse(fixtures[len(requests) - 1])
 
     original_adapter = backend.generate_sdcpp
 
     def real_adapter(prompt, negative, asset_id, canvas, *, output_dir=None):
-        paths = original_adapter(prompt, negative, asset_id, canvas, output_dir=output_dir)
-        all_raw_paths.append([Path(path) for path in paths])
-        return paths
+        path = original_adapter(prompt, negative, asset_id, canvas, output_dir=output_dir)
+        all_raw_paths.append(Path(path))
+        return path
 
     monkeypatch.setattr(backend, "SPRITE_DIR", tmp_path)
     monkeypatch.setattr(backend, "ensure_sdcpp_server", lambda: True)
     monkeypatch.setattr(backend, "_effective_sdcpp_lora_prompt_tags", lambda: "")
     monkeypatch.setattr(backend, "urlopen_no_redirect", offline_urlopen)
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 2)
     monkeypatch.setattr(backend, "SDCPP_SEED", configured_seed)
     monkeypatch.setattr(backend, "SDCPP_SERVER_TXT2IMG_PATHS", ["/sdapi/v1/txt2img"])
     monkeypatch.setattr(backend, "SDCPP_SERVER_PAYLOAD_STYLE", "a1111")
@@ -656,8 +660,8 @@ def test_real_adapter_retry_keeps_raw_evidence_unique_and_configured_seeds(offli
         processing_role="vfx_strip",
     )
     assert result[3] == "generated", data["debug"]
-    assert len(requests) == 6 and len(all_raw_paths) == 3
-    assert [row["seed"] for row in requests] == [configured_seed, configured_seed + 1] * 3
+    assert len(requests) == len(all_raw_paths) == 3
+    assert [row["seed"] for row in requests] == [configured_seed] * 3
     attempts = json.loads(data["debug"]["vfx:bandSpriteValidation"])
     assert [row["attempt"] for row in attempts] == [0, 1, 2]
     assert attempts[-1]["validation"]["ok"]
@@ -666,10 +670,9 @@ def test_real_adapter_retry_keeps_raw_evidence_unique_and_configured_seeds(offli
         alpha = final.getchannel("A")
         assert alpha.getbbox() == (0, 8, 32, 12)
         assert alpha.getpixel((0, 8)) == alpha.getpixel((31, 11)) == 144
-    flattened = [path for paths in all_raw_paths for path in paths]
-    assert len({path.name.casefold() for path in flattened}) == 6, "retry raw filenames alias after the real adapter's 80-character stem projection"
-    for index, paths in enumerate(all_raw_paths):
-        assert all(path.read_bytes() == fixtures[index] for path in paths)
+    assert len({path.name.casefold() for path in all_raw_paths}) == 3, "retry raw filenames alias after the real adapter's 80-character stem projection"
+    for index, path in enumerate(all_raw_paths):
+        assert path.read_bytes() == fixtures[index]
     data["vfxManifest"]["assets"][0].update(
         spritePath=result[0], spriteUrl=result[1], spriteTechnicalScore=result[2], spriteStatus=result[3],
     )

@@ -103,7 +103,7 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
         image.save(raw)
         calls.append(dict(prompt=prompt, negative=negative, canvas=canvas, raw=str(raw), bytes=raw.read_bytes(),
                           attempt=int(output_dir.name.removeprefix("attempt-"))))
-        return [str(raw)]
+        return str(raw)
 
     monkeypatch.setattr(generation, "generate_openai_codex", offline_response)
     return calls

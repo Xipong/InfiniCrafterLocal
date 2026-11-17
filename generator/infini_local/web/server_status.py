@@ -127,7 +127,6 @@ def health_payload() -> dict[str, Any]:
             "scheduler": visual_config.COMFYUI_SCHEDULER,
         },
         "sdcpp": sdcpp,
-        "imageVariants": visual_config.GENERATE_VARIANTS,
         "spriteRetries": visual_config.SPRITE_RETRIES,
         "spriteValidation": {
             "minBboxRatio": visual_config.SPRITE_MIN_BBOX_RATIO,

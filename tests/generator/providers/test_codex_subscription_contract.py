@@ -788,7 +788,6 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
         return {"data": [{"b64_json": base64.b64encode(stream.getvalue()).decode()}]}
     monkeypatch.setattr(auth, "post_json", post)
     monkeypatch.setattr(backend, "SPRITE_DIR", tmp_path)
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 1)
     monkeypatch.setattr(visual, "IMAGE_BACKEND", "openai_codex")
     monkeypatch.setattr(visual, "IMAGE_BACKEND_CONFIG_ERROR", "")
     class Gate:
@@ -800,10 +799,10 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     monkeypatch.setattr(visual, "IMAGE_GENERATION_GATE", Gate())
     for name in ("generate_image_api", "generate_sdcpp"):
         monkeypatch.setattr(visual, name, lambda *a: (_ for _ in ()).throw(AssertionError("unexpected fallback")))
-    paths = visual._generate_backend_variants({}, prompt="Literal authored предмет", negative="no text", asset_id="test-item", canvas=32, role="item")
+    path = visual._generate_backend_image({}, prompt="Literal authored предмет", negative="no text", asset_id="test-item", canvas=32, role="item")
     assert gate == ["entered", "exited"]
-    assert len(paths) == 1
-    assert Image.open(paths[0]).format == "PNG"
+    assert len(calls) == 1
+    assert Image.open(path).format == "PNG"
     url, payload, options = calls[0]
     assert url == "https://chatgpt.com/backend-api/codex/images/generations"
     assert payload == {"model": "gpt-image-2", "prompt": "Literal authored предмет\n\nAvoid: no text", "n": 1, "quality": "medium", "size": "1024x1024", "background": background}

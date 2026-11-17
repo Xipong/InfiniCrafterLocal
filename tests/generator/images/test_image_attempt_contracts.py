@@ -71,7 +71,6 @@ def offline(monkeypatch, request, tmp_path):
     monkeypatch.setattr(generation, 'generate_sdcpp', backend.generate_sdcpp)
     monkeypatch.setattr(backend, 'ensure_sdcpp_server', lambda: True)
     monkeypatch.setattr(backend, '_effective_sdcpp_lora_prompt_tags', lambda: '')
-    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
     monkeypatch.setattr(backend, 'SDCPP_SEED', 731)
     monkeypatch.setattr(backend, 'SDCPP_SERVER_TXT2IMG_PATHS', ['/sdapi/v1/txt2img'])
     monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', 'a1111')
@@ -338,14 +337,14 @@ def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, mon
     victim = root.parent.parent / 'victim.png'
     victim.write_bytes(png((10, 90, 220)))
     previous = victim.read_bytes()
-    original = generation._generate_backend_variants
+    original = generation._generate_backend_image
     logical_ids = []
 
     def capture(data, **kwargs):
         logical_ids.append(kwargs['asset_id'])
         return original(data, **kwargs)
 
-    monkeypatch.setattr(generation, '_generate_backend_variants', capture)
+    monkeypatch.setattr(generation, '_generate_backend_image', capture)
     data = _data([])
     result = invoke('item', '../../../victim', data)
     assert result[3] == 'generated'

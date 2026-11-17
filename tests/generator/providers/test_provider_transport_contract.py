@@ -1075,10 +1075,8 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
 
     monkeypatch.setattr(images, "http_json", image_transport)
     monkeypatch.setattr(images, "A1111_URL", base)
-    monkeypatch.setattr(images, "GENERATE_VARIANTS", 1)
-    paths = images.generate_a1111("literal", "", "batch", output_dir=tmp_path)
-    assert len(paths) == 1
-    assert Path(paths[0]).read_bytes() == png
+    path = images.generate_a1111("literal", "", "batch", output_dir=tmp_path)
+    assert Path(path).read_bytes() == png
 
 
 @pytest.mark.parametrize("provider", ["openai", "api", "remote", "or", "lmstudio", "lm_studio", "ollama", "typo"])

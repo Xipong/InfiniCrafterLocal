@@ -1033,12 +1033,12 @@ def test_visual_doctor_uses_current_processing_roles(tmp_path, monkeypatch, role
     calls = []
     def backend(data, *, prompt, canvas, **kwargs):
         calls.append((prompt, canvas))
-        return [str(raw)]
+        return str(raw)
     monkeypatch.setattr(stage, "IMAGE_BACKEND", "sdcpp")
     monkeypatch.setattr(stage, "SPRITE_RETRIES", 0)
     monkeypatch.setattr(stage, "SPRITE_DIR", tmp_path)
     monkeypatch.setattr(stage, "_backend_configuration_error", lambda: "")
-    monkeypatch.setattr(stage, "_generate_backend_variants", backend)
+    monkeypatch.setattr(stage, "_generate_backend_image", backend)
     result = server_utility_routes._visual_probe_payload(role, "vertical copper bar")
     assert result["ok"], json.dumps(result, ensure_ascii=False)
     assert result["role"] == role
