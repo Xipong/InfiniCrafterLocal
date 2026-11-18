@@ -4205,7 +4205,7 @@
     {
       "declarations": [
         {
-          "default": 2,
+          "default": 1,
           "file": "generator/infini_local/core/images/config.py",
           "maximum": 8,
           "minimum": 0,
@@ -4219,7 +4219,10 @@
           "type": "integer"
         }
       ],
-      "default": 2,
+      "default": [
+        1,
+        2
+      ],
       "documented": false,
       "example": null,
       "gui": true,
@@ -5029,7 +5032,7 @@
   ],
   "errors": [],
   "fieldCount": 205,
-  "fingerprint": "1f3b92ba937904367c08c7b79793e235e8ab9629300d5ee664209a3ee442bdb4",
+  "fingerprint": "0ab3ef360fb29e5429da5eac78668fc84d1ea690c5c4797dec69f61889ed22f8",
   "generatedFrom": [
     "env_* calls in generator/infini_local and tools",
     "generator/infini_local/desktop/settings_schema.py",
@@ -5052,6 +5055,14 @@
     {
       "field": "INFINI_GUI_PIPELINE_PRESET",
       "kind": "presented_without_env_helper_declaration"
+    },
+    {
+      "field": "INFINI_SPRITE_RETRIES",
+      "kind": "context_default_drift",
+      "values": [
+        1,
+        2
+      ]
     }
   ]
 }
