@@ -53,7 +53,7 @@ def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(mo
     _, user, _ = author.build_initial_author_request(source, {}, 'ammo-economy', model_name='offline')
     payload = json.loads(user)
     assert payload['parents']['A']['packet'] == raw_parent_card_for_llm(source)
-    assert payload['balanceCorridor']['parentDamage'] == [50, 0]
+    assert payload['balanceCorridor']['parentDamage'] == [50, None]
     assert payload['balanceCorridor']['parentUseTimeTicks'] == [10, None]
     assert source == before
 
@@ -103,3 +103,49 @@ def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair(
     assert audit['ok'] and audit['ignoredChanges']
     result = apply_repair_patch(source, filtered)
     assert result == original and validate_runtime_program(result)['ok']
+
+
+@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
+@pytest.mark.parametrize('nested', [False, True])
+@pytest.mark.parametrize('damage', [None, 0, -1, 37])
+def test_parent_damage_preserves_unknown_zero_and_native_sentinel(monkeypatch, mode, nested, damage):
+    from copy import deepcopy
+    from infini_local.pipelines.combine_balance import stat_profile_for
+
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    fields = {} if damage is None else {'damage': damage}
+    source = {'fingerprint': fields} if nested else fields
+    before = deepcopy(source)
+    assert stat_profile_for(source, {})['sourceDamage'] == [damage, None]
+    _, user, _ = author.build_initial_author_request(source, {}, 'damage-facts', model_name='offline')
+    corridor = json.loads(user)['balanceCorridor']
+    assert corridor['parentDamage'] == [damage, None]
+    assert 'null' in corridor['rule'] and '-1' in corridor['rule']
+    assert source == before
+
+
+def test_parent_damage_keeps_top_level_precedence_over_fingerprint():
+    from infini_local.pipelines.combine_balance import stat_profile_for
+
+    assert stat_profile_for({'damage': 0, 'fingerprint': {'damage': -1}},
+                            {'damage': -1, 'fingerprint': {'damage': 99}})['sourceDamage'] == [0, -1]
+
+
+@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
+@pytest.mark.parametrize('source, expected', [
+    ({'damage': None}, None),
+    ({'damage': None, 'fingerprint': {'damage': None}}, None),
+    ({'damage': None, 'fingerprint': {'damage': 0}}, 0),
+    ({'damage': None, 'fingerprint': {'damage': -1}}, -1),
+    ({'damage': None, 'fingerprint': {'damage': 37}}, 37),
+])
+def test_null_damage_uses_existing_fingerprint_fallback(monkeypatch, mode, source, expected):
+    from copy import deepcopy
+    from infini_local.pipelines.combine_balance import stat_profile_for
+
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    before = deepcopy(source)
+    assert stat_profile_for(source, {})['sourceDamage'] == [expected, None]
+    _, user, _ = author.build_initial_author_request(source, {}, 'nullable-damage', model_name='offline')
+    assert json.loads(user)['balanceCorridor']['parentDamage'] == [expected, None]
+    assert source == before

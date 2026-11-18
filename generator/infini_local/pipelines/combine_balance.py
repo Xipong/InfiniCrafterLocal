@@ -9,7 +9,7 @@ guidance only and never selects mechanics, entity kinds, inputs or assets.
 
 from typing import Any
 
-from infini_local.core.item_identity_tools import item_num
+from infini_local.core.item_identity_tools import item_field
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
 
@@ -34,7 +34,9 @@ def _source_craft_depth_fact(item: dict[str, Any], parent: str) -> dict[str, Any
 
 
 def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    damages = [max(0, int(item_num(parent, "damage", 0))) for parent in (a, b)]
+    # Literal source facts: unknown, zero and native sentinel values are not
+    # interchangeable. Do not infer attack strength from Item.damage alone.
+    damages = [item_field(parent, "damage", None) for parent in (a, b)]
     craft_depth_facts = [
         fact for fact in (
             _source_craft_depth_fact(a, "A"),

@@ -385,7 +385,7 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "parentUseTimeTicks": [item_field(parent, "useTime", None) for parent in (a, b)],
         "parentCraftDepthFacts": stage.get("sourceCraftDepthFacts"),
         "broadEnvelope": envelope,
-        "rule": "Parent numbers describe their existing roles, not a power ceiling for a new role; non-combat damage is not a combat balance target. Craft depth records recursive crafting, not acquisition tier. Missing acquisition context is unknown; rarity and value alone do not establish it.",
+        "rule": "parentDamage preserves source Item.damage: null is unknown, 0 is explicit zero, and -1 is a native sentinel, not the damage of a wired tile attack. Parent numbers describe their existing roles, not a power ceiling for a new role; non-combat damage is not a combat balance target. Craft depth records recursive crafting, not acquisition tier. Missing acquisition context is unknown; rarity and value alone do not establish it.",
     }
 
 
