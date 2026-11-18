@@ -240,6 +240,75 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void AssetLifecycleInventoryReferenceHydration(bool ammo)
+    {
+        int oldWorld = Terraria.Main.worldID, oldMode = Terraria.Main.netMode;
+        uint oldTick = Terraria.Main.GameUpdateCount;
+        var property = typeof(InfiniMod).GetProperty("GeneratedItems")!;
+        object? oldRegistry = property.GetValue(null);
+        var drawRequest = typeof(GeneratedItem).GetMethod("QueueRuntimeHydration", AssetOwnerInstance)!;
+        var seedSystem = SeedSystem();
+        seedSystem.Load();
+        try {
+            Terraria.Main.worldID = 42004; Terraria.Main.netMode = 0;
+            foreach (string route in new[] { "save", "network" })
+            foreach (bool withDraw in new[] { false, true }) {
+                MaterialClock(0);
+                using var registry = new GeneratedItemRegistryService(); property.SetValue(null, registry);
+                WithPlayer((player, effects) => {
+                    var data = ammo
+                        ? AmmoFixture(Terraria.ID.AmmoID.Bullet, Terraria.ID.ProjectileID.Bullet, 2.5f).Data
+                        : InventorySeedData();
+                    data.Id = $"inventory_hydration_{ammo}_{route}_{withDraw}";
+                    data.SourceMode = "test_fixture"; data.Gameplay.MaxStack = 99;
+                    GeneratedItemRegistryService.StampCurrentWorld(data);
+                    var item = ReviewItem(GeneratedItemData.Placeholder());
+                    string reference = data.ToPlayerSaveJson();
+                    if (route == "save")
+                        item.LoadData(new Terraria.ModLoader.IO.TagCompound { { "infiniJson", reference } });
+                    else {
+                        using var wire = new MemoryStream();
+                        using (var writer = new BinaryWriter(wire, Encoding.UTF8, true)) {
+                            writer.Write(7); writer.Write(reference); writer.Write(0);
+                        }
+                        wire.Position = 0; item.NetReceive(new BinaryReader(wire));
+                    }
+                    // Native eligibility is evaluated before use. Ammo in its dedicated
+                    // slot and an inventory passive never receive HoldItem/CanUseItem.
+                    item.Item.stack = 10; player.inventory[54] = item.Item;
+                    var weapon = new Terraria.Item {
+                        type = Terraria.ID.ItemID.CopperShortsword, stack = 1,
+                        useAmmo = Terraria.ID.AmmoID.Bullet, shoot = Terraria.ID.ProjectileID.Bullet,
+                        shootSpeed = 8f, damage = 30, knockBack = 2f,
+                    };
+                    player.inventory[0] = weapon; player.selectedItem = 0;
+                    bool Eligible() => ammo
+                        ? player.PickAmmo(weapon, out _, out _, out _, out _, out _, dontConsume: true)
+                        : player.HasItem(Terraria.ID.ItemID.Sets.DropSeedsIfInInventory);
+                    Terraria.ModLoader.ItemLoader.UpdateInventory(item.Item, player);
+                    Equal(false, Eligible(), "cold inventory reference is not a native witness");
+                    long token = item.PresentationToken;
+                    registry.RegisterLocal(data, persist: false, ensureAssets: false);
+                    for (uint tick = 0; tick < 360; tick++) {
+                        Terraria.ModLoader.ItemLoader.UpdateInventory(item.Item, player);
+                        MaterialClock(tick + 1);
+                        if (withDraw) drawRequest.Invoke(item, null);
+                    }
+                    string context = $"ammo={ammo}, route={route}, draw={withDraw}";
+                    Equal(true, Eligible(), "published inventory definition restores native eligibility; " + context);
+                    Equal(true, ReferenceEquals(data, item.Data), "inventory adopts exact canonical definition; " + context);
+                    Equal(10, item.Item.stack, "hydration and read-only eligibility preserve the stack; " + context);
+                    Equal(token, item.PresentationToken, "inventory hydration preserves instance identity; " + context);
+                    Equal(weapon, player.HeldItem, "generated inventory item was never selected; " + context);
+                    Console.WriteLine("DETAIL: inventory-reference hydration " + context);
+                });
+            }
+        } finally {
+            seedSystem.Unload(); property.SetValue(null, oldRegistry); MaterialClock(oldTick);
+            Terraria.Main.worldID = oldWorld; Terraria.Main.netMode = oldMode;
+        }
+    }
+
     private static void AssetLifecycleReferenceWorldFence()
     {
         int oldWorld = Terraria.Main.worldID, oldMode = Terraria.Main.netMode;

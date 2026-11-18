@@ -458,6 +458,10 @@ public partial class GeneratedItem
 
     public override void UpdateInventory(Player player)
     {
+        // Native ammo and inventory-passive eligibility precede held/use hooks.
+        // Resolve compact instances here without adding work for resolved items.
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(Data))
+            EnsureRuntimeHydration(player);
         // UpdateEquips visits inventory before ItemCheck. ItemCheck then decrements
         // itemAnimation BEFORE SmartSelectLookup and HoldItem. At 1 -> 0 there is
         // no remaining mining window, but SmartSelect already needs the real pick.

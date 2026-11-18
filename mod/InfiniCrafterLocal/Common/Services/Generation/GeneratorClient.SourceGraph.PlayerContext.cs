@@ -12,8 +12,6 @@ public sealed partial class GeneratorClient
 {
     private sealed partial class ParentSourceGraph
     {
-        private readonly HashSet<string> externalPlayerHooks = new(StringComparer.Ordinal);
-
         private void PlayerContextHooks(Type owner)
         {
             foreach (MethodInfo method in Overrides(owner, typeof(ModPlayer)).Where(m => PlayerEvents.Contains(m.Name)))
@@ -24,7 +22,6 @@ public sealed partial class GeneratorClient
                 {
                     // The field-consumer fixed point may still admit this hook
                     // later, when a parent writes the state that activates it.
-                    externalPlayerHooks.Add(InvocationKey(method, Captured(owner)));
                     continue;
                 }
                 Hooks(owner, typeof(ModPlayer), new HashSet<string>(StringComparer.Ordinal) { method.Name },
@@ -45,10 +42,28 @@ public sealed partial class GeneratorClient
                 if (type?.IsByRef == true || type?.IsArray == true) type = type.GetElementType();
                 return type is not null && (typeof(Item).IsAssignableFrom(type) || typeof(Projectile).IsAssignableFrom(type));
             }
-            bool ParentArgument(string input) => body.Definitions(input).Any(origin => origin.Op == "ldarg"
-                && origin.Operand is int argument
-                && argument - (method.IsStatic ? 0 : 1) is int index && index >= 0
-                && index < method.GetParameters().Length && ParentType(method.GetParameters()[index].ParameterType));
+            bool ParentArgument(string input)
+            {
+                var pending = new Stack<string>(); pending.Push(input);
+                var origins = new HashSet<string>();
+                while (pending.Count > 0 && origins.Count < 256)
+                {
+                    string id = pending.Pop();
+                    if (!origins.Add(id)) continue;
+                    foreach (var origin in body.Definitions(id))
+                    {
+                        if (origin.Op == "ldarg" && origin.Operand is int argument
+                            && argument - (method.IsStatic ? 0 : 1) is int index && index >= 0
+                            && index < method.GetParameters().Length && ParentType(method.GetParameters()[index].ParameterType)) return true;
+                        if (origin.Op is "castclass" or "isinst" && origin.Inputs.Count == 1) pending.Push(origin.Inputs[0]);
+                        if (origin.Op == "unresolved_definition_traversal_bound")
+                        { Gap("player_context_dependency_unresolved"); return true; }
+                    }
+                }
+                if (pending.Count == 0) return false;
+                Gap("player_context_dependency_unresolved");
+                return true;
+            }
             foreach (var value in body.Values.Values)
             {
                 if (value.Operand is Type testedType && (ParentType(testedType) || typeof(ModItem).IsAssignableFrom(testedType))) return true;
@@ -64,9 +79,34 @@ public sealed partial class GeneratorClient
                         && value.Inputs.Count > 0 && ParentArgument(value.Inputs[0])) return true;
                 }
                 if (value.Operand is not MethodBase helper) continue;
-                if (helper.DeclaringType == typeof(object) && !helper.IsStatic && value.Inputs.Count > 0
+                if ((helper.DeclaringType == typeof(object) || helper.DeclaringType == typeof(Entity))
+                    && !helper.IsStatic && value.Inputs.Count > 0
                     && ParentArgument(value.Inputs[0])) return true;
                 if (ParentType(helper.DeclaringType) || helper is MethodInfo result && ParentType(result.ReturnType)) return true;
+                if (helper.DeclaringType is { } delegateType && typeof(Delegate).IsAssignableFrom(delegateType)
+                    && helper.Name is "Invoke" or "DynamicInvoke")
+                {
+                    Gap("player_context_dependency_unresolved");
+                    return true; // A runtime delegate may capture parent state; its target is not known here.
+                }
+                var parameters = helper.GetParameters();
+                int firstArgument = helper.IsStatic || value.Op == "newobj" ? 0 : 1;
+                for (int index = 0; index < parameters.Length && index + firstArgument < value.Inputs.Count; index++)
+                {
+                    Type parameterType = parameters[index].ParameterType;
+                    bool byRef = parameterType.IsByRef;
+                    if (byRef) parameterType = parameterType.GetElementType()!;
+                    bool erased = parameterType == typeof(object) || parameterType == typeof(Entity);
+                    if (erased && (byRef || ParentArgument(value.Inputs[index + firstArgument]))
+                        || byRef && ParentType(parameterType))
+                    {
+                        // This relevance scan has no caller/alias binding for
+                        // erased or indirect parent arguments. Keep conditional
+                        // source instead of proving their absence from a type.
+                        Gap("player_context_dependency_unresolved");
+                        return true;
+                    }
+                }
                 if (helper.Module.Assembly == assembly && helper.Module.Assembly != typeof(NPC).Assembly)
                 {
                     Type? boundReceiver = !helper.IsStatic && receiver is not null
