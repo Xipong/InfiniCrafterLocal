@@ -164,7 +164,7 @@ def test_ingredient_scheduling_keeps_bound_and_failed_identity(offline_backend, 
             if role != "item" and capacity > 1 and ordinal <= 2:
                 barrier.wait(timeout=3)
             if role == "vfx:bad":
-                return []  # Explicit transport fixture failure, not fabricated art.
+                return ""  # Explicit transport fixture failure, not fabricated art.
             return backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         finally:
             if role != "item":

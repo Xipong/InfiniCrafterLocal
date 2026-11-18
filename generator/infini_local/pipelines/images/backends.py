@@ -26,7 +26,6 @@ from infini_local.core.image_dependencies import (
 from infini_local.core.images import config as visual_config
 from infini_local.core.images.errors import ImageBackendError, ImageBackendConfigurationError
 from infini_local.core.images.config import (
-    A1111_BATCH_SIZE,
     A1111_HEIGHT,
     A1111_LORA_NAME,
     A1111_LORA_WEIGHT,
@@ -52,7 +51,6 @@ from infini_local.core.images.config import (
     COMFYUI_WORKFLOW,
     COMFYUI_WORKFLOW_LORA,
     COMFYUI_WORKFLOW_NO_LORA,
-    GENERATE_VARIANTS,
     IMAGE_API_BASE_URL,
     IMAGE_API_EXTRA_HEADERS_JSON,
     IMAGE_API_KEY,
@@ -226,17 +224,17 @@ def poll_comfyui_history(prompt_id: str, timeout: int | None = None) -> dict[str
             time.sleep(min(max(0.1, COMFYUI_POLL_INTERVAL), remaining))
     raise TimeoutError(f"ComfyUI prompt {prompt_id} did not finish within {timeout}s; last={last}")
 
-def extract_comfyui_images(history: dict[str, Any], prompt_id: str) -> list[dict[str, Any]]:
+def extract_comfyui_image(history: dict[str, Any], prompt_id: str) -> dict[str, Any] | None:
+    """Take the first saved image in provider order, excluding temporary previews."""
     entry = history.get(prompt_id) if isinstance(history, dict) and prompt_id in history else history
     outputs = entry.get("outputs", {}) if isinstance(entry, dict) else {}
-    images: list[dict[str, Any]] = []
     for node_id, out in (outputs or {}).items():
         for img in (out or {}).get("images", []) or []:
-            if isinstance(img, dict) and img.get("filename"):
+            if isinstance(img, dict) and img.get("filename") and img.get("type", "output") == "output":
                 item = dict(img)
                 item["nodeId"] = node_id
-                images.append(item)
-    return images
+                return item
+    return None
 
 def fetch_comfyui_image(image_meta: dict[str, Any], out_path: Path) -> str:
     query = urlencode({
@@ -352,7 +350,7 @@ def extract_image_from_server_response(raw: bytes, ctype: str, out_path: Path, *
         timeout=SDCPP_SERVER_REQUEST_TIMEOUT,
     )
 
-def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
+def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> str:
     if not ensure_sdcpp_server():
         raise ImageBackendError(
             "stable-diffusion.cpp server is unavailable: " + str(SDCPP_SERVER_STATE.last_start_error or SDCPP_SERVER_URL),
@@ -374,72 +372,56 @@ def generate_sdcpp_server(prompt: str, negative: str, sprite_id: str, preferred_
             # payload, and the server is already verified alive. A transient catalog
             # failure must not cancel the whole generation attempt.
             log_event("warn", "stable-diffusion.cpp LoRA cache refresh failed; continuing with txt2img", {"spriteId": sprite_id, "error": repr(exc)})
-    out: list[str] = []
-    variants = max(1, int(GENERATE_VARIANTS))
     width = SDCPP_WIDTH
     height = SDCPP_HEIGHT
     prompt = str(prompt or "")
     paths = SDCPP_SERVER_TXT2IMG_PATHS or ["/sdapi/v1/txt2img"]
     styles = [SDCPP_SERVER_PAYLOAD_STYLE] if SDCPP_SERVER_PAYLOAD_STYLE != "auto" else ["a1111", "sdcpp", "openai"]
     last_failure = None
-    for i in range(variants):
-        # A fixed configured seed pins attempt 0; further variants must still differ,
-        # otherwise best-of-N degenerates into N identical images.
-        if SDCPP_SEED >= 0:
-            seed = SDCPP_SEED + i
-        else:
-            seed = random.randint(1, 2**31 - 1)
-        out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_sdcpp_server_{i}.png"
-        ok = False
-        last_err = ""
-        for path in paths:
-            url = SDCPP_SERVER_URL + (path if path.startswith("/") else "/" + path)
-            for style in styles:
-                remaining_seconds(deadline)
-                payload = sdcpp_server_payload(prompt, str(negative or ""), width, height, seed, style)
-                trace_event("step", "SDCPP:txt2img", "trying sd.cpp txt2img endpoint", {
-                    "spriteId": sprite_id, "url": url, "style": style, "seed": seed, "width": width, "height": height,
-                    "payloadKeys": sorted(payload.keys()),
-                })
-                try:
-                    req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Content-Type": "application/json", "Accept": "application/json,image/png,*/*"}, method="POST")
-                    t0 = time.time()
-                    with urlopen_no_redirect(req, deadline=deadline) as resp:
-                        raw = read_with_deadline(resp, deadline=deadline)
-                        ctype = resp.headers.get("Content-Type", "")
-                    if extract_image_from_server_response(raw, ctype, out_path, deadline=deadline) and out_path.exists():
-                        out.append(str(out_path))
-                        trace_event("step", "SDCPP:txt2img", "sd.cpp image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed, "contentType": ctype})
-                        log_event("info", "stable-diffusion.cpp server image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed})
-                        ok = True
-                        break
-                    last_err = f"no image in response from {url} style={style} contentType={ctype} bodyPrefix={raw[:200]!r}"
-                    last_failure = ImageBackendError(last_err, category="no_image", retryable=True)
-                except (ImageOutputIOError, HttpDeadlineExceeded):
-                    raise
-                except urlerror.HTTPError as e:
-                    # The adapter owns every rejected physical response too;
-                    # close it before negotiation continues, independent of GC.
-                    with e:
-                        last_err = repr(e)
-                    last_failure = ImageBackendError(last_err, category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
-                    if e.code in {401, 403}:
-                        raise last_failure from e
-                    remaining_seconds(deadline)
-                except Exception as e:
-                    remaining_seconds(deadline)
+    seed = SDCPP_SEED if SDCPP_SEED >= 0 else random.randint(1, 2**31 - 1)
+    out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_sdcpp_server.png"
+    last_err = ""
+    for path in paths:
+        url = SDCPP_SERVER_URL + (path if path.startswith("/") else "/" + path)
+        for style in styles:
+            remaining_seconds(deadline)
+            payload = sdcpp_server_payload(prompt, str(negative or ""), width, height, seed, style)
+            trace_event("step", "SDCPP:txt2img", "trying sd.cpp txt2img endpoint", {
+                "spriteId": sprite_id, "url": url, "style": style, "seed": seed, "width": width, "height": height,
+                "payloadKeys": sorted(payload.keys()),
+            })
+            try:
+                req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers={"Content-Type": "application/json", "Accept": "application/json,image/png,*/*"}, method="POST")
+                t0 = time.time()
+                with urlopen_no_redirect(req, deadline=deadline) as resp:
+                    raw = read_with_deadline(resp, deadline=deadline)
+                    ctype = resp.headers.get("Content-Type", "")
+                if extract_image_from_server_response(raw, ctype, out_path, deadline=deadline) and out_path.exists():
+                    trace_event("step", "SDCPP:txt2img", "sd.cpp image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed, "contentType": ctype})
+                    log_event("info", "stable-diffusion.cpp server image generated", {"spriteId": sprite_id, "path": str(out_path), "ms": int((time.time() - t0) * 1000), "url": url, "style": style, "seed": seed})
+                    return str(out_path)
+                last_err = f"no image in response from {url} style={style} contentType={ctype} bodyPrefix={raw[:200]!r}"
+                last_failure = ImageBackendError(last_err, category="no_image", retryable=True)
+            except (ImageOutputIOError, HttpDeadlineExceeded):
+                raise
+            except urlerror.HTTPError as e:
+                # The adapter owns every rejected physical response too;
+                # close it before negotiation continues, independent of GC.
+                with e:
                     last_err = repr(e)
-                    last_failure = ImageBackendError(last_err, category="transport", retryable=True)
-            if ok:
-                break
-        if not ok:
-            trace_event("error", "SDCPP:txt2img", "sd.cpp generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths, "styles": styles})
-            log_event("warn", "stable-diffusion.cpp server generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths})
-            if last_failure is not None and not last_failure.retryable:
-                raise last_failure
-    if not out and last_failure is not None:
+                last_failure = ImageBackendError(last_err, category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
+                if e.code in {401, 403}:
+                    raise last_failure from e
+                remaining_seconds(deadline)
+            except Exception as e:
+                remaining_seconds(deadline)
+                last_err = repr(e)
+                last_failure = ImageBackendError(last_err, category="transport", retryable=True)
+    trace_event("error", "SDCPP:txt2img", "sd.cpp generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths, "styles": styles})
+    log_event("warn", "stable-diffusion.cpp server generation failed", {"spriteId": sprite_id, "error": last_err, "paths": paths})
+    if last_failure is not None:
         raise last_failure
-    return out
+    return ""
 
 def image_api_headers() -> dict[str, str]:
     headers = {"Content-Type": "application/json", "Accept": "application/json,image/png,*/*"}
@@ -515,40 +497,37 @@ def extract_image_from_api_response(raw: bytes, ctype: str, out_path: Path, time
             return True
     return False
 
-def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
+def generate_openai_codex(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> str:
     from infini_local.core.images import config
     from infini_local.core.images.contracts import uses_key_background
     from infini_local.services import codex_auth
     from infini_local.services.codex_image_backend import generate_image
     background_args = {} if uses_key_background() else {"background": "transparent"}
-    paths = []
-    for variant in range(max(1, int(GENERATE_VARIANTS))):
-        path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex_{variant}.png"
-        inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()
-        join = {**inherited_join, "attemptId": sprite_id, "variant": variant}
-        # Callback metadata is synchronous even when diagnostic persistence is
-        # asynchronous. Keep only this variant's observed HTTP identity.
-        transport: dict[str, str] = {}
+    path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_openai_codex.png"
+    inherited_join, inherited_observer = codex_auth._GENERATION_OBSERVATIONS.get()
+    join = {**inherited_join, "attemptId": sprite_id}
+    # Callback metadata is synchronous even when diagnostic persistence is
+    # asynchronous. Keep this request's observed HTTP identity.
+    transport: dict[str, str] = {}
 
-        def observe_image(observation):
-            if observation["event"] == "request":
-                transport["transportCallId"] = observation["transportCallId"]
-            if inherited_observer is not None:
-                inherited_observer(observation)
+    def observe_image(observation):
+        if observation["event"] == "request":
+            transport["transportCallId"] = observation["transportCallId"]
+        if inherited_observer is not None:
+            inherited_observer(observation)
 
-        try:
-            with codex_auth.generation_observations(join, observe_image):
-                generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
-                               quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
-                               timeout=config.CODEX_IMAGE_TIMEOUT, **background_args)
-        except OSError as exc:
-            raise ImageOutputIOError("Codex raw image write failed") from exc
-        paths.append(str(path))
-        log_event("info", "Codex OAuth generated sprite", {**join, **transport, "spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
-    return paths
+    try:
+        with codex_auth.generation_observations(join, observe_image):
+            generate_image(prompt, negative, path, model=config.CODEX_IMAGE_MODEL,
+                           quality=config.CODEX_IMAGE_QUALITY, size=config.CODEX_IMAGE_SIZE,
+                           timeout=config.CODEX_IMAGE_TIMEOUT, **background_args)
+    except OSError as exc:
+        raise ImageOutputIOError("Codex raw image write failed") from exc
+    log_event("info", "Codex OAuth generated sprite", {**join, **transport, "spriteId": sprite_id, "model": config.CODEX_IMAGE_MODEL, "path": str(path)})
+    return str(path)
 
 
-def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
+def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> str:
     """Generate sprite through an OpenAI-compatible image API.
 
     This is intentionally independent from INFINI_LLM_PROVIDER: OpenRouter (or any
@@ -559,88 +538,81 @@ def generate_image_api(prompt: str, negative: str, sprite_id: str, preferred_can
     if not IMAGE_API_KEY:
         raise ImageBackendConfigurationError("image API backend has no API key")
     deadline = time.monotonic() + IMAGE_API_TIMEOUT
-    variants = max(1, int(GENERATE_VARIANTS))
-    out: list[str] = []
     url = image_api_url()
     last_failure = None
     size = IMAGE_API_SIZE or "512x512"
     full_prompt = str(prompt or "")
     if negative:
         full_prompt = full_prompt + ", avoid: " + str(negative)[:700]
-    for i in range(variants):
-        remaining_seconds(deadline)
-        payload = {
-            "model": IMAGE_API_MODEL,
-            "prompt": full_prompt,
-            "n": 1,
-            "size": size,
-            "response_format": "b64_json",
-        }
-        out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_image_api_{i}.png"
+    remaining_seconds(deadline)
+    payload = {
+        "model": IMAGE_API_MODEL,
+        "prompt": full_prompt,
+        "n": 1,
+        "size": size,
+        "response_format": "b64_json",
+    }
+    out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_image_api.png"
+    try:
+        req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
+        t0 = time.time()
+        with urlopen_no_redirect(req, deadline=deadline) as resp:
+            raw = read_with_deadline(resp, deadline=deadline)
+            ctype = resp.headers.get("Content-Type", "")
+        if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
+            log_event("info", "image API generated sprite", {"spriteId": sprite_id, "model": IMAGE_API_MODEL, "url": url, "ms": int((time.time()-t0)*1000), "path": str(out_path)})
+            return str(out_path)
+        log_event("warn", "image API response had no usable image", {"spriteId": sprite_id, "contentType": ctype, "bodyPrefix": raw[:300].decode("utf-8", "replace")})
+        last_failure = ImageBackendError("image API response had no usable image", category="no_image", retryable=True)
+    except (ImageOutputIOError, HttpDeadlineExceeded):
+        raise
+    except urlerror.HTTPError as e:
+        body = ""
         try:
-            req = urlrequest.Request(url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
-            t0 = time.time()
-            with urlopen_no_redirect(req, deadline=deadline) as resp:
-                raw = read_with_deadline(resp, deadline=deadline)
-                ctype = resp.headers.get("Content-Type", "")
-            if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
-                out.append(str(out_path))
-                log_event("info", "image API generated sprite", {"spriteId": sprite_id, "model": IMAGE_API_MODEL, "url": url, "ms": int((time.time()-t0)*1000), "path": str(out_path)})
-                continue
-            log_event("warn", "image API response had no usable image", {"spriteId": sprite_id, "contentType": ctype, "bodyPrefix": raw[:300].decode("utf-8", "replace")})
-            last_failure = ImageBackendError("image API response had no usable image", category="no_image", retryable=True)
-        except (ImageOutputIOError, HttpDeadlineExceeded):
+            with e:
+                body = read_with_deadline(e, deadline=deadline).decode("utf-8", "replace")[:2000]
+        except HttpDeadlineExceeded:
             raise
-        except urlerror.HTTPError as e:
-            body = ""
-            try:
-                with e:
-                    body = read_with_deadline(e, deadline=deadline).decode("utf-8", "replace")[:2000]
-            except HttpDeadlineExceeded:
-                raise
-            except Exception:
-                remaining_seconds(deadline)
-            last_failure = ImageBackendError(f"image API HTTP {e.code}: {body}", category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
-            if e.code in {401, 403}:
-                raise last_failure from e
-            # Some gateways reject response_format. Retry once without it.
-            if e.code in {400, 404, 422}:
-                try:
-                    retry = dict(payload)
-                    retry.pop("response_format", None)
-                    req = urlrequest.Request(url, data=json.dumps(retry, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
-                    with urlopen_no_redirect(req, deadline=deadline) as resp:
-                        raw = read_with_deadline(resp, deadline=deadline)
-                        ctype = resp.headers.get("Content-Type", "")
-                    if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
-                        out.append(str(out_path))
-                        continue
-                    last_failure = ImageBackendError("image API response without response_format had no usable image", category="no_image", retryable=True)
-                except (ImageOutputIOError, HttpDeadlineExceeded):
-                    raise
-                except urlerror.HTTPError as e2:
-                    with e2:
-                        log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
-                    last_failure = ImageBackendError(f"image API HTTP {e2.code}: {e2.reason}", category="provider_rejected", retryable=e2.code in {408, 429} or e2.code >= 500)
-                    if e2.code in {401, 403}:
-                        raise last_failure from e2
-                    remaining_seconds(deadline)
-                except Exception as e2:
-                    remaining_seconds(deadline)
-                    last_failure = ImageBackendError(repr(e2), category="transport", retryable=True)
-                    log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
-            log_event("warn", "image API HTTP error", {"spriteId": sprite_id, "status": e.code, "body": body})
-        except Exception as e:
+        except Exception:
             remaining_seconds(deadline)
-            last_failure = ImageBackendError(repr(e), category="transport", retryable=True)
-            log_event("warn", "image API generation failed", {"spriteId": sprite_id, "error": repr(e)})
-        if last_failure is not None and not last_failure.retryable:
-            raise last_failure
-    if not out and last_failure is not None:
+        last_failure = ImageBackendError(f"image API HTTP {e.code}: {body}", category="provider_rejected", retryable=e.code in {408, 429} or e.code >= 500)
+        if e.code in {401, 403}:
+            raise last_failure from e
+        # Some gateways reject response_format. Retry once without it.
+        if e.code in {400, 404, 422}:
+            try:
+                retry = dict(payload)
+                retry.pop("response_format", None)
+                req = urlrequest.Request(url, data=json.dumps(retry, ensure_ascii=False).encode("utf-8"), headers=image_api_headers(), method="POST")
+                with urlopen_no_redirect(req, deadline=deadline) as resp:
+                    raw = read_with_deadline(resp, deadline=deadline)
+                    ctype = resp.headers.get("Content-Type", "")
+                if extract_image_from_api_response(raw, ctype, out_path, IMAGE_API_TIMEOUT, deadline=deadline) and out_path.exists():
+                    return str(out_path)
+                last_failure = ImageBackendError("image API response without response_format had no usable image", category="no_image", retryable=True)
+            except (ImageOutputIOError, HttpDeadlineExceeded):
+                raise
+            except urlerror.HTTPError as e2:
+                with e2:
+                    log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
+                last_failure = ImageBackendError(f"image API HTTP {e2.code}: {e2.reason}", category="provider_rejected", retryable=e2.code in {408, 429} or e2.code >= 500)
+                if e2.code in {401, 403}:
+                    raise last_failure from e2
+                remaining_seconds(deadline)
+            except Exception as e2:
+                remaining_seconds(deadline)
+                last_failure = ImageBackendError(repr(e2), category="transport", retryable=True)
+                log_event("warn", "image API retry without response_format failed", {"spriteId": sprite_id, "error": repr(e2)})
+        log_event("warn", "image API HTTP error", {"spriteId": sprite_id, "status": e.code, "body": body})
+    except Exception as e:
+        remaining_seconds(deadline)
+        last_failure = ImageBackendError(repr(e), category="transport", retryable=True)
+        log_event("warn", "image API generation failed", {"spriteId": sprite_id, "error": repr(e)})
+    if last_failure is not None:
         raise last_failure
-    return out
+    return ""
 
-def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
+def generate_sdcpp(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> str:
     """Generate image through persistent stable-diffusion.cpp server only.
 
     v0.4.19 intentionally removed CLI/subprocess-per-image mode because it reloads
@@ -657,57 +629,46 @@ def append_a1111_lora(prompt: str) -> str:
         parts.append(f"<lora:{A1111_LORA_NAME}:{weight}>")
     return ", ".join(p for p in parts if p)
 
-def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> list[str]:
-    # Low-VRAM safe by default: sequential requests, batch size 1, no hires fix.
+def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas: int = 32, *, output_dir: Path | None = None) -> str:
+    # One image per attempt, no hires fix.
     width = env_int("INFINI_A1111_WIDTH", A1111_WIDTH, lo=64, hi=2048)
     height = env_int("INFINI_A1111_HEIGHT", A1111_HEIGHT, lo=64, hi=2048)
-    variants = max(1, int(GENERATE_VARIANTS))
-    batch_size = env_int("INFINI_A1111_BATCH_SIZE", A1111_BATCH_SIZE, lo=1, hi=16)
-    batch_size = min(batch_size, variants)
-    out: list[str] = []
     prompt = append_a1111_lora(prompt)
     negative = str(negative or "")
-    remaining = variants
-    request_i = 0
-    while remaining > 0:
-        this_batch = min(batch_size, remaining)
-        payload = {
-            "prompt": prompt,
-            "negative_prompt": negative,
-            "steps": env_int("INFINI_A1111_STEPS", 16),
-            "cfg_scale": env_float("INFINI_A1111_CFG", 5.5),
-            "width": width,
-            "height": height,
-            "batch_size": this_batch,
-            "n_iter": 1,
-            "sampler_name": env_str("INFINI_A1111_SAMPLER", "Euler a"),
-            "enable_hr": False,
-            "do_not_save_samples": True,
-            "do_not_save_grid": True,
-        }
-        # Image batches are not text-model JSON; preserve their existing size policy.
-        raw = http_json(f"{A1111_URL}/sdapi/v1/txt2img", payload, timeout=VISUAL_GENERATION_TIMEOUT,
-                        max_response_bytes=None)
-        for j, b64 in enumerate(raw.get("images", [])):
-            data = base64.b64decode(b64.split(",")[-1])
-            p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_a1111_{request_i}_{j}.png"
-            write_image_bytes(p, data)
-            out.append(str(p))
-        remaining -= this_batch
-        request_i += 1
-    log_event("info", "a1111 images generated", {"spriteId": sprite_id, "count": len(out), "width": width, "height": height, "variants": variants, "batchSize": batch_size, "removeBg": REMOVE_BG,
+    payload = {
+        "prompt": prompt,
+        "negative_prompt": negative,
+        "steps": env_int("INFINI_A1111_STEPS", 16),
+        "cfg_scale": env_float("INFINI_A1111_CFG", 5.5),
+        "width": width,
+        "height": height,
+        "batch_size": 1,
+        "n_iter": 1,
+        "sampler_name": env_str("INFINI_A1111_SAMPLER", "Euler a"),
+        "enable_hr": False,
+        "do_not_save_samples": True,
+        "do_not_save_grid": True,
+    }
+    # Image data is not text-model JSON; preserve its existing size policy.
+    raw = http_json(f"{A1111_URL}/sdapi/v1/txt2img", payload, timeout=VISUAL_GENERATION_TIMEOUT,
+                    max_response_bytes=None)
+    images = raw.get("images", [])
+    if not images:
+        raise ImageBackendError("A1111 response had no images", category="no_image", retryable=True)
+    data = base64.b64decode(images[0].split(",")[-1])
+    path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_a1111.png"
+    write_image_bytes(path, data)
+    log_event("info", "a1111 image generated", {"spriteId": sprite_id, "path": str(path), "width": width, "height": height, "removeBg": REMOVE_BG,
                         "requirePillow": REQUIRE_PILLOW,
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
-    if not out:
-        raise ImageBackendError("A1111 response had no images", category="no_image", retryable=True)
-    return out
+    return str(path)
 
-def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: Path | None = None) -> list[str]:
-    """Run a real ComfyUI workflow and download its output PNGs.
+def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: Path | None = None) -> str:
+    """Run a real ComfyUI workflow and download its first saved output PNG.
 
     Contract:
     - workflow JSON may contain placeholders like {{PROMPT}}, {{SPRITE_ID}}, {{WIDTH}};
-    - SaveImage should produce at least one image;
+    - SaveImage should produce an image; temporary previews are not delivery assets;
     - local postprocess still owns alpha/crop/downscale, so workflow can be raw SD1.5.
     """
     workflow_path = resolve_comfyui_workflow_path()
@@ -717,38 +678,30 @@ def generate_comfyui(prompt: str, negative: str, sprite_id: str, *, output_dir: 
         workflow = json.loads(workflow_path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
         raise ImageBackendConfigurationError(f"ComfyUI workflow cannot be read: {exc!r}") from exc
-    out: list[str] = []
-    last_fetch_error = None
-    for variant in range(max(1, int(GENERATE_VARIANTS))):
-        seed = random.randint(1, 2**31 - 1)
-        variant_workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))
-        payload = {"prompt": variant_workflow, "client_id": COMFYUI_CLIENT_ID}
-        queued = http_json(f"{COMFYUI_URL}/prompt", payload, timeout=30)
-        prompt_id = str(queued.get("prompt_id") or "").strip()
-        if not prompt_id:
-            raise RuntimeError(f"ComfyUI did not return prompt_id: {queued}")
-        log_event("info", "ComfyUI prompt queued", {"promptId": prompt_id, "spriteId": sprite_id, "workflow": str(workflow_path), "seed": seed, "width": COMFYUI_WIDTH, "height": COMFYUI_HEIGHT, "steps": COMFYUI_STEPS, "cfg": COMFYUI_CFG, "lora": COMFYUI_LORA_NAME})
-        history = poll_comfyui_history(prompt_id, COMFYUI_TIMEOUT)
-        metas = extract_comfyui_images(history, prompt_id)
-        for i, meta in enumerate(metas):
-            p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy_{variant}_{i}.png"
-            try:
-                out.append(fetch_comfyui_image(meta, p))
-            except ImageOutputIOError:
-                raise
-            except (urlerror.HTTPError, HttpDeadlineExceeded):
-                raise  # Preserve terminal rejection/deadline attribution at the attempt boundary.
-            except Exception as e:
-                last_fetch_error = e
-                log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(e)})
-        log_event("info", "ComfyUI images downloaded", {"spriteId": sprite_id, "count": len(out), "promptId": prompt_id, "removeBg": REMOVE_BG,
-                            "requirePillow": REQUIRE_PILLOW,
-                            "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
-    if not out:
-        if last_fetch_error is not None:
-            raise ImageBackendError(f"ComfyUI image fetch failed: {last_fetch_error!r}", category="transport", retryable=True) from last_fetch_error
+    seed = random.randint(1, 2**31 - 1)
+    resolved_workflow = json_deep_replace(workflow, comfyui_mapping(prompt, negative, sprite_id, seed))
+    payload = {"prompt": resolved_workflow, "client_id": COMFYUI_CLIENT_ID}
+    queued = http_json(f"{COMFYUI_URL}/prompt", payload, timeout=30)
+    prompt_id = str(queued.get("prompt_id") or "").strip()
+    if not prompt_id:
+        raise RuntimeError(f"ComfyUI did not return prompt_id: {queued}")
+    log_event("info", "ComfyUI prompt queued", {"promptId": prompt_id, "spriteId": sprite_id, "workflow": str(workflow_path), "seed": seed, "width": COMFYUI_WIDTH, "height": COMFYUI_HEIGHT, "steps": COMFYUI_STEPS, "cfg": COMFYUI_CFG, "lora": COMFYUI_LORA_NAME})
+    history = poll_comfyui_history(prompt_id, COMFYUI_TIMEOUT)
+    meta = extract_comfyui_image(history, prompt_id)
+    if meta is None:
         raise ImageBackendError("ComfyUI completed without downloadable images", category="no_image", retryable=True)
-    return out
+    path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_comfy.png"
+    try:
+        result = fetch_comfyui_image(meta, path)
+    except (ImageOutputIOError, urlerror.HTTPError, HttpDeadlineExceeded):
+        raise  # Preserve terminal rejection/deadline attribution at the attempt boundary.
+    except Exception as exc:
+        log_event("warn", "ComfyUI image fetch failed", {"spriteId": sprite_id, "meta": meta, "error": repr(exc)})
+        raise ImageBackendError(f"ComfyUI image fetch failed: {exc!r}", category="transport", retryable=True) from exc
+    log_event("info", "ComfyUI image downloaded", {"spriteId": sprite_id, "path": result, "promptId": prompt_id, "removeBg": REMOVE_BG,
+                        "requirePillow": REQUIRE_PILLOW,
+                        "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE})
+    return result
 
 # Local config reader: image backend owns sd.cpp command construction now.
 def _effective_sdcpp_lora_prompt_tags() -> str:

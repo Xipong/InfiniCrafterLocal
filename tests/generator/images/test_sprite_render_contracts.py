@@ -211,8 +211,8 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
         source = kwargs["output_dir"] / "fixture_raw_openai_codex.png"
         supplied = Image.new("RGBA", (64, 64), "white" if opaque_first else (0, 0, 0, 0)) if len(captured) == 1 else image
         supplied.save(source)
-        return [str(source)]
-    monkeypatch.setattr(generation, "_generate_backend_variants", producer)
+        return str(source)
+    monkeypatch.setattr(generation, "_generate_backend_image", producer)
     data = {"id": "native-fixture", "vfxManifest": {"recipeId": "native-fixture"}}
     published, _, _, status = generation.generate_visual_asset(data, role, authored, "", "native-producer", 32)
     assert published and status == "generated", data
@@ -244,8 +244,8 @@ def run_plan(tmp_path, monkeypatch, entity_id, kind, declared=None):
     calls = []
     def backend(data, **kwargs):
         calls.append(kwargs)
-        return [str(raw)]
-    monkeypatch.setattr(generation, "_generate_backend_variants", backend)
+        return str(raw)
+    monkeypatch.setattr(generation, "_generate_backend_image", backend)
     entity = {"id": entity_id, "kind": kind, "visualRole": declared if declared is not None else VISUAL_ROLE_BY_ENTITY_KIND[kind],
               "hitbox": {"widthPx": 32, "heightPx": 32},
               "visual": {"assetMode": "baked_sprite", "prompt": "blue authored shape", "preferredCanvasSize": 32, "renderSizePx": 32, "forwardAngleDegrees": 0}}
@@ -378,7 +378,7 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
         monkeypatch.setattr(generation, "SPRITE_RETRIES", 0)
         monkeypatch.setattr(generation, "SPRITE_DIR", tmp_path)
         monkeypatch.setattr(generation, "_backend_configuration_error", lambda: "")
-        monkeypatch.setattr(generation, "_generate_backend_variants", lambda *args, **kwargs: [str(source)])
+        monkeypatch.setattr(generation, "_generate_backend_image", lambda *args, **kwargs: str(source))
         path, _, _, status = generation.generate_visual_asset({}, role, "copper slab with orange tip", "", "asset", canvas)
         assert path, status
     else:
@@ -453,8 +453,8 @@ def test_grip_image_boundary(monkeypatch, role, present, long):
         monkeypatch.setattr(generation, "SPRITE_RETRIES", 0)
         monkeypatch.setattr(generation, "_backend_configuration_error", lambda: "")
         def capture(_data, **kwargs):
-            captured.append(kwargs); return []
-        monkeypatch.setattr(generation, "_generate_backend_variants", capture)
+            captured.append(kwargs); return ""
+        monkeypatch.setattr(generation, "_generate_backend_image", capture)
         generation.generate_visual_asset(data, "item", authored, "", "grip_probe", 64)
         assert len(captured) == 1
         assert authored in captured[0]["prompt"] and '"normalizedX":0.123456789' in captured[0]["prompt"] and '"normalizedY":0.8' in captured[0]["prompt"]

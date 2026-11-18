@@ -66,7 +66,6 @@ def codex_image(monkeypatch, tmp_path):
         monkeypatch.setattr(generation, name, value)
     monkeypatch.setattr(generation, "SPRITE_DIR", tmp_path / "sprites")
     monkeypatch.setattr(generation, "WORLD_RECIPES_DIR", tmp_path / "world")
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 1)
     for name, value in {"CODEX_IMAGE_MODEL": "gpt-image-2", "CODEX_IMAGE_QUALITY": "medium",
                         "CODEX_IMAGE_SIZE": "1024x1024", "CODEX_IMAGE_TIMEOUT": 5}.items():
         monkeypatch.setattr(config, name, value)

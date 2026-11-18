@@ -142,12 +142,12 @@ def test_same_authored_asset_id_changed_png_does_not_replace_distributed_file(of
     old_bytes = old_path.read_bytes()
     original = visual_sprite_generation.generate_sdcpp
     def changed_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
-        paths = original(prompt, negative, asset_id, canvas, output_dir=output_dir)
+        path = original(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_"):
-            with Image.open(paths[0]) as image:
+            with Image.open(path) as image:
                 image.putpixel((14, 23), (50, 210, 90, 144))
-                image.save(paths[0])
-        return paths
+                image.save(path)
+        return path
     monkeypatch.setattr(visual_sprite_generation, "generate_sdcpp", changed_fixture)
     second = visual_sprite_generation.maybe_generate_visual_assets(copy.deepcopy(data))
     new_path = Path(second["vfxManifest"]["assets"][0]["spritePath"])
@@ -189,10 +189,10 @@ def test_strip_retry_keeps_asymmetric_uv_landmarks_and_publishes_only_final_png(
             if attempts == 1 and failure == "backend_exception":
                 calls.append({"id": asset_id, "prompt": prompt, "canvas": canvas})
                 raise RuntimeError("offline first-attempt failure")
-        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
+        path = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_") and attempts == 1 and failure == "invalid_png":
-            Path(paths[0]).write_bytes(b"offline corrupt PNG fixture")
-        return paths
+            Path(path).write_bytes(b"offline corrupt PNG fixture")
+        return path
     def bake_with_first_wrong_canvas(master, target_size, role="item"):
         nonlocal bakes
         image = original_bake(master, target_size, role)
@@ -226,12 +226,12 @@ def test_tiny_strip_does_not_enter_silhouette_refit(offline_backend, monkeypatch
     original_backend = visual_sprite_generation.generate_sdcpp
     original_refit = visual_sprite_generation.refit_processed_sprite_to_contract
     def tiny_uv_fixture(prompt, negative, asset_id, canvas, *, output_dir=None):
-        paths = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
+        path = original_backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if asset_id.startswith("infini_vfx_job_"):
             image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
             ImageDraw.Draw(image).rectangle((2, 48, 3, 49), fill=(210, 100, 20, 144))
-            image.save(paths[0])
-        return paths
+            image.save(path)
+        return path
     def forbidden_refit(*args, **kwargs):
         if args[3] == "vfx_strip":
             raise AssertionError("strip silhouette refit was called")
@@ -428,11 +428,11 @@ def test_required_ingredient_failure_projection(offline_backend, monkeypatch, tm
         if selected and fault in {"backend_error", "partial_backend"}:
             calls.append({"id": asset_id, "prompt": prompt, "canvas": canvas})
             raise RuntimeError("offline requested backend failure")
-        paths = backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
+        path = backend(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if selected and fault == "native_alpha_postprocess_io":
             image = Image.new("RGBA", (canvas, canvas))
-            ImageDraw.Draw(image).rectangle((4, 4, canvas - 5, canvas - 5), fill=(200, 110, 10, 128)); image.save(paths[0])
-        return paths
+            ImageDraw.Draw(image).rectangle((4, 4, canvas - 5, canvas - 5), fill=(200, 110, 10, 128)); image.save(path)
+        return path
     monkeypatch.setattr(visual_sprite_generation, "generate_sdcpp", backend_boundary)
     if fault in {"native_alpha_postprocess_io", "wrong_canvas", "atomic_publication"}:
         owner, name = (visual_sprite_generation.os, "replace") if fault == "atomic_publication" else (sprite_postprocess, "prepare_sprite_master" if fault == "native_alpha_postprocess_io" else "bake_sprite_from_master")

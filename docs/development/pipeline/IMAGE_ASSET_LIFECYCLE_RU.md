@@ -11,7 +11,7 @@
 |---|---|
 | Принятые Visual/VFX requests | Канонические Visual DTO и `vfxManifest`; `pipelines/visual/assets.py` создаёт deep-copy план, не вторую truth source |
 | Техническая image-попытка | `_execute_image_request` в `pipelines/images/stage.py` |
-| Provider transport, seed/variants, backend admission | Существующие backend adapters и `IMAGE_GENERATION_GATE` |
+| Provider transport, seed, backend admission | Существующие backend adapters и `IMAGE_GENERATION_GATE` |
 | Raw/stages/master/final/refit промежуточные файлы | Явный invocation/attempt `output_dir` |
 | Публичный завершённый PNG | Общий атомарный publisher |
 | PNG-потребность VFX slot | Read-only `vfx_png_dependencies` в существующем VFX contract owner |
@@ -28,9 +28,9 @@ sd.cpp: `core/images/config.py` читает настройки и владее�
 <a id="attempts"></a>
 ## Одна попытка, private output и atomic publication
 
-`maybe_generate_sprite` и `generate_visual_asset` сохраняют публичные интерфейсы и специфичные проекции, но используют один executor. Только он владеет budget, retry prompt, backend call, выбором варианта, postprocess, validation/refit, принятием, публикацией и receipts. Item-проекция сохраняет raw/status/technical metrics и visual-soul; остальные роли возвращают результат для своих canonical DTO.
+`maybe_generate_sprite` и `generate_visual_asset` сохраняют публичные интерфейсы и специфичные проекции, но используют один executor. Только он владеет budget, retry prompt, backend call, postprocess, validation/refit, принятием, публикацией и receipts. Одна попытка запрашивает один PNG для конкретного ассета и сразу передаёт его в postprocess. Item-проекция сохраняет raw/status/technical metrics и visual-soul; остальные роли возвращают результат для своих canonical DTO.
 
-Приватный immutable request разделяет logical asset ID, audit role, processing role, canvas/topology и конечную publication policy. Result содержит committed path, raw path, оба score, final prompt, validation/attempt receipts и failure phase. Это технические структуры Python, не новый LLM output, asset registry, VM или система callbacks.
+Приватный immutable request разделяет logical asset ID, audit role, processing role, canvas/topology и конечную publication policy. Result содержит committed path, raw path, technical score, final prompt, validation/attempt receipts и failure phase. Это технические структуры Python, не новый LLM output, asset registry, VM или система callbacks.
 
 У каждой invocation и попытки свой private `output_dir` в `images/worlds/<мир>/<предмет>/diagnostics`, вне индексируемой папки `final`. Этот путь явно передаётся backend/postprocess/stages/refit; module-global directories не переключаются. Backend gate не расширяется на CPU/postprocess/publication.
 
@@ -70,9 +70,9 @@ VFX ID сохраняется буквально, включая регистр.
 <a id="failure"></a>
 ## Failure policy без скрытого artwork
 
-Local filesystem/write/commit failure — `failed`, пустые public paths и failure phase; не повторный backend call, новый prompt или replacement. `_execute_image_request` различает configuration, backend, selection, processing, validation, publication и projection. `IMAGE_BACKEND=off` возвращает `prompt_only`, не готовый PNG. Backend config error диагностируется до image attempts.
+Local filesystem/write/commit failure — `failed`, пустые public paths и failure phase; не повторный backend call, новый prompt или replacement. `_execute_image_request` различает configuration, backend, processing, validation, publication и projection. `IMAGE_BACKEND=off` возвращает `prompt_only`, не готовый PNG. Backend config error диагностируется до image attempts.
 
-Ошибки внутри адаптера сохраняют причину через небольшой `ImageBackendError(category, retryable)`; отсутствующие URL/key/workflow дают `ImageBackendConfigurationError`, а не `[] → no_raw_image`. Недоступный sd.cpp сохраняет `last_start_error`; HTTP 401/403 и отказ исполнения ComfyUI терминальны, без повторного artwork/fallback. После существующего format/endpoint negotiation прочие HTTP-отказы сохраняют status и retryability: 408/429/5xx допускают прежний bounded retry, остальные отказы — нет. Attempt receipt содержит category/retryable/error; ошибки PNG/alpha остаются у своих технических validators.
+Ошибки внутри адаптера сохраняют причину через небольшой `ImageBackendError(category, retryable)`; отсутствующие URL/key/workflow дают `ImageBackendConfigurationError`, а не пустой результат `no_raw_image`. Недоступный sd.cpp сохраняет `last_start_error`; HTTP 401/403 и отказ исполнения ComfyUI терминальны, без повторного artwork/fallback. После существующего format/endpoint negotiation прочие HTTP-отказы сохраняют status и retryability: 408/429/5xx допускают прежний bounded retry, остальные отказы — нет. Attempt receipt содержит category/retryable/error; ошибки PNG/alpha остаются у своих технических validators.
 
 Непригодное provider image content допускает существующий bounded technical retry (`max(1, SPRITE_RETRIES+1)` attempts), но `CodexError`, `ImageOutputIOError`, publication failure и OSError в processing/projection терминальны. Public DTO гидратируется только после commit; projection-tail failure не делает DTO пригодным и не тратит новую модельную попытку.
 
@@ -127,7 +127,7 @@ Debug snapshot сохраняет resident `TextureCount`/`EstimatedTextureBytes
 
 - `INFINI_IMAGE_PARALLEL=1` включает параллельную генерацию по умолчанию; галочка в Studio → Изображения отключает её для локальных моделей с ограниченной видеопамятью. После сохранения нужен перезапуск сервера. При `0` backend gate всегда равен 1, независимо от сохранённого лимита. `INFINI_IMAGE_MAX_CONCURRENCY` задаёт лимит при включённой галочке, default 4, range 1..4; endpoint combine/multidev semaphores не заменяют его. Gate не охватывает CPU/postprocess/publication.
 - `INFINI_VISUAL_ASSET_MODE` ограничивает materialization; обязательный authored asset, отключённый настройкой, не становится optional для delivery. Exact `assetMode`/Visual project выбирает Director, не старый GUI role toggle.
-- Backend/model/seed/variants и sd.cpp profile arguments остаются в adapters/config; настройка не разрешает скрытый provider switch. Для Codex OAuth см. [его operations guide](../../user/CODEX_IMAGE_OAUTH_RU.md).
+- Backend/model/seed и sd.cpp profile arguments остаются в adapters/config; настройка не разрешает скрытый provider switch. Для Codex OAuth см. [его operations guide](../../user/CODEX_IMAGE_OAUTH_RU.md).
 - `core/images/contracts.py::image_backend_is_zimage` — один predicate для retry, prompt, payload и delivery diagnostics. Только `sdcpp`: `INFINI_ZIMAGE_PROMPT_CONTRACT=1/on` принудительно включает contract, `0/off` выключает, `auto` проверяет model/command/extra args на Z-Image. `INFINI_ZIMAGE_POSITIVE_ONLY` — отдельный выбор внутри активного Z-Image contract: `1` убирает negative channel, `0` сохраняет authored negative. У Flux/другого non-Z backend этот Z-Image флаг не очищает negative; OpenAI-shaped sd.cpp wrapper переносит negative в `Avoid:` positive prompt, поскольку отдельного канала у него нет.
 - Sprite keyer/master/downscale/stage/retry knobs меняют техническую обработку, не authored grip, palette, event или gameplay. Transparency contracts — [Visual metadata](../../reference/presentation/VISUAL_PRESENTATION_METADATA.md#image-contract).
 

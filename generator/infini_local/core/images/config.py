@@ -98,7 +98,6 @@ CODEX_IMAGE_MODEL = env_str("INFINI_CODEX_IMAGE_MODEL", "gpt-image-2")
 CODEX_IMAGE_QUALITY = env_str("INFINI_CODEX_IMAGE_QUALITY", "medium")
 CODEX_IMAGE_SIZE = env_str("INFINI_CODEX_IMAGE_SIZE", "1024x1024")
 CODEX_IMAGE_TIMEOUT = env_int("INFINI_CODEX_IMAGE_TIMEOUT", 240, lo=1, hi=3600)
-GENERATE_VARIANTS = env_int("INFINI_IMAGE_VARIANTS", 1)
 IMAGE_PARALLEL = env_bool("INFINI_IMAGE_PARALLEL", True)
 IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 4, lo=1, hi=4)
 IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY if IMAGE_PARALLEL else 1)
@@ -119,10 +118,9 @@ def contract_versions_payload() -> dict[str, Any]:
         visual_pipeline_profile=VISUAL_PIPELINE_PROFILE,
     )
 VISUAL_GENERATION_TIMEOUT = env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240)
-# v0.3.9 one-shot sprite alpha pipeline. Default path:
+# One-shot sprite alpha pipeline:
 # 1 generated image per asset -> local alpha removal -> crop/fit/downscale ->
 # technical validation -> retry only if PNG is technically broken.
-# No VLM judge and no fake best-of-N selection by default.
 REMOVE_BG = env_bool("INFINI_REMOVE_BG", True)
 BG_REMOVE_MODE = env_str("INFINI_BG_REMOVE_MODE", "sprite_keyer").lower()  # primary supported mode: sprite_keyer
 BG_COLOR = env_str("INFINI_BG_COLOR", "magenta").lower()
@@ -146,7 +144,8 @@ SPRITE_DOWNSCALE_FILTER = _sprite_downscale_filter if _sprite_downscale_filter i
 SPRITE_CHROMA_DEFRINGE = env_bool("INFINI_SPRITE_CHROMA_DEFRINGE", True)
 SPRITE_PREMULTIPLIED_RESIZE = env_bool("INFINI_SPRITE_PREMULTIPLIED_RESIZE", True)
 DENOISE_STRAY_PIXELS = env_bool("INFINI_DENOISE_STRAY_PIXELS", False)
-SPRITE_RETRIES = env_int("INFINI_SPRITE_RETRIES", 2, lo=0, hi=8)
+# One initial image plus one technical retry; not best-of-N selection.
+SPRITE_RETRIES = env_int("INFINI_SPRITE_RETRIES", 1, lo=0, hi=8)
 SPRITE_MIN_BBOX_RATIO = env_float("INFINI_SPRITE_MIN_BBOX_RATIO", 0.10)
 SPRITE_MAX_BBOX_RATIO = env_float("INFINI_SPRITE_MAX_BBOX_RATIO", 0.92)
 SPRITE_ITEM_CORE_ALPHA_THRESHOLD = env_int("INFINI_SPRITE_ITEM_CORE_ALPHA_THRESHOLD", 56)
@@ -168,7 +167,6 @@ A1111_LORA_WEIGHT = env_str("INFINI_A1111_LORA_WEIGHT", "0.8")
 A1111_TRIGGER = env_str("INFINI_A1111_TRIGGER", "")
 A1111_WIDTH = env_int("INFINI_A1111_WIDTH", 512, lo=64, hi=2048)
 A1111_HEIGHT = env_int("INFINI_A1111_HEIGHT", A1111_WIDTH, lo=64, hi=2048)
-A1111_BATCH_SIZE = env_int("INFINI_A1111_BATCH_SIZE", 1, lo=1, hi=16)
 
 
 __all__ = [
@@ -233,7 +231,6 @@ __all__ = [
     "IMAGE_API_SIZE",
     "IMAGE_API_TIMEOUT",
     "IMAGE_API_EXTRA_HEADERS_JSON",
-    "GENERATE_VARIANTS",
     "IMAGE_PARALLEL",
     "IMAGE_MAX_CONCURRENCY",
     "IMAGE_GENERATION_GATE",
@@ -278,5 +275,4 @@ __all__ = [
     "A1111_TRIGGER",
     "A1111_WIDTH",
     "A1111_HEIGHT",
-    "A1111_BATCH_SIZE",
 ]

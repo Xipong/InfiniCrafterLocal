@@ -34,7 +34,6 @@ def recording(monkeypatch, tmp_path):
     monkeypatch.setattr(visual, "IMAGE_BACKEND", "openai_codex")
     monkeypatch.setattr(visual, "IMAGE_BACKEND_CONFIG_ERROR", "")
     monkeypatch.setattr(visual, "SPRITE_RETRIES", 0)
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 1)
     monkeypatch.setattr(config, "CODEX_IMAGE_MODEL", "fixture-model")
     monkeypatch.setattr(config, "CODEX_IMAGE_QUALITY", "low")
     monkeypatch.setattr(config, "CODEX_IMAGE_SIZE", "auto")
@@ -90,7 +89,7 @@ def test_image_lifecycle_binds_logical_asset_actual_backend_attempt_and_audit_ro
     assert Path(result.raw_path).read_bytes() == recording["png"]
     observations = rows(recording)
     assert observations
-    expected_attempt = Path(result.raw_path).name.removesuffix("_raw_openai_codex_0.png")
+    expected_attempt = Path(result.raw_path).name.removesuffix("_raw_openai_codex.png")
     assert expected_attempt.startswith("infini_vfx_job_") and expected_attempt != image_request.logical_asset_id
     for row in observations:
         assert row.get("assetId") == image_request.logical_asset_id
@@ -103,7 +102,7 @@ def test_image_lifecycle_binds_logical_asset_actual_backend_attempt_and_audit_ro
     assert success["transportCallId"] == observations[0]["transportCallId"]
     assert success["assetId"] == image_request.logical_asset_id
     assert success["attemptId"] == expected_attempt and success["spriteId"] == expected_attempt
-    assert success["role"] == image_request.audit_role and success["variant"] == 0
+    assert success["role"] == image_request.audit_role
     assert len(recording["sent"]) == 1
     assert json.loads(recording["sent"][0][0]) == {
         "model": "fixture-model", "prompt": "same authored fixture prompt\n\nAvoid: avoid text",
@@ -111,9 +110,7 @@ def test_image_lifecycle_binds_logical_asset_actual_backend_attempt_and_audit_ro
     }
 
 
-@pytest.mark.parametrize("variants", [1, 3])
-def test_each_variant_success_log_joins_observed_transport_without_replacing_outer_context(recording, monkeypatch, variants):
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", variants)
+def test_image_success_log_joins_observed_transport_without_replacing_outer_context(recording, monkeypatch):
     observed, successes = [], []
     monkeypatch.setattr(backend, "log_event", lambda level, message, payload: successes.append(payload))
     join = {"assetId": "logical-asset", "attemptId": "stale-inherited-attempt",
@@ -122,35 +119,30 @@ def test_each_variant_success_log_joins_observed_transport_without_replacing_out
     output_dir = recording["root"] / "raw"
     with auth.generation_observations(join, observed.append):
         before = auth._GENERATION_OBSERVATIONS.get()
-        paths = backend.generate_openai_codex("same authored fixture prompt", "avoid text", "actual-backend-attempt", output_dir=output_dir)
+        path = backend.generate_openai_codex("same authored fixture prompt", "avoid text", "actual-backend-attempt", output_dir=output_dir)
         assert auth._GENERATION_OBSERVATIONS.get() == before
     observations = rows(recording)
-    assert len(paths) == len(successes) == variants
-    assert all(Path(path).read_bytes() == recording["png"] for path in paths)
-    assert len({row["transportCallId"] for row in observations}) == variants
+    assert len(successes) == 1
+    assert Path(path).read_bytes() == recording["png"]
+    assert len({row["transportCallId"] for row in observations}) == 1
     assert len(observed) == len(observations)
-    for variant, success in enumerate(successes):
-        group = [row for row in observations if row.get("variant") == variant]
-        assert group, "HTTP transport must carry the variant before persistence"
-        call_id = next(row["transportCallId"] for row in group if row["event"] == "request")
-        assert {row["transportCallId"] for row in group} == {call_id}
-        for row in [*group, success]:
-            assert row["assetId"] == "logical-asset"
-            assert row["attemptId"] == "actual-backend-attempt"
-            assert row["role"] == "vfx:literal-effect"
-            assert row["attempt"] == 2
-            assert row["variant"] == variant
-            assert row["logicalCallId"] == "fixture-logical"
-            assert row["leaseId"] == "fixture-lease"
-            assert row["transportCallId"] == call_id
-        assert success["spriteId"] == "actual-backend-attempt" and success["path"] == paths[variant]
+    call_id = next(row["transportCallId"] for row in observations if row["event"] == "request")
+    for row in [*observations, successes[0]]:
+        assert row["assetId"] == "logical-asset"
+        assert row["attemptId"] == "actual-backend-attempt"
+        assert row["role"] == "vfx:literal-effect"
+        assert row["attempt"] == 2
+        assert row["logicalCallId"] == "fixture-logical"
+        assert row["leaseId"] == "fixture-lease"
+        assert row["transportCallId"] == call_id
+    assert successes[0]["spriteId"] == "actual-backend-attempt" and successes[0]["path"] == path
     assert all("artifact" not in row for row in observed), "callback receives metadata, not the raw body"
-    assert "variant" not in join and join["attemptId"] == "stale-inherited-attempt"
+    assert join["attemptId"] == "stale-inherited-attempt"
 
 
 @pytest.mark.parametrize("same_asset", [False, True])
 @pytest.mark.parametrize("required_vfx", [False, True])
-def test_concurrent_identical_prompts_keep_invocation_and_variant_joins_separate(recording, monkeypatch, same_asset, required_vfx):
+def test_concurrent_identical_prompts_keep_invocation_joins_separate(recording, monkeypatch, same_asset, required_vfx):
     from concurrent.futures import ThreadPoolExecutor
     from dataclasses import replace
     from threading import Barrier, Lock
@@ -160,7 +152,6 @@ def test_concurrent_identical_prompts_keep_invocation_and_variant_joins_separate
     # single-image gate (which intentionally serializes the opener barrier).
     monkeypatch.setattr(visual, "IMAGE_GENERATION_GATE", ImageRequestGate(2))
     barrier, lock = Barrier(2), Lock()
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 2)
     successes = []
 
     def opened(req, *, deadline, on_open=None):
@@ -189,30 +180,27 @@ def test_concurrent_identical_prompts_keep_invocation_and_variant_joins_separate
         results = list(pool.map(call, [1, 2]))
     assert all(result.status == "generated" for result in results), results
     assert all(Path(result.raw_path).read_bytes() == recording["png"] for result in results)
-    assert len(recording["sent"]) == 4
+    assert len(recording["sent"]) == 2
     assert len({wire for wire, _, _ in recording["sent"]}) == 1
     observations = rows(recording)
-    assert len({row["transportCallId"] for row in observations}) == 4
-    actual_attempts = {Path(result.raw_path).name.removesuffix("_raw_openai_codex_0.png") for result in results}
+    assert len({row["transportCallId"] for row in observations}) == 2
+    actual_attempts = {Path(result.raw_path).name.removesuffix("_raw_openai_codex.png") for result in results}
     assert len(actual_attempts) == (1 if same_asset and not required_vfx else 2)
     assert len({result.raw_path for result in results}) == 2
     assert {row["attemptId"] for row in observations} == actual_attempts
-    assert len(successes) == 4
+    assert len(successes) == 2
     for success in successes:
         group = [row for row in observations if row["transportCallId"] == success["transportCallId"]]
         assert group
-        assert all({key: row[key] for key in ("assetId", "attemptId", "attempt", "role", "variant")} ==
-                   {key: success[key] for key in ("assetId", "attemptId", "attempt", "role", "variant")} for row in group)
-    for attempt_id in actual_attempts:
-        assert {row["variant"] for row in observations if row["attemptId"] == attempt_id} == {0, 1}
+        assert all({key: row[key] for key in ("assetId", "attemptId", "attempt", "role")} ==
+                   {key: success[key] for key in ("assetId", "attemptId", "attempt", "role")} for row in group)
 
 
 @pytest.mark.parametrize("outcome", ["recover", "exhaust", "terminal"])
-def test_physical_retries_share_variant_join_without_multiplying_lifecycle_budget(recording, monkeypatch, outcome):
+def test_physical_retries_share_request_join_without_multiplying_lifecycle_budget(recording, monkeypatch, outcome):
     from email.message import Message
     from urllib.error import HTTPError
 
-    monkeypatch.setattr(backend, "GENERATE_VARIANTS", 2)
     monkeypatch.setattr(visual, "SPRITE_RETRIES", 3)
     observed, successes = [], []
     monkeypatch.setattr(backend, "log_event", lambda level, message, payload: successes.append(payload))
@@ -233,7 +221,7 @@ def test_physical_retries_share_variant_join_without_multiplying_lifecycle_budge
         result = execute(request())
         assert auth._GENERATION_OBSERVATIONS.get() == before
     observations = rows(recording)
-    expected_posts = {"recover": 3, "exhaust": 2, "terminal": 1}[outcome]
+    expected_posts = {"recover": 2, "exhaust": 2, "terminal": 1}[outcome]
     assert len(recording["sent"]) == expected_posts
     starts = [row for row in observations if row["event"] == "post_start"]
     assert len(starts) == expected_posts and all(row["networkStarted"] for row in starts)
@@ -242,22 +230,20 @@ def test_physical_retries_share_variant_join_without_multiplying_lifecycle_budge
                row["attempt"] == 0 and row["logicalCallId"] == "fixture-logical" and
                row["leaseId"] == "fixture-lease" for row in observations)
     assert len({row["attemptId"] for row in observations}) == 1
-    first_variant = [row for row in observations if row["variant"] == 0]
-    assert len({row["transportCallId"] for row in first_variant}) == 1
-    first_starts = [row for row in first_variant if row["event"] == "post_start"]
+    assert len({row["transportCallId"] for row in observations}) == 1
+    first_starts = [row for row in observations if row["event"] == "post_start"]
     expected_first = 1 if outcome == "terminal" else 2
     assert [row["physicalAttemptIndex"] for row in first_starts] == list(range(1, expected_first + 1))
-    terminal = next(row for row in first_variant if row["event"] == "call_end")
+    terminal = next(row for row in observations if row["event"] == "call_end")
     assert terminal["physicalAttemptCount"] == expected_first
     assert terminal["outcome"] == ("success" if outcome == "recover" else "failure")
     if outcome == "recover":
-        assert result.status == "generated" and len(successes) == 2
+        assert result.status == "generated" and len(successes) == 1
         assert recording["sent"][0] == recording["sent"][1], "retry must retain bytes, headers and deadline"
         assert Path(result.raw_path).read_bytes() == recording["png"]
     else:
         assert result.status == "failed" and result.failure_phase == "backend"
         assert len(result.attempts) == 1 and successes == []
-        assert {row["variant"] for row in observations} == {0}
         assert not list((recording["root"] / "sprites").glob("*.png"))
 
 

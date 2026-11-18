@@ -283,7 +283,7 @@ def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(cam
     expected_role = "item" if selection in {"reuse_item_icon", "item_body"} else "entity:" + owner_id
     observer = _campaign_observers(fixture)
     projector_globals_before = {key: getattr(sprites, key) for key in (
-        "maybe_generate_sprite", "generate_visual_asset", "_generate_backend_variants", "write_visual_manifest",
+        "maybe_generate_sprite", "generate_visual_asset", "_generate_backend_image", "write_visual_manifest",
     )}
     control = synthetic_no_image_execution_control(hydrated, fixture)
     assert {key: getattr(sprites, key) for key in projector_globals_before} == projector_globals_before

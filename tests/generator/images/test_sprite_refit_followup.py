@@ -41,9 +41,9 @@ def pipeline(tmp_path, monkeypatch, source_pixels):
         source_pixels.save(source)
         kwargs["source"] = source
         kwargs["source_bytes"] = source.read_bytes()
-        return [str(source)]
+        return str(source)
 
-    monkeypatch.setattr(generation, "_generate_backend_variants", provider)
+    monkeypatch.setattr(generation, "_generate_backend_image", provider)
     return calls
 
 

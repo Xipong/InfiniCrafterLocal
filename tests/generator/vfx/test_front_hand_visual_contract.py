@@ -270,7 +270,7 @@ def test_real_image_retry_keeps_selected_owner_grip_without_png_or_provider_call
 
     def offline_no_image(prompt, negative, asset_id, canvas, *, output_dir=None):
         calls.append(prompt)
-        return []  # Explicit offline failed image response, no PNG writes.
+        return ""  # Explicit offline failed image response, no PNG writes.
 
     monkeypatch.setattr(images, "generate_openai_codex", offline_no_image)
     if mode == "reuse_item_icon":

@@ -47,7 +47,7 @@ from infini_local.pipelines.images.backends import (
 )
 from infini_local.pipelines.images.retry import build_retry_prompt_from_validation
 from infini_local.pipelines.images.pixels import cleanup_alpha, bake_sprite_from_master, resize_rgba_premultiplied
-from infini_local.pipelines.images.postprocess import RawSpriteBackgroundError, RawSpriteFrameError, pick_best_sprite, postprocess_sprite
+from infini_local.pipelines.images.postprocess import RawSpriteBackgroundError, RawSpriteFrameError, postprocess_sprite
 from infini_local.pipelines.images.validation import sprite_validation_fatal, technical_validation_score, validate_processed_sprite
 from infini_local.pipelines.images.manifest import write_visual_manifest
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
@@ -87,7 +87,7 @@ def _backend_configuration_error() -> str:
     return ""
 
 
-def _generate_backend_variants(
+def _generate_backend_image(
     data: dict[str, Any],
     *,
     prompt: str,
@@ -96,7 +96,7 @@ def _generate_backend_variants(
     canvas: int,
     role: str,
     output_dir: Path | None = None,
-) -> list[str]:
+) -> str:
     """Dispatch one configured backend without silently changing authorship mode."""
     config_error = _backend_configuration_error()
     if config_error:
@@ -113,7 +113,7 @@ def _generate_backend_variants(
         if IMAGE_BACKEND == "image_api":
             return generate_image_api(prompt, negative, asset_id, canvas, output_dir=output_dir)
         if IMAGE_BACKEND == "off":
-            return []
+            return ""
         raise ImageBackendConfigurationError(f"unsupported image backend: {IMAGE_BACKEND}")
 
 
@@ -142,7 +142,6 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         return data
     visual.pop("visualJudgeScore", None)
     if result.public_path:
-        visual["spriteCandidateScore"] = result.candidate_score
         try:
             attach_visual_soul_from_sprite(data, result.public_path, validation=result.validation, score=result.technical_score)
         except OSError as exc:
@@ -268,7 +267,6 @@ class _ImageResult:
     raw_path: str = ""
     status: str = "failed"
     technical_score: float = 0.0
-    candidate_score: float = 0.0
     final_prompt: str = ""
     final_prompt_attempt: int = 0
     validation: dict[str, Any] | None = None
@@ -344,7 +342,6 @@ def _finish_image_request(data: dict[str, Any], request: _ImageRequest, result: 
     if result.public_path:
         if request.policy is not _PublicationPolicy.ITEM:
             debug[prefix + "SpriteTechnicalScore"] = round(result.technical_score, 3)
-            debug[prefix + "SpriteCandidateScore"] = result.candidate_score
         if result.validation and not result.validation.get("ok") and not result.late_warning:
             debug[prefix + "SpriteAcceptedWithWarnings"] = json.dumps(result.validation, ensure_ascii=False)
     return result
@@ -415,7 +412,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             "backend": IMAGE_BACKEND, "canvas": request.canvas, "spriteRetries": SPRITE_RETRIES,
         }, prompt=prompt, negative=request.negative)
         phase = "processing"
-        best = ""
+        raw_path = ""
         try:
             output_dir = workspace / f"attempt-{attempt}"
             output_dir.mkdir()
@@ -426,25 +423,21 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             with codex_auth.generation_observations({**join,
                     "assetId": request.logical_asset_id, "attemptId": attempt_id,
                     "attempt": attempt, "role": request.audit_role}, observer):
-                variants = _generate_backend_variants(data, prompt=prompt, negative=request.negative,
+                raw_path = _generate_backend_image(data, prompt=prompt, negative=request.negative,
                     asset_id=attempt_id, canvas=request.canvas, role=request.processing_role, output_dir=output_dir)
-            variants = [path for path in variants if path and Path(path).exists()]
-            if not variants:
+            if not raw_path or not Path(raw_path).exists():
                 retry_validation = {}
                 attempts.append({"attempt": attempt, "ok": False, "status": "no_raw_image"})
                 if request.policy is _PublicationPolicy.ITEM:
                     trace_event("step", "IMAGE:item", "no raw image returned", {"assetId": request.logical_asset_id, "attempt": attempt, "backend": IMAGE_BACKEND})
                 continue
-            phase = "selection"
-            selection = pick_best_sprite(variants, request.processing_role, request.canvas)
-            best, score = selection.path, selection.score
             phase = "processing"
             # Keep retained sampling inputs outside the logical filename
             # namespace: an asset named "refit-master" must not overwrite its
             # own high-resolution source when postprocess saves the final bake.
             master_path = output_dir / "refit-source" / "master.png" if request.processing_role != "vfx_strip" else None
-            final = postprocess_sprite(best, attempt_id, request.canvas, request.processing_role,
-                output_dir=output_dir, master_output=master_path, prepared=selection.prepared, **process_kwargs)
+            final = postprocess_sprite(raw_path, attempt_id, request.canvas, request.processing_role,
+                output_dir=output_dir, master_output=master_path, **process_kwargs)
             phase = "validation"
             validation = validate_processed_sprite(final, request.processing_role, **validation_kwargs)
             refit_path = ""
@@ -459,14 +452,14 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                     if refit_validation.get("ok"):
                         result = replace(result, refit={"samplingSource": "pre_bake_master" if master_path is not None and master_path.exists() else "processed_sprite", "from": str(Path(final).resolve()), "to": str(Path(refit_path).resolve()), "before": validation, "after": refit_validation})
                         final, validation = refit_path, refit_validation
-            row = {"attempt": attempt, "raw": best, "final": final, "score": technical_validation_score(validation),
-                   "candidateScore": round(float(score), 3), "validation": validation}
+            row = {"attempt": attempt, "raw": raw_path, "final": final, "score": technical_validation_score(validation),
+                   "validation": validation}
             if refit_path:
                 row["refit"] = {"path": refit_path, "validation": refit_validation}
             attempts.append(row)
             retry_validation = validation
             last_path = final
-            result = replace(result, raw_path=str(Path(best).resolve()), technical_score=row["score"], candidate_score=row["candidateScore"], validation=validation)
+            result = replace(result, raw_path=str(Path(raw_path).resolve()), technical_score=row["score"], validation=validation)
             if validation.get("ok") or not sprite_validation_fatal(validation):
                 phase = "publication"
                 published = (_publish_vfx_png(data, request.audit_role.removeprefix("vfx:"), final) if required_vfx
@@ -474,8 +467,8 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                 status = "generated" if validation.get("ok") else "generated_warn_invalid"
                 phase = "projection"
                 trace_event("step", f"IMAGE:{request.audit_role}", "sprite accepted", {
-                    "assetId": request.logical_asset_id, "attempt": attempt, "raw": best, "final": published,
-                    "score": result.technical_score, "candidateScore": result.candidate_score, "status": status, "validation": validation,
+                    "assetId": request.logical_asset_id, "attempt": attempt, "raw": raw_path, "final": published,
+                    "score": result.technical_score, "status": status, "validation": validation,
                 })
                 result = replace(result, public_path=published, status=status, error="", failure_phase="")
                 return _finish_image_request(data, request, result, attempts)
@@ -495,8 +488,8 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             retry_validation = ({"ok": False, "reasons": [str(exc).partition(":")[0]], "role": request.processing_role}
                                 if isinstance(exc, (RawSpriteBackgroundError, RawSpriteFrameError)) else {})
             failure = {"attempt": attempt, "ok": False, "error": repr(exc), "phase": phase}
-            if best:
-                failure["raw"] = best
+            if raw_path:
+                failure["raw"] = raw_path
             if retry_validation:
                 failure["validation"] = retry_validation
             if isinstance(exc, ImageBackendError):
@@ -802,7 +795,7 @@ def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str
 __all__ = [
     "ImageBackendConfigurationError",
     "_backend_configuration_error",
-    "_generate_backend_variants",
+    "_generate_backend_image",
     "maybe_generate_sprite",
     "_validation_reasons",
     "refit_processed_sprite_to_contract",

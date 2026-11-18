@@ -71,7 +71,6 @@ def offline(monkeypatch, request, tmp_path):
     monkeypatch.setattr(generation, 'generate_sdcpp', backend.generate_sdcpp)
     monkeypatch.setattr(backend, 'ensure_sdcpp_server', lambda: True)
     monkeypatch.setattr(backend, '_effective_sdcpp_lora_prompt_tags', lambda: '')
-    monkeypatch.setattr(backend, 'GENERATE_VARIANTS', 1)
     monkeypatch.setattr(backend, 'SDCPP_SEED', 731)
     monkeypatch.setattr(backend, 'SDCPP_SERVER_TXT2IMG_PATHS', ['/sdapi/v1/txt2img'])
     monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', 'a1111')
@@ -338,14 +337,14 @@ def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, mon
     victim = root.parent.parent / 'victim.png'
     victim.write_bytes(png((10, 90, 220)))
     previous = victim.read_bytes()
-    original = generation._generate_backend_variants
+    original = generation._generate_backend_image
     logical_ids = []
 
     def capture(data, **kwargs):
         logical_ids.append(kwargs['asset_id'])
         return original(data, **kwargs)
 
-    monkeypatch.setattr(generation, '_generate_backend_variants', capture)
+    monkeypatch.setattr(generation, '_generate_backend_image', capture)
     data = _data([])
     result = invoke('item', '../../../victim', data)
     assert result[3] == 'generated'
@@ -675,3 +674,32 @@ def test_retry_diagnostic_does_not_leak_from_an_older_failed_attempt(offline, mo
     assert 'validation' not in attempts[1]
     assert attempts[2]['validation']['ok']
     assert 'runtime:fieldSpriteError' not in data['debug']
+
+
+@pytest.mark.parametrize('valid_on', [1, 2, 3])
+@pytest.mark.parametrize('kind', ['item', 'entity', 'vfx_cutout', 'vfx_strip'])
+def test_default_allows_one_image_and_one_technical_retry(offline, monkeypatch, valid_on, kind):
+    """A third usable PNG must never be requested under the shipped default."""
+    import runpy
+    from infini_local.desktop import settings_schema
+
+    monkeypatch.delenv('INFINI_SPRITE_RETRIES', raising=False)
+    retries = runpy.run_path(config.__file__)['SPRITE_RETRIES']
+    assert retries == int(settings_schema.DEFAULTS['INFINI_SPRITE_RETRIES']) == 1
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', retries)
+    original_urlopen = backend.urlopen_no_redirect
+    calls = []
+
+    def invalid_then_valid(req, **kwargs):
+        calls.append(json.loads(req.data))
+        if len(calls) < valid_on:
+            return Response(b'not a PNG: technical content fault')
+        return original_urlopen(req, **kwargs)
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', invalid_then_valid)
+    path, _, _, status = invoke(kind, 'default_image_budget')
+    assert len(calls) == min(valid_on, 2)
+    if valid_on <= 2:
+        assert status == 'generated' and Path(path).is_file()
+    else:
+        assert status == 'failed' and not path
