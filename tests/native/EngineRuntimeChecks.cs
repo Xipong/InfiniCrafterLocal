@@ -199,6 +199,7 @@ internal static partial class EngineRuntimeChecks
             ("atlas layout native atlas text glyph callbacks center labels", () => AtlasLayoutNativeText(false)),
             ("atlas layout native forge text glyph callbacks center labels", () => AtlasLayoutNativeText(true)),
             ("atlas header visible glyph centering and safe inset", AtlasHeaderUsesVisibleGlyphsAndInsetControls),
+            ("atlas modal input blocks native inventory and item use", AtlasModalMouseBlocksNativeInventoryAndUse),
             ("atlas packaged skin alpha matches PNG loading", AtlasPackagedSkinPixelsMatchPngAlpha),
             ("atlas unload graphics stay on main thread across reload", AtlasUnloadRetiresOwnedGraphicsOnMainThread),
             ("atlas unload disposal failures preserve later cleanup", AtlasUnloadIsolatesDisposalFailures),
