@@ -66,16 +66,19 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             { Close(); return; }
         }
         UpdateLineageInput();
-        if (Main.LocalPlayer is not { active: true } player
-            || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
-                Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
         // PostUpdateInput also runs during reload, before tML populates the new
         // binding in Triggers. ModKeybind.JustPressed indexes that dictionary.
         // A missing binding means no input, not a startup exception or a toggle.
-        if (_toggleJournalTrigger.Length == 0
-            || !PlayerInput.Triggers.JustPressed.KeyStatus.TryGetValue(_toggleJournalTrigger, out bool pressed)
-            || !pressed) return;
-        if (IsOpen) Close(); else Open();
+        if (Main.LocalPlayer is { active: true } player
+            && CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
+                Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)
+            && _toggleJournalTrigger.Length != 0
+            && PlayerInput.Triggers.JustPressed.KeyStatus.TryGetValue(_toggleJournalTrigger, out bool pressed)
+            && pressed)
+        {
+            if (IsOpen) Close(); else Open();
+        }
+        UpdateModalMouseOwnership();
     }
     private static string _query = "", _selected = "";
     private static bool _searchFocus, _favoritesOnly, _awaitingMouseRelease;
@@ -117,7 +120,12 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         Main.blockInput = focused;
         PlayerInput.WritingText = focused;
     }
-    private static void Close() { IsOpen = false; SetSearchFocus(false); ClearLineageHover(); _lineageDragging = _lineageBrowserPending = false; _awaitingMouseRelease = false; }
+    private static void Close()
+    {
+        IsOpen = false; SetSearchFocus(false); ClearLineageHover();
+        _lineageDragging = _lineageBrowserPending = false; _awaitingMouseRelease = false;
+        ReleaseModalMouseOwnership();
+    }
     private static bool IsCovered()
         => !Main.hasFocus || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
             || Main.inFancyUI || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding
@@ -147,7 +155,11 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
         int index = layers.FindIndex(layer => layer.Name == "Vanilla: Inventory");
-        if (index >= 0) layers.Insert(Math.Min(index + 2, layers.Count), new LegacyGameInterfaceLayer("InfiniCrafterLocal: Recipe Journal", Draw, InterfaceScaleType.UI));
+        if (index < 0) return;
+        // Vanilla draws and processes inventory clicks before the atlas. Do not
+        // reactivate it on yield; layer activation belongs to tML and other mods.
+        if (OwnsMouse) layers[index].Active = false;
+        layers.Insert(Math.Min(index + 2, layers.Count), new LegacyGameInterfaceLayer("InfiniCrafterLocal: Recipe Journal", Draw, InterfaceScaleType.UI));
     }
     private static void Select(string id, bool remember = true)
     {
@@ -199,8 +211,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         var controls = RecipeJournalView.BookControls(layout);
         Vector2 cursor = new Vector2(Main.mouseX, Main.mouseY);
         bool click = Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface;
-        if (book.Contains(cursor.ToPoint()))
-        { Main.LocalPlayer.mouseInterface = true; PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Recipe Journal"); }
+
         if (click && !book.Contains(cursor.ToPoint())) SetSearchFocus(false);
         var sb = Main.spriteBatch;
         Fill(sb, new Rectangle(0, 0, width, height), new Color(0, 0, 0, 75));

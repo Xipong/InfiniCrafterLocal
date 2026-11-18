@@ -180,7 +180,7 @@ public sealed partial class RecipeJournalUISystem
         var cursor = new Vector2(Main.mouseX, Main.mouseY);
         bool click = Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface;
         bool inside = book.Contains(cursor.ToPoint());
-        if (inside) { Main.LocalPlayer.mouseInterface = true; PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Lineage"); }
+
         Fill(sb, new Rectangle(0, 0, Main.screenWidth, Main.screenHeight), new Color(0, 0, 0, 75));
         DrawBook(sb, book);
         var header = RecipeJournalView.HeaderRow(book);
