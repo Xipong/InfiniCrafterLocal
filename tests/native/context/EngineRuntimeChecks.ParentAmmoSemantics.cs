@@ -163,18 +163,18 @@ internal static partial class EngineRuntimeChecks
             Equal(CanonicalParentFactJson(reference), CanonicalParentFactJson(parent.GetProperty("fingerprint").GetProperty("ammoRaw").GetProperty("projectileSemanticsReference")), "player-free fingerprint preserves the same unevaluated source");
             if (type == 4953)
             {
-                var source = sites.Single(site => site.GetProperty("sourceSpawnIlOffset").GetInt32() == 10958);
+                var source = sites.Single(site => site.GetProperty("sourceSpawnIlOffset").GetInt32() == 10946);
                 var damage = SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("damage")).ToArray();
                 Equal(true, damage.Any(node => node.TryGetProperty("operator", out var op) && op.GetString() == "mul"
                     && node.GetProperty("right").TryGetProperty("value", out var value) && value.GetDouble() == 2), "conditional current-damage multiplication is retained");
-                Equal(true, damage.Any(node => node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10866), "damage state predicate is retained");
+                Equal(true, damage.Any(node => node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10854), "damage state predicate is retained");
                 Equal(true, damage.Any(node => node.TryGetProperty("reason", out var reason) && reason.GetString() == "branch_entry_value_unknown"), "hook-modified branch-entry damage is never item base damage");
                 Equal(true, SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("velocity")).Any(node =>
-                    node.TryGetProperty("sourceStoreIlOffset", out var offset) && offset.GetInt32() == 10932), "source velocity reassignment survives");
+                    node.TryGetProperty("sourceStoreIlOffset", out var offset) && offset.GetInt32() == 10920), "source velocity reassignment survives");
                 Equal(true, SpawnSourceNodes(source.GetProperty("spawnInputs").GetProperty("ai1")).Any(node =>
                     node.TryGetProperty("operator", out var op) && op.GetString() == "rem"), "source AI remainder expression survives");
                 Equal(true, SpawnSourceNodes(source.GetProperty("whenSourceCondition")).Any(node =>
-                    node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10886), "projectile-state spawn condition survives");
+                    node.TryGetProperty("sourceBranchIlOffset", out var offset) && offset.GetInt32() == 10874), "projectile-state spawn condition survives");
             }
             if (type != ItemID.TerraBlade)
             {
