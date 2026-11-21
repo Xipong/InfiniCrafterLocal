@@ -85,7 +85,7 @@
           "value": 36
         }
       ],
-      "sourceBranchOffset": 337,
+      "sourceBranchOffset": 325,
       "regenerationComponent": {
         "field": "Player.lifeRegen",
         "add": 1,
@@ -104,7 +104,7 @@
           "value": 54
         }
       ],
-      "sourceBranchOffset": 461,
+      "sourceBranchOffset": 449,
       "regenerationComponent": {
         "field": "Player.lifeRegen",
         "add": 1,
@@ -123,7 +123,7 @@
           "value": 72
         }
       ],
-      "sourceBranchOffset": 495
+      "sourceBranchOffset": 483
     },
     {
       "tileId": 42,
@@ -140,7 +140,7 @@
           "value": 358
         }
       ],
-      "sourceBranchOffset": 526,
+      "sourceBranchOffset": 514,
       "regenerationComponent": {
         "field": "Player.lifeRegen",
         "add": 2,
@@ -164,7 +164,7 @@
           "value": 286
         }
       ],
-      "sourceBranchOffset": 575
+      "sourceBranchOffset": 563
     }
   ],
   "placementMapping": {

@@ -42,8 +42,23 @@ def test_decode_consumes_full_declared_large_method_and_hashes_all_il(monkeypatc
     instructions, _, _, _, method_hash, _, _ = decoder.decode(path, "Player", "Test")
     assert len(instructions) == len(code)
     assert instructions[-1].op == "ret"
-    assert instructions[-1].offset == 12 + len(code) - 1
+    assert instructions[-1].offset == len(code) - 1
     assert method_hash == hashlib.sha256(code).hexdigest()
+
+
+@pytest.mark.parametrize("tiny", [True, False])
+def test_decoder_uses_one_il_origin_for_instructions_and_all_targets(monkeypatch, tmp_path, tiny):
+    import dnfile
+    # br.s IL_0002; ldc.i4.0; switch (IL_000c); ret
+    code = bytes.fromhex("2b 00 16 45 01 00 00 00 00 00 00 00 2a")
+    path = synthetic_pe(monkeypatch, tmp_path, code)
+    if tiny:
+        pe = dnfile.dnPE(str(path))
+        raw = bytes([(len(code) << 2) | 2]) + code
+        pe.get_data = lambda rva, size: raw[rva - 4096:rva - 4096 + size]
+    rows = decoder.decode(path, "Player", "Test")[0]
+    assert [(r.offset, r.op, r.arg) for r in rows] == [
+        (0, "br", 2), (2, "const", 0), (3, "switch", [12]), (12, "ret", None)]
 
 
 def test_decoder_preserves_exact_constructor_metadata(monkeypatch, tmp_path):

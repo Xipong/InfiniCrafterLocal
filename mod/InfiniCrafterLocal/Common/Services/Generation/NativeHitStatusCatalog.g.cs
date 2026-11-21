@@ -27,171 +27,171 @@ internal static class NativeHitStatusCatalog
             [ProjectileID.Sunfury] = new Fact[] {
             },
             [ProjectileID.DarkLance] = new Fact[] {
-                new(BuffID.ShadowFlame, "ShadowFlame", 240, 299, 1, 2176),
+                new(BuffID.ShadowFlame, "ShadowFlame", 240, 299, 1, 2164),
             },
             [ProjectileID.PoisonedKnife] = new Fact[] {
             },
             [ProjectileID.TheDaoofPow] = new Fact[] {
             },
             [ProjectileID.CursedFlameFriendly] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3703),
+                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3691),
             },
             [ProjectileID.PoisonDart] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 600, 600, 1, 3960),
+                new(BuffID.Poisoned, "Poisoned", 600, 600, 1, 3948),
             },
             [ProjectileID.CursedArrow] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3703),
+                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3691),
             },
             [ProjectileID.CursedBullet] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3703),
+                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3691),
             },
             [ProjectileID.IceBoomerang] = new Fact[] {
             },
             [ProjectileID.FrostBoltSword] = new Fact[] {
-                new(BuffID.Frostburn2, "Frostburn2", 240, 240, 1, 342),
+                new(BuffID.Frostburn2, "Frostburn2", 240, 240, 1, 330),
             },
             [ProjectileID.Flare] = new Fact[] {
             },
             [ProjectileID.FrostburnArrow] = new Fact[] {
             },
             [ProjectileID.PoisonDartTrap] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 900, 900, 1, 3988),
+                new(BuffID.Poisoned, "Poisoned", 900, 900, 1, 3976),
             },
             [ProjectileID.FlamesTrap] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 1200, 1200, 1, 3641),
+                new(BuffID.OnFire3, "OnFire3", 1200, 1200, 1, 3629),
             },
             [ProjectileID.PygmySpear] = new Fact[] {
-                new(BuffID.Venom, "Venom", 300, 600, 60, 315),
+                new(BuffID.Venom, "Venom", 300, 600, 60, 303),
             },
             [ProjectileID.BallofFrost] = new Fact[] {
-                new(BuffID.Frostburn2, "Frostburn2", 480, 480, 1, 3038),
+                new(BuffID.Frostburn2, "Frostburn2", 480, 480, 1, 3026),
             },
             [ProjectileID.PoisonFang] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 1800, 1800, 1, 4044),
+                new(BuffID.Poisoned, "Poisoned", 1800, 1800, 1, 4032),
             },
             [ProjectileID.PoisonDartBlowgun] = new Fact[] {
             },
             [ProjectileID.IchorArrow] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3758),
+                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3746),
             },
             [ProjectileID.IchorBullet] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3758),
+                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3746),
             },
             [ProjectileID.GoldenShowerFriendly] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3758),
+                new(BuffID.Ichor, "Ichor", 600, 600, 1, 3746),
             },
             [ProjectileID.VenomArrow] = new Fact[] {
-                new(BuffID.Venom, "Venom", 600, 600, 1, 3800),
+                new(BuffID.Venom, "Venom", 600, 600, 1, 3788),
             },
             [ProjectileID.VenomBullet] = new Fact[] {
-                new(BuffID.Venom, "Venom", 600, 600, 1, 3800),
+                new(BuffID.Venom, "Venom", 600, 600, 1, 3788),
             },
             [ProjectileID.NanoBullet] = new Fact[] {
             },
             [ProjectileID.GoldenBullet] = new Fact[] {
-                new(BuffID.Midas, "Midas", 120, 120, 1, 2808),
+                new(BuffID.Midas, "Midas", 120, 120, 1, 2796),
             },
             [ProjectileID.InfernoFriendlyBolt] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 480, 900, 60, 2595),
+                new(BuffID.OnFire3, "OnFire3", 480, 900, 60, 2583),
             },
             [ProjectileID.InfernoFriendlyBlast] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 480, 900, 60, 2595),
+                new(BuffID.OnFire3, "OnFire3", 480, 900, 60, 2583),
             },
             [ProjectileID.FrostBlastFriendly] = new Fact[] {
-                new(BuffID.Frostburn2, "Frostburn2", 300, 300, 1, 372),
+                new(BuffID.Frostburn2, "Frostburn2", 300, 300, 1, 360),
             },
             [ProjectileID.BlueFlare] = new Fact[] {
             },
             [ProjectileID.VenomFang] = new Fact[] {
-                new(BuffID.Venom, "Venom", 1800, 1800, 1, 4072),
+                new(BuffID.Venom, "Venom", 1800, 1800, 1, 4060),
             },
             [ProjectileID.FrostBoltStaff] = new Fact[] {
-                new(BuffID.Frostburn2, "Frostburn2", 420, 420, 1, 402),
+                new(BuffID.Frostburn2, "Frostburn2", 420, 420, 1, 390),
             },
             [ProjectileID.HornetStinger] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 240, 360, 60, 2454),
+                new(BuffID.Poisoned, "Poisoned", 240, 360, 60, 2442),
             },
             [ProjectileID.ImpFireball] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2491),
+                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2479),
             },
             [ProjectileID.BabySpider] = new Fact[] {
-                new(BuffID.Venom, "Venom", 120, 240, 60, 2367),
+                new(BuffID.Venom, "Venom", 120, 240, 60, 2355),
             },
             [ProjectileID.VenomSpider] = new Fact[] {
-                new(BuffID.Venom, "Venom", 120, 240, 60, 2417),
+                new(BuffID.Venom, "Venom", 120, 240, 60, 2405),
             },
             [ProjectileID.JumperSpider] = new Fact[] {
-                new(BuffID.Venom, "Venom", 120, 240, 60, 2417),
+                new(BuffID.Venom, "Venom", 120, 240, 60, 2405),
             },
             [ProjectileID.DangerousSpider] = new Fact[] {
-                new(BuffID.Venom, "Venom", 120, 240, 60, 2417),
+                new(BuffID.Venom, "Venom", 120, 240, 60, 2405),
             },
             [ProjectileID.MolotovCocktail] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2541),
+                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2529),
             },
             [ProjectileID.MolotovFire] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2541),
+                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2529),
             },
             [ProjectileID.MolotovFire2] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2541),
+                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2529),
             },
             [ProjectileID.MolotovFire3] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2541),
+                new(BuffID.OnFire, "OnFire", 180, 360, 60, 2529),
             },
             [ProjectileID.SoulDrain] = new Fact[] {
-                new(BuffID.SoulDrain, "SoulDrain", 30, 30, 1, 2203),
+                new(BuffID.SoulDrain, "SoulDrain", 30, 30, 1, 2191),
             },
             [ProjectileID.CursedDart] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 180, 360, 60, 2292),
+                new(BuffID.CursedInferno, "CursedInferno", 180, 360, 60, 2280),
             },
             [ProjectileID.IchorDart] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 420, 840, 60, 2330),
+                new(BuffID.Ichor, "Ichor", 420, 840, 60, 2318),
             },
             [ProjectileID.CursedDartFlame] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 180, 360, 60, 2292),
+                new(BuffID.CursedInferno, "CursedInferno", 180, 360, 60, 2280),
             },
             [ProjectileID.ClingerStaff] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3703),
+                new(BuffID.CursedInferno, "CursedInferno", 420, 420, 1, 3691),
             },
             [ProjectileID.ShadowFlameArrow] = new Fact[] {
-                new(BuffID.ShadowFlame, "ShadowFlame", 120, 299, 1, 2047),
+                new(BuffID.ShadowFlame, "ShadowFlame", 120, 299, 1, 2035),
             },
             [ProjectileID.ShadowFlame] = new Fact[] {
-                new(BuffID.ShadowFlame, "ShadowFlame", 240, 479, 1, 2134),
+                new(BuffID.ShadowFlame, "ShadowFlame", 240, 479, 1, 2122),
             },
             [ProjectileID.ShadowFlameKnife] = new Fact[] {
-                new(BuffID.ShadowFlame, "ShadowFlame", 60, 179, 1, 2089),
+                new(BuffID.ShadowFlame, "ShadowFlame", 60, 179, 1, 2077),
             },
             [ProjectileID.ToxicBubble] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 600, 1740, 60, 2242),
+                new(BuffID.Poisoned, "Poisoned", 600, 1740, 60, 2230),
             },
             [ProjectileID.IchorSplash] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 180, 420, 60, 1463),
+                new(BuffID.Ichor, "Ichor", 180, 420, 60, 1451),
             },
             [ProjectileID.Cascade] = new Fact[] {
             },
             [ProjectileID.Amarok] = new Fact[] {
             },
             [ProjectileID.HelFire] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 180, 479, 1, 1950),
+                new(BuffID.OnFire3, "OnFire3", 180, 479, 1, 1938),
             },
             [ProjectileID.SporeTrap] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 300, 600, 60, 961),
+                new(BuffID.Poisoned, "Poisoned", 300, 600, 60, 949),
             },
             [ProjectileID.SporeTrap2] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 300, 600, 60, 961),
+                new(BuffID.Poisoned, "Poisoned", 300, 600, 60, 949),
             },
             [ProjectileID.NurseSyringeHurt] = new Fact[] {
-                new(BuffID.Poisoned, "Poisoned", 180, 300, 60, 1426),
+                new(BuffID.Poisoned, "Poisoned", 180, 300, 60, 1414),
             },
             [ProjectileID.ClothiersCurse] = new Fact[] {
-                new(BuffID.ShadowFlame, "ShadowFlame", 300, 600, 60, 1389),
+                new(BuffID.ShadowFlame, "ShadowFlame", 300, 600, 60, 1377),
             },
             [ProjectileID.SolarWhipSword] = new Fact[] {
-                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1159),
+                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1147),
             },
             [ProjectileID.SolarWhipSwordExplosion] = new Fact[] {
-                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1189),
+                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1177),
             },
             [ProjectileID.DD2FlameBurstTowerT1Shot] = new Fact[] {
             },
@@ -200,56 +200,56 @@ internal static class NativeHitStatusCatalog
             [ProjectileID.DD2FlameBurstTowerT3Shot] = new Fact[] {
             },
             [ProjectileID.DD2PhoenixBowShot] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 480, 480, 1, 1306),
+                new(BuffID.OnFire3, "OnFire3", 480, 480, 1, 1294),
             },
             [ProjectileID.ApprenticeStaffT3Shot] = new Fact[] {
-                new(BuffID.BetsysCurse, "BetsysCurse", 600, 600, 1, 1276),
+                new(BuffID.BetsysCurse, "BetsysCurse", 600, 600, 1, 1264),
             },
             [ProjectileID.BlandWhip] = new Fact[] {
-                new(BuffID.BlandWhipEnemyDebuff, "BlandWhipEnemyDebuff", 240, 240, 1, 512),
+                new(BuffID.BlandWhipEnemyDebuff, "BlandWhipEnemyDebuff", 240, 240, 1, 500),
             },
             [ProjectileID.SwordWhip] = new Fact[] {
-                new(BuffID.SwordWhipNPCDebuff, "SwordWhipNPCDebuff", 240, 240, 1, 556),
+                new(BuffID.SwordWhipNPCDebuff, "SwordWhipNPCDebuff", 240, 240, 1, 544),
             },
             [ProjectileID.MaceWhip] = new Fact[] {
-                new(BuffID.MaceWhipNPCDebuff, "MaceWhipNPCDebuff", 240, 240, 1, 733),
+                new(BuffID.MaceWhipNPCDebuff, "MaceWhipNPCDebuff", 240, 240, 1, 721),
             },
             [ProjectileID.ScytheWhip] = new Fact[] {
-                new(BuffID.ScytheWhipEnemyDebuff, "ScytheWhipEnemyDebuff", 240, 240, 1, 578),
+                new(BuffID.ScytheWhipEnemyDebuff, "ScytheWhipEnemyDebuff", 240, 240, 1, 566),
             },
             [ProjectileID.CoolWhip] = new Fact[] {
-                new(BuffID.CoolWhipNPCDebuff, "CoolWhipNPCDebuff", 240, 240, 1, 651),
-                new(BuffID.Frostburn2, "Frostburn2", 240, 240, 1, 668),
+                new(BuffID.CoolWhipNPCDebuff, "CoolWhipNPCDebuff", 240, 240, 1, 639),
+                new(BuffID.Frostburn2, "Frostburn2", 240, 240, 1, 656),
             },
             [ProjectileID.FireWhip] = new Fact[] {
-                new(BuffID.OnFire3, "OnFire3", 240, 240, 1, 632),
+                new(BuffID.OnFire3, "OnFire3", 240, 240, 1, 620),
             },
             [ProjectileID.ThornWhip] = new Fact[] {
-                new(BuffID.ThornWhipNPCDebuff, "ThornWhipNPCDebuff", 240, 240, 1, 687),
+                new(BuffID.ThornWhipNPCDebuff, "ThornWhipNPCDebuff", 240, 240, 1, 675),
             },
             [ProjectileID.RainbowWhip] = new Fact[] {
-                new(BuffID.RainbowWhipNPCDebuff, "RainbowWhipNPCDebuff", 240, 240, 1, 752),
+                new(BuffID.RainbowWhipNPCDebuff, "RainbowWhipNPCDebuff", 240, 240, 1, 740),
             },
             [ProjectileID.FlamingMace] = new Fact[] {
             },
             [ProjectileID.BoneWhip] = new Fact[] {
-                new(BuffID.BoneWhipNPCDebuff, "BoneWhipNPCDebuff", 240, 240, 1, 534),
+                new(BuffID.BoneWhipNPCDebuff, "BoneWhipNPCDebuff", 240, 240, 1, 522),
             },
             [ProjectileID.DaybreakExplosion] = new Fact[] {
-                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1246),
+                new(BuffID.Daybreak, "Daybreak", 300, 300, 1, 1234),
             },
             [ProjectileID.BladeOfGrass] = new Fact[] {
             },
             [ProjectileID.Volcano] = new Fact[] {
-                new(BuffID.OnFire, "OnFire", 180, 180, 1, 1216),
+                new(BuffID.OnFire, "OnFire", 180, 180, 1, 1204),
             },
             [ProjectileID.VenomDartTrap] = new Fact[] {
-                new(BuffID.Venom, "Venom", 300, 300, 1, 4016),
+                new(BuffID.Venom, "Venom", 300, 300, 1, 4004),
             },
             [ProjectileID.SpelunkerFlare] = new Fact[] {
             },
             [ProjectileID.CursedFlare] = new Fact[] {
-                new(BuffID.CursedInferno, "CursedInferno", 600, 600, 1, 3935),
+                new(BuffID.CursedInferno, "CursedInferno", 600, 600, 1, 3923),
             },
             [ProjectileID.RainbowFlare] = new Fact[] {
             },
@@ -269,12 +269,12 @@ internal static class NativeHitStatusCatalog
             [ItemID.BeeKeeper] = new Fact[] {
             },
             [ItemID.Bladetongue] = new Fact[] {
-                new(BuffID.Ichor, "Ichor", 300, 540, 60, 468),
+                new(BuffID.Ichor, "Ichor", 300, 540, 60, 456),
             },
             [ItemID.DD2SquireDemonSword] = new Fact[] {
             },
             [ItemID.Flymeal] = new Fact[] {
-                new(BuffID.Stinky, "Stinky", 300, 300, 1, 496),
+                new(BuffID.Stinky, "Stinky", 300, 300, 1, 484),
             },
             [ItemID.WaffleIron] = new Fact[] {
             },
@@ -287,225 +287,225 @@ internal static class NativeHitStatusCatalog
         ["0409d6e8aeb6c41acc5454f7f818368639b041341d9eafff9dd1336cd42e2cf7:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2"] = new()
         {
             [ProjectileID.FireArrow] = new Choice[] {
-                new(2881, 0, 3, new Alternative[] {
+                new(2869, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 2897),
+                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 2885),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.Flamarang] = new Choice[] {
-                new(3064, 0, 2, new Alternative[] {
+                new(3052, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 360, 360, 1, 3083),
+                        new(BuffID.OnFire, "OnFire", 360, 360, 1, 3071),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.ThornChakram] = new Choice[] {
-                new(3154, 0, 2, new Alternative[] {
+                new(3142, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 3173),
+                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 3161),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.Flamelash] = new Choice[] {
-                new(3247, 0, 2, new Alternative[] {
+                new(3235, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 240, 479, 1, 3281),
+                        new(BuffID.OnFire, "OnFire", 240, 479, 1, 3269),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.Sunfury] = new Choice[] {
-                new(3365, 0, 2, new Alternative[] {
+                new(3353, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3384),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3372),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.PoisonedKnife] = new Choice[] {
-                new(3410, 0, 2, new Alternative[] {
+                new(3398, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 600, 600, 1, 3429),
+                        new(BuffID.Poisoned, "Poisoned", 600, 600, 1, 3417),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.TheDaoofPow] = new Choice[] {
-                new(3519, 0, 5, new Alternative[] {
+                new(3507, 0, 5, new Alternative[] {
                     new(new int[] { 0 }, 1, 5, new Fact[] {
                     }),
                     new(new int[] { 1, 2, 3, 4 }, 4, 5, new Fact[] {
-                        new(BuffID.Confused, "Confused", 120, 240, 60, 3548),
+                        new(BuffID.Confused, "Confused", 120, 240, 60, 3536),
                     }),
                 }),
             },
             [ProjectileID.IceBoomerang] = new Choice[] {
-                new(3109, 0, 2, new Alternative[] {
+                new(3097, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.Frostburn, "Frostburn", 180, 180, 1, 3128),
+                        new(BuffID.Frostburn, "Frostburn", 180, 180, 1, 3116),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.Flare] = new Choice[] {
-                new(3876, 0, 3, new Alternative[] {
+                new(3864, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3892),
+                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3880),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3908),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3896),
                     }),
                 }),
             },
             [ProjectileID.FrostburnArrow] = new Choice[] {
-                new(2921, 0, 3, new Alternative[] {
+                new(2909, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.Frostburn, "Frostburn", 180, 180, 1, 2940),
+                        new(BuffID.Frostburn, "Frostburn", 180, 180, 1, 2928),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.PoisonDartBlowgun] = new Choice[] {
-                new(3458, 0, 3, new Alternative[] {
+                new(3446, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 3600, 3600, 1, 3474),
+                        new(BuffID.Poisoned, "Poisoned", 3600, 3600, 1, 3462),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 1800, 1800, 1, 3493),
+                        new(BuffID.Poisoned, "Poisoned", 1800, 1800, 1, 3481),
                     }),
                 }),
             },
             [ProjectileID.NanoBullet] = new Choice[] {
-                new(2832, 0, 3, new Alternative[] {
+                new(2820, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.Confused, "Confused", 180, 180, 1, 2848),
+                        new(BuffID.Confused, "Confused", 180, 180, 1, 2836),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.Confused, "Confused", 60, 60, 1, 2861),
+                        new(BuffID.Confused, "Confused", 60, 60, 1, 2849),
                     }),
                 }),
             },
             [ProjectileID.BlueFlare] = new Choice[] {
-                new(3876, 0, 3, new Alternative[] {
+                new(3864, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3892),
+                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3880),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3908),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3896),
                     }),
                 }),
             },
             [ProjectileID.Cascade] = new Choice[] {
-                new(1877, 0, 3, new Alternative[] {
+                new(1865, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 60, 239, 1, 1905),
+                        new(BuffID.OnFire, "OnFire", 60, 239, 1, 1893),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.Amarok] = new Choice[] {
-                new(1974, 0, 3, new Alternative[] {
+                new(1962, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.Frostburn2, "Frostburn2", 120, 319, 1, 2005),
+                        new(BuffID.Frostburn2, "Frostburn2", 120, 319, 1, 1993),
                     }),
                 }),
             },
             [ProjectileID.DD2FlameBurstTowerT1Shot] = new Choice[] {
-                new(776, 0, 3, new Alternative[] {
+                new(764, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 180, 300, 60, 802),
+                        new(BuffID.OnFire, "OnFire", 180, 300, 60, 790),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.DD2FlameBurstTowerT2Shot] = new Choice[] {
-                new(826, 0, 2, new Alternative[] {
+                new(814, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.OnFire3, "OnFire3", 180, 480, 60, 856),
+                        new(BuffID.OnFire3, "OnFire3", 180, 480, 60, 844),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.DD2FlameBurstTowerT3Shot] = new Choice[] {
-                new(880, 0, 3, new Alternative[] {
+                new(868, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire3, "OnFire3", 360, 480, 60, 910),
+                        new(BuffID.OnFire3, "OnFire3", 360, 480, 60, 898),
                     }),
                 }),
             },
             [ProjectileID.ThornWhip] = new Choice[] {
-                new(698, 0, 5, new Alternative[] {
+                new(686, 0, 5, new Alternative[] {
                     new(new int[] { 0 }, 1, 5, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 180, 180, 1, 714),
+                        new(BuffID.Poisoned, "Poisoned", 180, 180, 1, 702),
                     }),
                     new(new int[] { 1, 2, 3, 4 }, 4, 5, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.FlamingMace] = new Choice[] {
-                new(3310, 0, 6, new Alternative[] {
+                new(3298, 0, 6, new Alternative[] {
                     new(new int[] { 0 }, 1, 6, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 120, 180, 60, 3339),
+                        new(BuffID.OnFire, "OnFire", 120, 180, 60, 3327),
                     }),
                     new(new int[] { 1, 2, 3, 4, 5 }, 5, 6, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.BladeOfGrass] = new Choice[] {
-                new(3202, 0, 4, new Alternative[] {
+                new(3190, 0, 4, new Alternative[] {
                     new(new int[] { 0 }, 1, 4, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 3221),
+                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 3209),
                     }),
                     new(new int[] { 1, 2, 3 }, 3, 4, new Fact[] {
                     }),
                 }),
             },
             [ProjectileID.SpelunkerFlare] = new Choice[] {
-                new(3876, 0, 3, new Alternative[] {
+                new(3864, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3892),
+                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3880),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3908),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3896),
                     }),
                 }),
             },
             [ProjectileID.RainbowFlare] = new Choice[] {
-                new(3876, 0, 3, new Alternative[] {
+                new(3864, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3892),
+                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3880),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3908),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3896),
                     }),
                 }),
             },
             [ProjectileID.ShimmerFlare] = new Choice[] {
-                new(3876, 0, 3, new Alternative[] {
+                new(3864, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3892),
+                        new(BuffID.OnFire, "OnFire", 600, 600, 1, 3880),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3908),
+                        new(BuffID.OnFire, "OnFire", 300, 300, 1, 3896),
                     }),
                 }),
             },
@@ -513,63 +513,63 @@ internal static class NativeHitStatusCatalog
         ["ba0c7a049ff31dba62ae1a8d21c2a3d653dc37a2c0c84b2dfbedf437bde44fc6:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2"] = new()
         {
             [ItemID.FieryGreatsword] = new Choice[] {
-                new(588, 0, 2, new Alternative[] {
+                new(576, 0, 2, new Alternative[] {
                     new(new int[] { 0 }, 1, 2, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 613),
+                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 601),
                     }),
                     new(new int[] { 1 }, 1, 2, new Fact[] {
                     }),
                 }),
             },
             [ItemID.MoltenPickaxe] = new Choice[] {
-                new(706, 0, 10, new Alternative[] {
+                new(694, 0, 10, new Alternative[] {
                     new(new int[] { 0 }, 1, 10, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 728),
+                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 716),
                     }),
                     new(new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, 9, 10, new Fact[] {
                     }),
                 }),
             },
             [ItemID.BladeofGrass] = new Choice[] {
-                new(740, 0, 4, new Alternative[] {
+                new(728, 0, 4, new Alternative[] {
                     new(new int[] { 0 }, 1, 4, new Fact[] {
-                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 762),
+                        new(BuffID.Poisoned, "Poisoned", 420, 420, 1, 750),
                     }),
                     new(new int[] { 1, 2, 3 }, 3, 4, new Fact[] {
                     }),
                 }),
             },
             [ItemID.MoltenHamaxe] = new Choice[] {
-                new(774, 0, 5, new Alternative[] {
+                new(762, 0, 5, new Alternative[] {
                     new(new int[] { 0 }, 1, 5, new Fact[] {
-                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 796),
+                        new(BuffID.OnFire, "OnFire", 180, 180, 1, 784),
                     }),
                     new(new int[] { 1, 2, 3, 4 }, 4, 5, new Fact[] {
                     }),
                 }),
             },
             [ItemID.BeeKeeper] = new Choice[] {
-                new(809, 0, 10, new Alternative[] {
+                new(797, 0, 10, new Alternative[] {
                     new(new int[] { 0 }, 1, 10, new Fact[] {
                     }),
                     new(new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, 9, 10, new Fact[] {
-                        new(BuffID.Confused, "Confused", 120, 120, 1, 828),
+                        new(BuffID.Confused, "Confused", 120, 120, 1, 816),
                     }),
                 }),
             },
             [ItemID.DD2SquireDemonSword] = new Choice[] {
-                new(625, 0, 4, new Alternative[] {
+                new(613, 0, 4, new Alternative[] {
                     new(new int[] { 0 }, 1, 4, new Fact[] {
-                        new(BuffID.OnFire3, "OnFire3", 300, 300, 1, 653),
+                        new(BuffID.OnFire3, "OnFire3", 300, 300, 1, 641),
                     }),
                     new(new int[] { 1, 2, 3 }, 3, 4, new Fact[] {
                     }),
                 }),
             },
             [ItemID.WaffleIron] = new Choice[] {
-                new(665, 0, 3, new Alternative[] {
+                new(653, 0, 3, new Alternative[] {
                     new(new int[] { 0 }, 1, 3, new Fact[] {
-                        new(BuffID.OnFire3, "OnFire3", 300, 300, 1, 693),
+                        new(BuffID.OnFire3, "OnFire3", 300, 300, 1, 681),
                     }),
                     new(new int[] { 1, 2 }, 2, 3, new Fact[] {
                     }),
