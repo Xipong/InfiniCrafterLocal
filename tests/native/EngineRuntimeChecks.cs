@@ -319,6 +319,7 @@ internal static partial class EngineRuntimeChecks
             ("parent weapon crit ModItem actual native capture", ParentModItemCritSourceReachesCapture),
             ("parent weapon crit GlobalItem actual native capture", ParentGlobalItemCritSourceReachesCapture),
             ("parent weapon crit ModPlayer actual native capture", ParentModPlayerCritSourceReachesCapture),
+            ("parent hit status coordinates resolve in native IL", ParentHitStatusCoordinatesResolveInNativeIL),
             ("parent mod hit hook source statements without execution", ParentHitHooksPreserveSourceRequestsWithoutExecution),
             ("parent mod buff source data links without execution", ParentModBuffSourceLinksWithoutExecution),
             ("native parent tooltip hooks", ParentTooltipRunsNativeHooks),

@@ -81,25 +81,28 @@ public sealed partial class GeneratorClient
             var unresolved = new JsonArray();
             var targets = new HashSet<int>(code.SelectMany(i => i.Op == "switch" && i.Arg is int[] many ? many
                 : (i.Op.StartsWith("b") || i.Op.StartsWith("leave")) && i.Arg is int target ? new[] { target } : Array.Empty<int>()));
+            var escapedLocals = code.Where(i => i.Op is "ldloca" or "ldloca.s").Select(i => (int)i.Arg!).ToHashSet();
+            var mutableArguments = code.Where(i => i.Op is "ldarga" or "ldarga.s" or "starg" or "starg.s")
+                .Select(i => (int)i.Arg!).ToHashSet();
             var parameters = method.GetParameters();
             for (int n = 0; n < code.Count; n++)
             {
                 if (code[n].Op is not ("call" or "callvirt") || code[n].Arg is not MethodInfo call
                     || call.DeclaringType != typeof(NPC) || call.Name != nameof(NPC.AddBuff)) continue;
                 var signature = call.GetParameters();
-                AmmoIl? duration = StatusArgumentSource(code, n - 2, targets);
-                AmmoIl? flags = StatusArgumentSource(code, n - 1, targets);
+                AmmoIl? duration = StatusArgumentSource(code, n - 2, targets, escapedLocals);
+                AmmoIl? flags = StatusArgumentSource(code, n - 1, targets, escapedLocals);
                 // Exact stack-producing slice, including target and quiet. No
                 // edge may enter its interior with different stack values.
                 if (signature.Length != 3 || signature[0].ParameterType != typeof(int)
                     || signature[1].ParameterType != typeof(int) || signature[2].ParameterType != typeof(bool)
                     || n < 4 || code[n - 4].Op != "ldarg" || code[n - 4].Arg is not int arg
-                    || arg < 1 || arg > parameters.Length || parameters[arg - 1].ParameterType != typeof(NPC)
+                    || mutableArguments.Contains(arg) || arg < 1 || arg > parameters.Length || parameters[arg - 1].ParameterType != typeof(NPC)
                     || duration?.Op != "const" || duration.Arg is not int ticks || ticks <= 0
                     || flags?.Op != "const" || flags.Arg is not int quiet || quiet is not (0 or 1)
                     || code.Skip(n - 3).Take(4).Any(i => targets.Contains(i.Offset)))
                 { unresolved.Add(code[n].Offset); continue; }
-                var identity = ReadStatusBuffIdentity(StatusArgumentSource(code, n - 3, targets));
+                var identity = ReadStatusBuffIdentity(StatusArgumentSource(code, n - 3, targets, escapedLocals));
                 if (identity is null) { unresolved.Add(code[n].Offset); continue; }
                 identity["receiver"] = "npc";
                 identity["targetParameter"] = parameters[arg - 1].Name;
@@ -119,19 +122,19 @@ public sealed partial class GeneratorClient
         return result;
     }
 
-    private static AmmoIl? StatusArgumentSource(List<AmmoIl> code, int index, HashSet<int> targets)
+    private static AmmoIl? StatusArgumentSource(List<AmmoIl> code, int index, HashSet<int> targets, HashSet<int> escapedLocals)
     {
         if (index < 0) return null;
         AmmoIl value = code[index];
         if (value.Op != "ldloc") return value;
-        if (targets.Contains(value.Offset)) return null;
+        if (value.Arg is not int local || escapedLocals.Contains(local) || targets.Contains(value.Offset)) return null;
         // A local copy is evidence only with a dominating definition in the
         // same straight-line block and no address escape. Do not choose an arm
         // of a phi/ternary or evaluate a helper to invent the missing value.
         for (int n = index - 1; n >= 0; n--)
         {
             AmmoIl prior = code[n];
-            if (targets.Contains(prior.Offset) || prior.Op.StartsWith("ldloca") || prior.Op.StartsWith("b")
+            if (targets.Contains(prior.Offset) || prior.Op.StartsWith("b")
                 || prior.Op.StartsWith("leave") || prior.Op is "switch" or "ret" or "throw") return null;
             if (prior.Op == "stloc" && Equals(prior.Arg, value.Arg))
                 return n > 0 && code[n - 1].Op is "const" or "call" ? code[n - 1] : null;

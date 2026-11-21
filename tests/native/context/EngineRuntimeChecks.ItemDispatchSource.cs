@@ -136,6 +136,11 @@ internal static partial class EngineRuntimeChecks
         }
         foreach (string name in new[] { "Arbitrary", "Derived", "Reassigned", "AddressExposed", "CalleeMutation", "ConditionalCall", "LoopHelperCall" })
             Equal(0, Read(name)["records"]!.AsArray().Count, "unproved integer binding is refused: " + name);
+        var distinct = Read(nameof(ItemIdentityFixture.RepeatedBody))["records"]!.AsArray();
+        Equal(2, distinct.Count, "two equal excerpts at different helper sites survive");
+        Equal(1, distinct.Select(row => (string?)row!["codeSha256"]).Distinct().Count(), "fixture has identical rendered bodies");
+        Equal(2, distinct.Select(row => (string?)row!["id"]).Distinct().Count(), "source identity includes the site");
+        Equal(2, distinct.Select(row => row!["enclosingConditions"]!.ToJsonString()).Distinct().Count(), "each site keeps its own guard");
         var bounded = Read("Forward", bound: 1);
         Equal(0, bounded["records"]!.AsArray().Count, "complete helper region and binding omitted at character bound");
         Equal(true, bounded["unknowns"]!.ToJsonString().Contains("bound"), "helper character omission remains visible");
@@ -157,6 +162,35 @@ internal static partial class EngineRuntimeChecks
             {
                 if (candidate.type == 177 || candidate.type == 178) { Executions++; moveSpeed += 0.125f; }
                 else { jumpSpeedBoost += 0.5f; }
+            }
+        }
+    }
+
+    private sealed class DispatchShapeFixture : Player
+    {
+        public void SwitchOnItem(Item candidate)
+        {
+            switch (candidate.type)
+            {
+                case 174: jumpSpeedBoost++; break;
+                case 175: jumpSpeedBoost--; break;
+                case 176: moveSpeed--; break;
+                case 177: case 178: moveSpeed += 2; break;
+                case 179: moveSpeed++; break;
+                default: jumpSpeedBoost += 4; break;
+            }
+        }
+        public void Wrapped(Item candidate, bool flag)
+        {
+            if (Flag(candidate.type == 177, flag)) jumpSpeedBoost++;
+        }
+        private bool Flag(bool equal, bool flag) => equal == flag;
+        public void Nested(Item candidate, Item other)
+        {
+            if (candidate.type == 177)
+            {
+                jumpSpeedBoost++; moveSpeed++; jumpSpeedBoost++; moveSpeed++;
+                if (other.type == 177) moveSpeed--;
             }
         }
     }
@@ -201,6 +235,24 @@ internal static partial class EngineRuntimeChecks
         var bounded = Read(177, 1);
         Equal(0, bounded["records"]!.AsArray().Count, "bound refuses whole region without clipping");
         Equal(true, bounded["unknowns"]!.ToJsonString().Contains("entire_region_omitted"), "omitted source is explicit");
+        JsonObject From(string name, int maxCharacters = 24000)
+        {
+            var target = typeof(DispatchShapeFixture).GetMethod(name)!;
+            using var input = (IDisposable)Create(CSharpOwner.GetNestedType("NativeCSharpDocument", CSharpFlags)!, target, module, CancellationToken.None);
+            var root = new JsonObject { ["records"] = new JsonArray(), ["unknowns"] = new JsonArray() };
+            CSharpOwner.GetMethod("BuildNativeItemDispatchRegions", CSharpFlags)!.Invoke(null,
+                new object[] { input, 177, root, CancellationToken.None, 16, maxCharacters, 64000 });
+            return root;
+        }
+        var section = From(nameof(DispatchShapeFixture.SwitchOnItem))["records"]!.AsArray().Single()!;
+        string sectionCode = (string)section["code"]!;
+        Equal(true, sectionCode.Contains("case 177:") && sectionCode.Contains("case 178:") && !sectionCode.Contains("jumpSpeedBoost"),
+            "item switch retains matching shared section and excludes unrelated cases");
+        Equal(0, From(nameof(DispatchShapeFixture.Wrapped))["records"]!.AsArray().Count, "opaque predicate argument is not a witness");
+        var nested = From(nameof(DispatchShapeFixture.Nested), 75);
+        var child = nested["records"]!.AsArray().Single()!;
+        Equal(true, ((string)child["entryCondition"]!).Contains("other.type") && child["enclosingConditions"]!.ToJsonString().Contains("candidate.type"),
+            "short child retains its outer guard after oversized parent was refused");
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
         bool cancelled = false;
         try { Read(177, token: cancellation.Token); }
@@ -228,6 +280,12 @@ internal sealed class ItemIdentityFixture : Player
     public void LoopHelperCall(Item candidate) { LoopyHelper(candidate.type); }
     [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
     public void Forward(Item candidate, bool allowed) { int identity = candidate.type; if (allowed) IdentityHelper(identity); }
+    public void RepeatedBody(Item candidate) => RepeatedHelper(candidate.type, active, wet);
+    private void RepeatedHelper(int identity, bool first, bool second)
+    {
+        if (first) { Executions++; if (identity == 177) moveSpeed++; }
+        if (second) { Executions--; if (identity == 177) moveSpeed++; }
+    }
     public void Direct(Item candidate) { IdentityHelper(candidate.type); }
     public void Duplicate(Item candidate) { IdentityHelper(candidate.type); IdentityHelper(candidate.type); }
     public void Second(Item candidate) { SecondHelper(9, candidate.type); }
