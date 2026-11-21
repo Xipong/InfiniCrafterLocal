@@ -13,7 +13,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2875,
+              "guardIlOffset": 2863,
               "effects": [
                 {
                   "stat": "critChance",
@@ -22,7 +22,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2891
+                  "ilOffset": 2879
                 }
               ]
             }
@@ -34,7 +34,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2875,
+              "guardIlOffset": 2863,
               "effects": [
                 {
                   "stat": "critChance",
@@ -43,7 +43,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2891
+                  "ilOffset": 2879
                 }
               ]
             }
@@ -55,7 +55,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2875,
+              "guardIlOffset": 2863,
               "effects": [
                 {
                   "stat": "critChance",
@@ -64,7 +64,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2891
+                  "ilOffset": 2879
                 }
               ]
             }
@@ -76,7 +76,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2638,
+              "guardIlOffset": 2626,
               "effects": [
                 {
                   "stat": "damage",
@@ -85,7 +85,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 2662
+                  "ilOffset": 2650
                 }
               ]
             }
@@ -97,7 +97,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2638,
+              "guardIlOffset": 2626,
               "effects": [
                 {
                   "stat": "damage",
@@ -106,7 +106,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 2662
+                  "ilOffset": 2650
                 }
               ]
             }
@@ -118,7 +118,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2638,
+              "guardIlOffset": 2626,
               "effects": [
                 {
                   "stat": "damage",
@@ -127,7 +127,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 2662
+                  "ilOffset": 2650
                 }
               ]
             }
@@ -139,7 +139,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2526,
+              "guardIlOffset": 2514,
               "effects": [
                 {
                   "stat": "damage",
@@ -148,7 +148,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2550
+                  "ilOffset": 2538
                 }
               ]
             }
@@ -160,7 +160,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2526,
+              "guardIlOffset": 2514,
               "effects": [
                 {
                   "stat": "damage",
@@ -169,7 +169,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2550
+                  "ilOffset": 2538
                 }
               ]
             }
@@ -181,7 +181,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2526,
+              "guardIlOffset": 2514,
               "effects": [
                 {
                   "stat": "damage",
@@ -190,7 +190,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2550
+                  "ilOffset": 2538
                 }
               ]
             }
@@ -202,7 +202,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2691,
+              "guardIlOffset": 2679,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -210,7 +210,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 2703
+                  "ilOffset": 2691
                 },
                 {
                   "stat": "critChance",
@@ -219,7 +219,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2722
+                  "ilOffset": 2710
                 }
               ]
             }
@@ -231,7 +231,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2747,
+              "guardIlOffset": 2735,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -239,7 +239,7 @@
                   "operation": "add",
                   "value": 20,
                   "units": "points",
-                  "ilOffset": 2759
+                  "ilOffset": 2747
                 },
                 {
                   "stat": "damage",
@@ -248,7 +248,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 2786
+                  "ilOffset": 2774
                 }
               ]
             }
@@ -260,7 +260,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2815,
+              "guardIlOffset": 2803,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -268,7 +268,7 @@
                   "operation": "add",
                   "value": 20,
                   "units": "points",
-                  "ilOffset": 2827
+                  "ilOffset": 2815
                 },
                 {
                   "stat": "critChance",
@@ -277,7 +277,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2846
+                  "ilOffset": 2834
                 }
               ]
             }
@@ -289,7 +289,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3023,
+              "guardIlOffset": 3011,
               "effects": [
                 {
                   "stat": "critChance",
@@ -298,7 +298,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 3039
+                  "ilOffset": 3027
                 }
               ]
             }
@@ -310,7 +310,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3051,
+              "guardIlOffset": 3039,
               "effects": [
                 {
                   "stat": "damage",
@@ -319,7 +319,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 3075
+                  "ilOffset": 3063
                 }
               ]
             }
@@ -331,7 +331,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3091,
+              "guardIlOffset": 3079,
               "effects": [
                 {
                   "stat": "attackSpeed",
@@ -340,7 +340,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 3107
+                  "ilOffset": 3095
                 }
               ]
             }
@@ -352,7 +352,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1809,
+              "guardIlOffset": 1797,
               "effects": [
                 {
                   "stat": "damage",
@@ -361,7 +361,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 1833
+                  "ilOffset": 1821
                 }
               ],
               "conditionalEffects": [
@@ -371,7 +371,7 @@
                     "equals": true,
                     "observed": false
                   },
-                  "guardIlOffset": 1843,
+                  "guardIlOffset": 1831,
                   "effects": [
                     {
                       "stat": "maximumMinions",
@@ -379,7 +379,7 @@
                       "operation": "add",
                       "value": 1,
                       "units": "slots",
-                      "ilOffset": 1854
+                      "ilOffset": 1842
                     }
                   ]
                 }
@@ -393,7 +393,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2363,
+              "guardIlOffset": 2351,
               "effects": [
                 {
                   "stat": "critChance",
@@ -402,7 +402,7 @@
                   "operation": "add",
                   "value": 3.0,
                   "units": "percentage_points",
-                  "ilOffset": 2379
+                  "ilOffset": 2367
                 }
               ]
             }
@@ -414,7 +414,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2363,
+              "guardIlOffset": 2351,
               "effects": [
                 {
                   "stat": "critChance",
@@ -423,7 +423,7 @@
                   "operation": "add",
                   "value": 3.0,
                   "units": "percentage_points",
-                  "ilOffset": 2379
+                  "ilOffset": 2367
                 }
               ]
             }
@@ -435,7 +435,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2363,
+              "guardIlOffset": 2351,
               "effects": [
                 {
                   "stat": "critChance",
@@ -444,7 +444,7 @@
                   "operation": "add",
                   "value": 3.0,
                   "units": "percentage_points",
-                  "ilOffset": 2379
+                  "ilOffset": 2367
                 }
               ]
             }
@@ -456,14 +456,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1789,
+              "guardIlOffset": 1777,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.accDivingHelm",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 1793
+                  "ilOffset": 1781
                 }
               ]
             }
@@ -475,7 +475,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3119,
+              "guardIlOffset": 3107,
               "effects": [
                 {
                   "stat": "critChance",
@@ -484,7 +484,7 @@
                   "operation": "add",
                   "value": 9.0,
                   "units": "percentage_points",
-                  "ilOffset": 3135
+                  "ilOffset": 3123
                 },
                 {
                   "stat": "damage",
@@ -493,7 +493,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 3158
+                  "ilOffset": 3146
                 },
                 {
                   "stat": "maximumMana",
@@ -501,7 +501,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 3173
+                  "ilOffset": 3161
                 }
               ]
             }
@@ -513,7 +513,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3189,
+              "guardIlOffset": 3177,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -521,7 +521,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 3204
+                  "ilOffset": 3192
                 },
                 {
                   "stat": "damage",
@@ -530,7 +530,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 3231
+                  "ilOffset": 3219
                 }
               ]
             }
@@ -542,7 +542,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3247,
+              "guardIlOffset": 3235,
               "effects": [
                 {
                   "stat": "damage",
@@ -551,7 +551,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 3271
+                  "ilOffset": 3259
                 },
                 {
                   "stat": "critChance",
@@ -560,7 +560,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 3290
+                  "ilOffset": 3278
                 }
               ]
             }
@@ -572,7 +572,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3302,
+              "guardIlOffset": 3290,
               "effects": [
                 {
                   "stat": "critChance",
@@ -581,7 +581,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 3318
+                  "ilOffset": 3306
                 }
               ]
             }
@@ -593,7 +593,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3330,
+              "guardIlOffset": 3318,
               "effects": [
                 {
                   "stat": "damage",
@@ -602,7 +602,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 3354
+                  "ilOffset": 3342
                 },
                 {
                   "stat": "movementSpeed",
@@ -610,7 +610,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 3372
+                  "ilOffset": 3360
                 }
               ]
             }
@@ -622,7 +622,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3388,
+              "guardIlOffset": 3376,
               "effects": [
                 {
                   "stat": "damage",
@@ -631,7 +631,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 3412
+                  "ilOffset": 3400
                 },
                 {
                   "stat": "maximumMana",
@@ -639,7 +639,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 3427
+                  "ilOffset": 3415
                 }
               ]
             }
@@ -651,7 +651,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3443,
+              "guardIlOffset": 3431,
               "effects": [
                 {
                   "stat": "critChance",
@@ -660,7 +660,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 3459
+                  "ilOffset": 3447
                 },
                 {
                   "stat": "damage",
@@ -669,7 +669,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 3482
+                  "ilOffset": 3470
                 }
               ]
             }
@@ -681,7 +681,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3498,
+              "guardIlOffset": 3486,
               "effects": [
                 {
                   "stat": "damage",
@@ -690,7 +690,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 3522
+                  "ilOffset": 3510
                 },
                 {
                   "stat": "critChance",
@@ -699,7 +699,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 3541
+                  "ilOffset": 3529
                 }
               ]
             }
@@ -711,7 +711,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3553,
+              "guardIlOffset": 3541,
               "effects": [
                 {
                   "stat": "damage",
@@ -720,7 +720,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 3577
+                  "ilOffset": 3565
                 }
               ]
             }
@@ -732,7 +732,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3593,
+              "guardIlOffset": 3581,
               "effects": [
                 {
                   "stat": "critChance",
@@ -741,7 +741,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 3609
+                  "ilOffset": 3597
                 }
               ]
             }
@@ -753,7 +753,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3661,
+              "guardIlOffset": 3649,
               "effects": [
                 {
                   "stat": "damage",
@@ -762,7 +762,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 3685
+                  "ilOffset": 3673
                 },
                 {
                   "stat": "critChance",
@@ -771,7 +771,7 @@
                   "operation": "add",
                   "value": 12.0,
                   "units": "percentage_points",
-                  "ilOffset": 3704
+                  "ilOffset": 3692
                 },
                 {
                   "stat": "maximumMana",
@@ -779,7 +779,7 @@
                   "operation": "add",
                   "value": 80,
                   "units": "points",
-                  "ilOffset": 3715
+                  "ilOffset": 3703
                 }
               ]
             }
@@ -791,7 +791,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3731,
+              "guardIlOffset": 3719,
               "effects": [
                 {
                   "stat": "critChance",
@@ -800,7 +800,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 3747
+                  "ilOffset": 3735
                 },
                 {
                   "stat": "damage",
@@ -809,7 +809,7 @@
                   "operation": "add",
                   "value": 0.14,
                   "units": "additive_fraction",
-                  "ilOffset": 3770
+                  "ilOffset": 3758
                 }
               ]
             }
@@ -821,7 +821,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3786,
+              "guardIlOffset": 3774,
               "effects": [
                 {
                   "stat": "damage",
@@ -830,7 +830,7 @@
                   "operation": "add",
                   "value": 0.14,
                   "units": "additive_fraction",
-                  "ilOffset": 3810
+                  "ilOffset": 3798
                 },
                 {
                   "stat": "critChance",
@@ -839,7 +839,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 3829
+                  "ilOffset": 3817
                 }
               ]
             }
@@ -851,7 +851,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3841,
+              "guardIlOffset": 3829,
               "effects": [
                 {
                   "stat": "damage",
@@ -860,7 +860,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 3865
+                  "ilOffset": 3853
                 }
               ]
             }
@@ -872,7 +872,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3881,
+              "guardIlOffset": 3869,
               "effects": [
                 {
                   "stat": "critChance",
@@ -881,7 +881,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 3897
+                  "ilOffset": 3885
                 },
                 {
                   "stat": "movementSpeed",
@@ -889,7 +889,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 3911
+                  "ilOffset": 3899
                 }
               ]
             }
@@ -901,7 +901,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7313,
+              "guardIlOffset": 7301,
               "effects": [
                 {
                   "stat": "pickUseTimeMultiplier",
@@ -909,7 +909,7 @@
                   "operation": "add",
                   "value": -0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7328
+                  "ilOffset": 7316
                 }
               ]
             }
@@ -921,7 +921,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7344,
+              "guardIlOffset": 7332,
               "effects": [
                 {
                   "stat": "pickUseTimeMultiplier",
@@ -929,7 +929,7 @@
                   "operation": "add",
                   "value": -0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7359
+                  "ilOffset": 7347
                 }
               ]
             }
@@ -941,7 +941,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5102,
+              "guardIlOffset": 5090,
               "effects": [
                 {
                   "stat": "critChance",
@@ -950,7 +950,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 5118
+                  "ilOffset": 5106
                 }
               ]
             }
@@ -962,7 +962,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5143,
+              "guardIlOffset": 5131,
               "effects": [
                 {
                   "stat": "damage",
@@ -971,7 +971,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 5167
+                  "ilOffset": 5155
                 },
                 {
                   "stat": "movementSpeed",
@@ -979,7 +979,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 5185
+                  "ilOffset": 5173
                 }
               ]
             }
@@ -991,7 +991,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4967,
+              "guardIlOffset": 4955,
               "effects": [
                 {
                   "stat": "damage",
@@ -1000,7 +1000,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 4991
+                  "ilOffset": 4979
                 },
                 {
                   "stat": "critChance",
@@ -1009,7 +1009,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 5010
+                  "ilOffset": 4998
                 }
               ]
             }
@@ -1021,7 +1021,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4801,
+              "guardIlOffset": 4789,
               "effects": [
                 {
                   "stat": "damage",
@@ -1030,7 +1030,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 4825
+                  "ilOffset": 4813
                 },
                 {
                   "stat": "critChance",
@@ -1039,7 +1039,7 @@
                   "operation": "add",
                   "value": 12.0,
                   "units": "percentage_points",
-                  "ilOffset": 4844
+                  "ilOffset": 4832
                 },
                 {
                   "stat": "maximumMana",
@@ -1047,7 +1047,7 @@
                   "operation": "add",
                   "value": 100,
                   "units": "points",
-                  "ilOffset": 4855
+                  "ilOffset": 4843
                 }
               ]
             }
@@ -1059,7 +1059,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4884,
+              "guardIlOffset": 4872,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1068,7 +1068,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 4900
+                  "ilOffset": 4888
                 },
                 {
                   "stat": "damage",
@@ -1077,7 +1077,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 4923
+                  "ilOffset": 4911
                 },
                 {
                   "stat": "attackSpeed",
@@ -1086,7 +1086,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 4942
+                  "ilOffset": 4930
                 }
               ]
             }
@@ -1098,7 +1098,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6848,
+              "guardIlOffset": 6836,
               "effects": [
                 {
                   "stat": "damage",
@@ -1107,7 +1107,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 6872
+                  "ilOffset": 6860
                 },
                 {
                   "stat": "damage",
@@ -1116,7 +1116,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 6899
+                  "ilOffset": 6887
                 }
               ]
             }
@@ -1128,7 +1128,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6915,
+              "guardIlOffset": 6903,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1137,7 +1137,7 @@
                   "operation": "add",
                   "value": 11.0,
                   "units": "percentage_points",
-                  "ilOffset": 6931
+                  "ilOffset": 6919
                 },
                 {
                   "stat": "critChance",
@@ -1146,7 +1146,7 @@
                   "operation": "add",
                   "value": 11.0,
                   "units": "percentage_points",
-                  "ilOffset": 6946
+                  "ilOffset": 6934
                 }
               ]
             }
@@ -1158,7 +1158,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6958,
+              "guardIlOffset": 6946,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -1166,7 +1166,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 6973
+                  "ilOffset": 6961
                 },
                 {
                   "stat": "attackSpeed",
@@ -1175,7 +1175,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 6992
+                  "ilOffset": 6980
                 }
               ]
             }
@@ -1187,7 +1187,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2983,
+              "guardIlOffset": 2971,
               "effects": [
                 {
                   "stat": "damage",
@@ -1196,7 +1196,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 3007
+                  "ilOffset": 2995
                 }
               ]
             }
@@ -1208,7 +1208,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2983,
+              "guardIlOffset": 2971,
               "effects": [
                 {
                   "stat": "damage",
@@ -1217,7 +1217,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 3007
+                  "ilOffset": 2995
                 }
               ]
             }
@@ -1229,7 +1229,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2983,
+              "guardIlOffset": 2971,
               "effects": [
                 {
                   "stat": "damage",
@@ -1238,7 +1238,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 3007
+                  "ilOffset": 2995
                 }
               ]
             }
@@ -1250,7 +1250,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2929,
+              "guardIlOffset": 2917,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1259,7 +1259,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2945
+                  "ilOffset": 2933
                 }
               ]
             }
@@ -1271,7 +1271,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2929,
+              "guardIlOffset": 2917,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1280,7 +1280,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2945
+                  "ilOffset": 2933
                 }
               ]
             }
@@ -1292,7 +1292,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2929,
+              "guardIlOffset": 2917,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1301,7 +1301,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2945
+                  "ilOffset": 2933
                 }
               ]
             }
@@ -1313,7 +1313,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2526,
+              "guardIlOffset": 2514,
               "effects": [
                 {
                   "stat": "damage",
@@ -1322,7 +1322,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2550
+                  "ilOffset": 2538
                 }
               ]
             }
@@ -1334,7 +1334,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2691,
+              "guardIlOffset": 2679,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -1342,7 +1342,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 2703
+                  "ilOffset": 2691
                 },
                 {
                   "stat": "critChance",
@@ -1351,7 +1351,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2722
+                  "ilOffset": 2710
                 }
               ]
             }
@@ -1363,7 +1363,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2747,
+              "guardIlOffset": 2735,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -1371,7 +1371,7 @@
                   "operation": "add",
                   "value": 20,
                   "units": "points",
-                  "ilOffset": 2759
+                  "ilOffset": 2747
                 },
                 {
                   "stat": "damage",
@@ -1380,7 +1380,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 2786
+                  "ilOffset": 2774
                 }
               ]
             }
@@ -1392,7 +1392,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2815,
+              "guardIlOffset": 2803,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -1400,7 +1400,7 @@
                   "operation": "add",
                   "value": 20,
                   "units": "points",
-                  "ilOffset": 2827
+                  "ilOffset": 2815
                 },
                 {
                   "stat": "critChance",
@@ -1409,7 +1409,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2846
+                  "ilOffset": 2834
                 }
               ]
             }
@@ -1421,7 +1421,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5340,
+              "guardIlOffset": 5328,
               "effects": [
                 {
                   "stat": "damage",
@@ -1430,7 +1430,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 5364
+                  "ilOffset": 5352
                 },
                 {
                   "stat": "critChance",
@@ -1439,7 +1439,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 5383
+                  "ilOffset": 5371
                 }
               ]
             }
@@ -1451,7 +1451,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5395,
+              "guardIlOffset": 5383,
               "effects": [
                 {
                   "stat": "damage",
@@ -1460,14 +1460,14 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 5419
+                  "ilOffset": 5407
                 },
                 {
                   "nativeMember": "Terraria.Player.chloroAmmoCost80",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 5426
+                  "ilOffset": 5414
                 }
               ]
             }
@@ -1479,7 +1479,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5442,
+              "guardIlOffset": 5430,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -1487,7 +1487,7 @@
                   "operation": "add",
                   "value": 80,
                   "units": "points",
-                  "ilOffset": 5454
+                  "ilOffset": 5442
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -1495,7 +1495,7 @@
                   "operation": "add",
                   "value": -0.17,
                   "units": "additive_fraction",
-                  "ilOffset": 5472
+                  "ilOffset": 5460
                 },
                 {
                   "stat": "damage",
@@ -1504,7 +1504,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 5499
+                  "ilOffset": 5487
                 }
               ]
             }
@@ -1516,7 +1516,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5515,
+              "guardIlOffset": 5503,
               "effects": [
                 {
                   "stat": "damage",
@@ -1525,7 +1525,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 5539
+                  "ilOffset": 5527
                 },
                 {
                   "stat": "critChance",
@@ -1534,7 +1534,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 5558
+                  "ilOffset": 5546
                 }
               ]
             }
@@ -1546,7 +1546,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5570,
+              "guardIlOffset": 5558,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1555,7 +1555,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 5586
+                  "ilOffset": 5574
                 },
                 {
                   "stat": "movementSpeed",
@@ -1563,7 +1563,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 5600
+                  "ilOffset": 5588
                 }
               ]
             }
@@ -1575,7 +1575,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7388,
+              "guardIlOffset": 7376,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -1583,7 +1583,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7399
+                  "ilOffset": 7387
                 }
               ]
             }
@@ -1595,7 +1595,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7415,
+              "guardIlOffset": 7403,
               "effects": [
                 {
                   "stat": "whipRangeMultiplier",
@@ -1603,12 +1603,12 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7430
+                  "ilOffset": 7418
                 }
               ]
             },
             {
-              "guardIlOffset": 7388,
+              "guardIlOffset": 7376,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -1616,12 +1616,12 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7399
+                  "ilOffset": 7387
                 }
               ]
             },
             {
-              "guardIlOffset": 7459,
+              "guardIlOffset": 7447,
               "effects": [
                 {
                   "stat": "damage",
@@ -1630,7 +1630,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7483
+                  "ilOffset": 7471
                 }
               ]
             }
@@ -1642,7 +1642,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7388,
+              "guardIlOffset": 7376,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -1650,12 +1650,12 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7399
+                  "ilOffset": 7387
                 }
               ]
             },
             {
-              "guardIlOffset": 7459,
+              "guardIlOffset": 7447,
               "effects": [
                 {
                   "stat": "damage",
@@ -1664,7 +1664,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7483
+                  "ilOffset": 7471
                 }
               ]
             }
@@ -1676,7 +1676,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7388,
+              "guardIlOffset": 7376,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -1684,12 +1684,12 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7399
+                  "ilOffset": 7387
                 }
               ]
             },
             {
-              "guardIlOffset": 7459,
+              "guardIlOffset": 7447,
               "effects": [
                 {
                   "stat": "damage",
@@ -1698,7 +1698,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 7483
+                  "ilOffset": 7471
                 }
               ]
             }
@@ -1710,7 +1710,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3927,
+              "guardIlOffset": 3915,
               "effects": [
                 {
                   "stat": "damage",
@@ -1719,7 +1719,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 3951
+                  "ilOffset": 3939
                 },
                 {
                   "stat": "attackSpeed",
@@ -1728,7 +1728,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 3970
+                  "ilOffset": 3958
                 }
               ]
             }
@@ -1740,7 +1740,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3982,
+              "guardIlOffset": 3970,
               "effects": [
                 {
                   "stat": "damage",
@@ -1749,7 +1749,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 4006
+                  "ilOffset": 3994
                 },
                 {
                   "stat": "critChance",
@@ -1758,7 +1758,7 @@
                   "operation": "add",
                   "value": 9.0,
                   "units": "percentage_points",
-                  "ilOffset": 4025
+                  "ilOffset": 4013
                 }
               ]
             }
@@ -1770,7 +1770,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4037,
+              "guardIlOffset": 4025,
               "effects": [
                 {
                   "stat": "damage",
@@ -1779,7 +1779,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 4061
+                  "ilOffset": 4049
                 },
                 {
                   "stat": "critChance",
@@ -1788,7 +1788,7 @@
                   "operation": "add",
                   "value": 9.0,
                   "units": "percentage_points",
-                  "ilOffset": 4080
+                  "ilOffset": 4068
                 },
                 {
                   "stat": "maximumMana",
@@ -1796,7 +1796,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 4091
+                  "ilOffset": 4079
                 }
               ]
             }
@@ -1808,7 +1808,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4107,
+              "guardIlOffset": 4095,
               "effects": [
                 {
                   "stat": "damage",
@@ -1817,7 +1817,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 4131
+                  "ilOffset": 4119
                 },
                 {
                   "stat": "critChance",
@@ -1826,7 +1826,7 @@
                   "operation": "add",
                   "value": 2.0,
                   "units": "percentage_points",
-                  "ilOffset": 4150
+                  "ilOffset": 4138
                 }
               ]
             }
@@ -1838,7 +1838,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4162,
+              "guardIlOffset": 4150,
               "effects": [
                 {
                   "stat": "damage",
@@ -1847,7 +1847,7 @@
                   "operation": "add",
                   "value": 0.02,
                   "units": "additive_fraction",
-                  "ilOffset": 4186
+                  "ilOffset": 4174
                 },
                 {
                   "stat": "critChance",
@@ -1856,7 +1856,7 @@
                   "operation": "add",
                   "value": 1.0,
                   "units": "percentage_points",
-                  "ilOffset": 4205
+                  "ilOffset": 4193
                 }
               ]
             }
@@ -1868,7 +1868,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4217,
+              "guardIlOffset": 4205,
               "effects": [
                 {
                   "stat": "damage",
@@ -1877,7 +1877,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 4241
+                  "ilOffset": 4229
                 },
                 {
                   "stat": "attackSpeed",
@@ -1886,7 +1886,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 4260
+                  "ilOffset": 4248
                 },
                 {
                   "stat": "movementSpeed",
@@ -1894,7 +1894,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 4274
+                  "ilOffset": 4262
                 }
               ]
             }
@@ -1906,7 +1906,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4290,
+              "guardIlOffset": 4278,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1915,7 +1915,7 @@
                   "operation": "add",
                   "value": 15.0,
                   "units": "percentage_points",
-                  "ilOffset": 4306
+                  "ilOffset": 4294
                 },
                 {
                   "stat": "movementSpeed",
@@ -1923,7 +1923,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 4320
+                  "ilOffset": 4308
                 }
               ]
             }
@@ -1935,7 +1935,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4336,
+              "guardIlOffset": 4324,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1944,7 +1944,7 @@
                   "operation": "add",
                   "value": 18.0,
                   "units": "percentage_points",
-                  "ilOffset": 4352
+                  "ilOffset": 4340
                 },
                 {
                   "stat": "maximumMana",
@@ -1952,7 +1952,7 @@
                   "operation": "add",
                   "value": 80,
                   "units": "points",
-                  "ilOffset": 4363
+                  "ilOffset": 4351
                 }
               ]
             }
@@ -1964,7 +1964,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4379,
+              "guardIlOffset": 4367,
               "effects": [
                 {
                   "stat": "critChance",
@@ -1973,7 +1973,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 4395
+                  "ilOffset": 4383
                 }
               ]
             }
@@ -1985,7 +1985,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4407,
+              "guardIlOffset": 4395,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -1993,7 +1993,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 4422
+                  "ilOffset": 4410
                 },
                 {
                   "stat": "damage",
@@ -2002,7 +2002,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 4449
+                  "ilOffset": 4437
                 }
               ]
             }
@@ -2014,7 +2014,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4465,
+              "guardIlOffset": 4453,
               "effects": [
                 {
                   "stat": "damage",
@@ -2023,7 +2023,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 4489
+                  "ilOffset": 4477
                 },
                 {
                   "stat": "critChance",
@@ -2032,7 +2032,7 @@
                   "operation": "add",
                   "value": 9.0,
                   "units": "percentage_points",
-                  "ilOffset": 4508
+                  "ilOffset": 4496
                 },
                 {
                   "stat": "attackSpeed",
@@ -2041,7 +2041,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 4523
+                  "ilOffset": 4511
                 }
               ]
             }
@@ -2053,7 +2053,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4535,
+              "guardIlOffset": 4523,
               "effects": [
                 {
                   "stat": "damage",
@@ -2062,7 +2062,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 4559
+                  "ilOffset": 4547
                 },
                 {
                   "stat": "critChance",
@@ -2071,7 +2071,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 4578
+                  "ilOffset": 4566
                 }
               ]
             }
@@ -2083,7 +2083,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4590,
+              "guardIlOffset": 4578,
               "effects": [
                 {
                   "stat": "damage",
@@ -2092,7 +2092,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 4614
+                  "ilOffset": 4602
                 },
                 {
                   "stat": "critChance",
@@ -2101,7 +2101,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 4633
+                  "ilOffset": 4621
                 },
                 {
                   "stat": "maximumMana",
@@ -2109,7 +2109,7 @@
                   "operation": "add",
                   "value": 100,
                   "units": "points",
-                  "ilOffset": 4644
+                  "ilOffset": 4632
                 }
               ]
             }
@@ -2121,7 +2121,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4660,
+              "guardIlOffset": 4648,
               "effects": [
                 {
                   "stat": "damage",
@@ -2130,7 +2130,7 @@
                   "operation": "add",
                   "value": 0.04,
                   "units": "additive_fraction",
-                  "ilOffset": 4684
+                  "ilOffset": 4672
                 },
                 {
                   "stat": "critChance",
@@ -2139,7 +2139,7 @@
                   "operation": "add",
                   "value": 3.0,
                   "units": "percentage_points",
-                  "ilOffset": 4703
+                  "ilOffset": 4691
                 }
               ]
             }
@@ -2151,7 +2151,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4715,
+              "guardIlOffset": 4703,
               "effects": [
                 {
                   "stat": "damage",
@@ -2160,7 +2160,7 @@
                   "operation": "add",
                   "value": 0.03,
                   "units": "additive_fraction",
-                  "ilOffset": 4739
+                  "ilOffset": 4727
                 },
                 {
                   "stat": "critChance",
@@ -2169,7 +2169,7 @@
                   "operation": "add",
                   "value": 3.0,
                   "units": "percentage_points",
-                  "ilOffset": 4758
+                  "ilOffset": 4746
                 },
                 {
                   "stat": "movementSpeed",
@@ -2177,7 +2177,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 4772
+                  "ilOffset": 4760
                 }
               ]
             }
@@ -2189,7 +2189,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6075,
+              "guardIlOffset": 6063,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2197,7 +2197,7 @@
                   "operation": "add",
                   "value": 20,
                   "units": "points",
-                  "ilOffset": 6087
+                  "ilOffset": 6075
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2205,7 +2205,7 @@
                   "operation": "add",
                   "value": -0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 6105
+                  "ilOffset": 6093
                 }
               ]
             }
@@ -2217,7 +2217,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6121,
+              "guardIlOffset": 6109,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2225,7 +2225,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 6133
+                  "ilOffset": 6121
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2233,7 +2233,7 @@
                   "operation": "add",
                   "value": -0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 6151
+                  "ilOffset": 6139
                 }
               ]
             }
@@ -2245,7 +2245,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6167,
+              "guardIlOffset": 6155,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2253,7 +2253,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 6179
+                  "ilOffset": 6167
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2261,7 +2261,7 @@
                   "operation": "add",
                   "value": -0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 6197
+                  "ilOffset": 6185
                 }
               ]
             }
@@ -2273,7 +2273,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6213,
+              "guardIlOffset": 6201,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2281,7 +2281,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 6225
+                  "ilOffset": 6213
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2289,7 +2289,7 @@
                   "operation": "add",
                   "value": -0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 6243
+                  "ilOffset": 6231
                 }
               ]
             }
@@ -2301,7 +2301,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6272,
+              "guardIlOffset": 6260,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2309,7 +2309,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 6284
+                  "ilOffset": 6272
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2317,7 +2317,7 @@
                   "operation": "add",
                   "value": -0.13,
                   "units": "additive_fraction",
-                  "ilOffset": 6302
+                  "ilOffset": 6290
                 }
               ]
             }
@@ -2329,7 +2329,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6318,
+              "guardIlOffset": 6306,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2337,7 +2337,7 @@
                   "operation": "add",
                   "value": 80,
                   "units": "points",
-                  "ilOffset": 6330
+                  "ilOffset": 6318
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2345,7 +2345,7 @@
                   "operation": "add",
                   "value": -0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 6348
+                  "ilOffset": 6336
                 }
               ]
             }
@@ -2357,7 +2357,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6390,
+              "guardIlOffset": 6378,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2365,12 +2365,12 @@
                   "operation": "add",
                   "value": 250,
                   "units": "native_units",
-                  "ilOffset": 6405
+                  "ilOffset": 6393
                 }
               ]
             },
             {
-              "guardIlOffset": 6421,
+              "guardIlOffset": 6409,
               "effects": [
                 {
                   "stat": "damage",
@@ -2379,7 +2379,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6445
+                  "ilOffset": 6433
                 }
               ]
             }
@@ -2391,7 +2391,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6390,
+              "guardIlOffset": 6378,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2399,12 +2399,12 @@
                   "operation": "add",
                   "value": 250,
                   "units": "native_units",
-                  "ilOffset": 6405
+                  "ilOffset": 6393
                 }
               ]
             },
             {
-              "guardIlOffset": 6461,
+              "guardIlOffset": 6449,
               "effects": [
                 {
                   "stat": "damage",
@@ -2413,7 +2413,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 6485
+                  "ilOffset": 6473
                 },
                 {
                   "stat": "critChance",
@@ -2422,7 +2422,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 6504
+                  "ilOffset": 6492
                 }
               ]
             }
@@ -2434,7 +2434,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6390,
+              "guardIlOffset": 6378,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2442,12 +2442,12 @@
                   "operation": "add",
                   "value": 250,
                   "units": "native_units",
-                  "ilOffset": 6405
+                  "ilOffset": 6393
                 }
               ]
             },
             {
-              "guardIlOffset": 6516,
+              "guardIlOffset": 6504,
               "effects": [
                 {
                   "stat": "critChance",
@@ -2456,7 +2456,7 @@
                   "operation": "add",
                   "value": 4.0,
                   "units": "percentage_points",
-                  "ilOffset": 6532
+                  "ilOffset": 6520
                 }
               ]
             }
@@ -2468,7 +2468,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5704,
+              "guardIlOffset": 5692,
               "effects": [
                 {
                   "stat": "damage",
@@ -2477,7 +2477,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 5728
+                  "ilOffset": 5716
                 },
                 {
                   "stat": "critChance",
@@ -2486,7 +2486,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 5747
+                  "ilOffset": 5735
                 }
               ]
             }
@@ -2498,7 +2498,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5759,
+              "guardIlOffset": 5747,
               "effects": [
                 {
                   "stat": "damage",
@@ -2507,7 +2507,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 5783
+                  "ilOffset": 5771
                 },
                 {
                   "stat": "movementSpeed",
@@ -2515,7 +2515,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 5801
+                  "ilOffset": 5789
                 }
               ]
             }
@@ -2527,7 +2527,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5967,
+              "guardIlOffset": 5955,
               "effects": [
                 {
                   "stat": "critChance",
@@ -2536,7 +2536,7 @@
                   "operation": "add",
                   "value": 13.0,
                   "units": "percentage_points",
-                  "ilOffset": 5983
+                  "ilOffset": 5971
                 },
                 {
                   "stat": "damage",
@@ -2545,14 +2545,14 @@
                   "operation": "add",
                   "value": 0.13,
                   "units": "additive_fraction",
-                  "ilOffset": 6006
+                  "ilOffset": 5994
                 },
                 {
                   "nativeMember": "Terraria.Player.ammoCost80",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 6013
+                  "ilOffset": 6001
                 }
               ]
             }
@@ -2564,7 +2564,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6029,
+              "guardIlOffset": 6017,
               "effects": [
                 {
                   "stat": "critChance",
@@ -2573,7 +2573,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 6045
+                  "ilOffset": 6033
                 },
                 {
                   "stat": "movementSpeed",
@@ -2581,7 +2581,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 6059
+                  "ilOffset": 6047
                 }
               ]
             }
@@ -2593,7 +2593,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8374,
+              "guardIlOffset": 8362,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -2601,7 +2601,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 8385
+                  "ilOffset": 8373
                 },
                 {
                   "stat": "damage",
@@ -2610,7 +2610,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 8412
+                  "ilOffset": 8400
                 }
               ]
             }
@@ -2622,7 +2622,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8428,
+              "guardIlOffset": 8416,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -2630,7 +2630,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "slots",
-                  "ilOffset": 8439
+                  "ilOffset": 8427
                 },
                 {
                   "stat": "damage",
@@ -2639,7 +2639,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 8466
+                  "ilOffset": 8454
                 }
               ]
             }
@@ -2651,7 +2651,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8482,
+              "guardIlOffset": 8470,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -2659,7 +2659,7 @@
                   "operation": "add",
                   "value": 0.2,
                   "units": "additive_fraction",
-                  "ilOffset": 8497
+                  "ilOffset": 8485
                 },
                 {
                   "stat": "maximumMinions",
@@ -2667,7 +2667,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 8511
+                  "ilOffset": 8499
                 },
                 {
                   "stat": "damage",
@@ -2676,7 +2676,7 @@
                   "operation": "add",
                   "value": 0.11,
                   "units": "additive_fraction",
-                  "ilOffset": 8538
+                  "ilOffset": 8526
                 }
               ]
             }
@@ -2688,7 +2688,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5616,
+              "guardIlOffset": 5604,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -2696,7 +2696,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 5628
+                  "ilOffset": 5616
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -2704,7 +2704,7 @@
                   "operation": "add",
                   "value": -0.13,
                   "units": "additive_fraction",
-                  "ilOffset": 5646
+                  "ilOffset": 5634
                 },
                 {
                   "stat": "damage",
@@ -2713,7 +2713,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 5673
+                  "ilOffset": 5661
                 },
                 {
                   "stat": "critChance",
@@ -2722,7 +2722,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 5692
+                  "ilOffset": 5680
                 }
               ]
             }
@@ -2734,7 +2734,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6557,
+              "guardIlOffset": 6545,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2742,12 +2742,12 @@
                   "operation": "add",
                   "value": 250,
                   "units": "native_units",
-                  "ilOffset": 6572
+                  "ilOffset": 6560
                 }
               ]
             },
             {
-              "guardIlOffset": 6619,
+              "guardIlOffset": 6607,
               "effects": [
                 {
                   "stat": "damage",
@@ -2756,7 +2756,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6643
+                  "ilOffset": 6631
                 }
               ]
             }
@@ -2768,7 +2768,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6659,
+              "guardIlOffset": 6647,
               "effects": [
                 {
                   "stat": "damage",
@@ -2777,7 +2777,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 6683
+                  "ilOffset": 6671
                 },
                 {
                   "stat": "critChance",
@@ -2786,7 +2786,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 6702
+                  "ilOffset": 6690
                 },
                 {
                   "stat": "attackSpeed",
@@ -2795,7 +2795,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6717
+                  "ilOffset": 6705
                 },
                 {
                   "stat": "movementSpeed",
@@ -2803,7 +2803,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6731
+                  "ilOffset": 6719
                 }
               ]
             }
@@ -2815,7 +2815,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6588,
+              "guardIlOffset": 6576,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2823,12 +2823,12 @@
                   "operation": "add",
                   "value": 400,
                   "units": "native_units",
-                  "ilOffset": 6603
+                  "ilOffset": 6591
                 }
               ]
             },
             {
-              "guardIlOffset": 6747,
+              "guardIlOffset": 6735,
               "effects": [
                 {
                   "stat": "damage",
@@ -2837,7 +2837,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 6771
+                  "ilOffset": 6759
                 },
                 {
                   "stat": "critChance",
@@ -2846,7 +2846,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 6790
+                  "ilOffset": 6778
                 }
               ]
             }
@@ -2858,7 +2858,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6557,
+              "guardIlOffset": 6545,
               "effects": [
                 {
                   "stat": "aggro",
@@ -2866,12 +2866,12 @@
                   "operation": "add",
                   "value": 250,
                   "units": "native_units",
-                  "ilOffset": 6572
+                  "ilOffset": 6560
                 }
               ]
             },
             {
-              "guardIlOffset": 6802,
+              "guardIlOffset": 6790,
               "effects": [
                 {
                   "stat": "attackSpeed",
@@ -2880,7 +2880,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6818
+                  "ilOffset": 6806
                 },
                 {
                   "stat": "movementSpeed",
@@ -2888,7 +2888,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 6832
+                  "ilOffset": 6820
                 }
               ]
             }
@@ -2900,7 +2900,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2566,
+              "guardIlOffset": 2554,
               "effects": [
                 {
                   "stat": "damage",
@@ -2909,7 +2909,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 2590
+                  "ilOffset": 2578
                 },
                 {
                   "stat": "critChance",
@@ -2918,7 +2918,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2609
+                  "ilOffset": 2597
                 }
               ]
             }
@@ -2930,7 +2930,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2143,
+              "guardIlOffset": 2131,
               "effects": [
                 {
                   "stat": "damage",
@@ -2939,7 +2939,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2167
+                  "ilOffset": 2155
                 },
                 {
                   "stat": "critChance",
@@ -2948,7 +2948,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 2186
+                  "ilOffset": 2174
                 },
                 {
                   "stat": "attackSpeed",
@@ -2957,7 +2957,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 2201
+                  "ilOffset": 2189
                 },
                 {
                   "stat": "movementSpeed",
@@ -2965,7 +2965,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 2215
+                  "ilOffset": 2203
                 }
               ]
             }
@@ -2977,7 +2977,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2231,
+              "guardIlOffset": 2219,
               "effects": [
                 {
                   "stat": "damage",
@@ -2986,7 +2986,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 2255
+                  "ilOffset": 2243
                 },
                 {
                   "stat": "critChance",
@@ -2995,7 +2995,7 @@
                   "operation": "add",
                   "value": 6.0,
                   "units": "percentage_points",
-                  "ilOffset": 2274
+                  "ilOffset": 2262
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -3003,7 +3003,7 @@
                   "operation": "add",
                   "value": -0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 2288
+                  "ilOffset": 2276
                 }
               ]
             }
@@ -3015,7 +3015,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7058,
+              "guardIlOffset": 7046,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3023,7 +3023,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7069
+                  "ilOffset": 7057
                 },
                 {
                   "stat": "damage",
@@ -3032,7 +3032,7 @@
                   "operation": "add",
                   "value": 0.04,
                   "units": "additive_fraction",
-                  "ilOffset": 7096
+                  "ilOffset": 7084
                 }
               ]
             }
@@ -3044,7 +3044,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7112,
+              "guardIlOffset": 7100,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3052,7 +3052,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7123
+                  "ilOffset": 7111
                 },
                 {
                   "stat": "damage",
@@ -3061,7 +3061,7 @@
                   "operation": "add",
                   "value": 0.04,
                   "units": "additive_fraction",
-                  "ilOffset": 7150
+                  "ilOffset": 7138
                 }
               ]
             }
@@ -3073,7 +3073,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7166,
+              "guardIlOffset": 7154,
               "effects": [
                 {
                   "stat": "damage",
@@ -3082,7 +3082,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 7190
+                  "ilOffset": 7178
                 }
               ]
             }
@@ -3094,7 +3094,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3634,
+              "guardIlOffset": 3622,
               "effects": [
                 {
                   "stat": "fishingPower",
@@ -3102,7 +3102,7 @@
                   "operation": "add",
                   "value": 5,
                   "units": "points",
-                  "ilOffset": 3645
+                  "ilOffset": 3633
                 }
               ]
             }
@@ -3114,7 +3114,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3634,
+              "guardIlOffset": 3622,
               "effects": [
                 {
                   "stat": "fishingPower",
@@ -3122,7 +3122,7 @@
                   "operation": "add",
                   "value": 5,
                   "units": "points",
-                  "ilOffset": 3645
+                  "ilOffset": 3633
                 }
               ]
             }
@@ -3134,7 +3134,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 3634,
+              "guardIlOffset": 3622,
               "effects": [
                 {
                   "stat": "fishingPower",
@@ -3142,7 +3142,7 @@
                   "operation": "add",
                   "value": 5,
                   "units": "points",
-                  "ilOffset": 3645
+                  "ilOffset": 3633
                 }
               ]
             }
@@ -3154,7 +3154,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7512,
+              "guardIlOffset": 7500,
               "effects": [
                 {
                   "stat": "damage",
@@ -3163,7 +3163,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 7536
+                  "ilOffset": 7524
                 },
                 {
                   "stat": "maximumMinions",
@@ -3171,7 +3171,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7550
+                  "ilOffset": 7538
                 }
               ]
             }
@@ -3183,7 +3183,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7512,
+              "guardIlOffset": 7500,
               "effects": [
                 {
                   "stat": "damage",
@@ -3192,7 +3192,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 7536
+                  "ilOffset": 7524
                 },
                 {
                   "stat": "maximumMinions",
@@ -3200,7 +3200,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7550
+                  "ilOffset": 7538
                 }
               ]
             }
@@ -3212,7 +3212,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7566,
+              "guardIlOffset": 7554,
               "effects": [
                 {
                   "stat": "damage",
@@ -3221,7 +3221,7 @@
                   "operation": "add",
                   "value": 0.06,
                   "units": "additive_fraction",
-                  "ilOffset": 7590
+                  "ilOffset": 7578
                 },
                 {
                   "stat": "maximumMinions",
@@ -3229,7 +3229,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7604
+                  "ilOffset": 7592
                 }
               ]
             }
@@ -3241,7 +3241,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7983,
+              "guardIlOffset": 7971,
               "effects": [
                 {
                   "stat": "critChance",
@@ -3250,7 +3250,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 7999
+                  "ilOffset": 7987
                 },
                 {
                   "stat": "damage",
@@ -3259,7 +3259,7 @@
                   "operation": "add",
                   "value": 0.16,
                   "units": "additive_fraction",
-                  "ilOffset": 8022
+                  "ilOffset": 8010
                 }
               ]
             }
@@ -3271,14 +3271,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8038,
+              "guardIlOffset": 8026,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.ammoCost75",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 8042
+                  "ilOffset": 8030
                 },
                 {
                   "stat": "critChance",
@@ -3287,7 +3287,7 @@
                   "operation": "add",
                   "value": 12.0,
                   "units": "percentage_points",
-                  "ilOffset": 8061
+                  "ilOffset": 8049
                 },
                 {
                   "stat": "damage",
@@ -3296,7 +3296,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 8084
+                  "ilOffset": 8072
                 }
               ]
             }
@@ -3308,7 +3308,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8100,
+              "guardIlOffset": 8088,
               "effects": [
                 {
                   "stat": "critChance",
@@ -3317,7 +3317,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 8116
+                  "ilOffset": 8104
                 },
                 {
                   "stat": "damage",
@@ -3326,7 +3326,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 8139
+                  "ilOffset": 8127
                 },
                 {
                   "stat": "movementSpeed",
@@ -3334,7 +3334,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 8157
+                  "ilOffset": 8145
                 }
               ]
             }
@@ -3346,7 +3346,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8173,
+              "guardIlOffset": 8161,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -3354,7 +3354,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 8185
+                  "ilOffset": 8173
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -3362,7 +3362,7 @@
                   "operation": "add",
                   "value": -0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 8203
+                  "ilOffset": 8191
                 },
                 {
                   "stat": "critChance",
@@ -3371,7 +3371,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 8222
+                  "ilOffset": 8210
                 },
                 {
                   "stat": "damage",
@@ -3380,7 +3380,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 8245
+                  "ilOffset": 8233
                 }
               ]
             }
@@ -3392,7 +3392,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8261,
+              "guardIlOffset": 8249,
               "effects": [
                 {
                   "stat": "damage",
@@ -3401,7 +3401,7 @@
                   "operation": "add",
                   "value": 0.09,
                   "units": "additive_fraction",
-                  "ilOffset": 8285
+                  "ilOffset": 8273
                 },
                 {
                   "stat": "critChance",
@@ -3410,7 +3410,7 @@
                   "operation": "add",
                   "value": 9.0,
                   "units": "percentage_points",
-                  "ilOffset": 8304
+                  "ilOffset": 8292
                 }
               ]
             }
@@ -3422,7 +3422,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 8316,
+              "guardIlOffset": 8304,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -3430,7 +3430,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 8331
+                  "ilOffset": 8319
                 },
                 {
                   "stat": "damage",
@@ -3439,7 +3439,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 8358
+                  "ilOffset": 8346
                 }
               ]
             }
@@ -3451,7 +3451,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7773,
+              "guardIlOffset": 7761,
               "effects": [
                 {
                   "stat": "aggro",
@@ -3459,7 +3459,7 @@
                   "operation": "add",
                   "value": 300,
                   "units": "native_units",
-                  "ilOffset": 7788
+                  "ilOffset": 7776
                 },
                 {
                   "stat": "critChance",
@@ -3468,7 +3468,7 @@
                   "operation": "add",
                   "value": 26.0,
                   "units": "percentage_points",
-                  "ilOffset": 7807
+                  "ilOffset": 7795
                 },
                 {
                   "stat": "lifeRegeneration",
@@ -3476,7 +3476,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "native_half_hp_per_second_units",
-                  "ilOffset": 7817
+                  "ilOffset": 7805
                 }
               ]
             }
@@ -3488,7 +3488,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7833,
+              "guardIlOffset": 7821,
               "effects": [
                 {
                   "stat": "aggro",
@@ -3496,7 +3496,7 @@
                   "operation": "add",
                   "value": 300,
                   "units": "native_units",
-                  "ilOffset": 7848
+                  "ilOffset": 7836
                 },
                 {
                   "stat": "damage",
@@ -3505,7 +3505,7 @@
                   "operation": "add",
                   "value": 0.29,
                   "units": "additive_fraction",
-                  "ilOffset": 7875
+                  "ilOffset": 7863
                 },
                 {
                   "stat": "lifeRegeneration",
@@ -3513,7 +3513,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "native_half_hp_per_second_units",
-                  "ilOffset": 7889
+                  "ilOffset": 7877
                 }
               ]
             }
@@ -3525,7 +3525,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7905,
+              "guardIlOffset": 7893,
               "effects": [
                 {
                   "stat": "aggro",
@@ -3533,7 +3533,7 @@
                   "operation": "add",
                   "value": 300,
                   "units": "native_units",
-                  "ilOffset": 7920
+                  "ilOffset": 7908
                 },
                 {
                   "stat": "attackSpeed",
@@ -3542,7 +3542,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 7939
+                  "ilOffset": 7927
                 },
                 {
                   "stat": "movementSpeed",
@@ -3550,7 +3550,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 7953
+                  "ilOffset": 7941
                 },
                 {
                   "stat": "lifeRegeneration",
@@ -3558,7 +3558,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "native_half_hp_per_second_units",
-                  "ilOffset": 7967
+                  "ilOffset": 7955
                 }
               ]
             }
@@ -3570,14 +3570,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2317,
+              "guardIlOffset": 2305,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.nightVision",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 2321
+                  "ilOffset": 2309
                 }
               ]
             }
@@ -3589,7 +3589,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2115,
+              "guardIlOffset": 2103,
               "effects": [
                 {
                   "stat": "armorPenetration",
@@ -3598,7 +3598,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "points",
-                  "ilOffset": 2131
+                  "ilOffset": 2119
                 }
               ]
             }
@@ -3610,7 +3610,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7206,
+              "guardIlOffset": 7194,
               "effects": [
                 {
                   "stat": "damage",
@@ -3619,7 +3619,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 7230
+                  "ilOffset": 7218
                 }
               ]
             }
@@ -3631,7 +3631,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7246,
+              "guardIlOffset": 7234,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3639,7 +3639,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7257
+                  "ilOffset": 7245
                 }
               ]
             }
@@ -3651,7 +3651,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7273,
+              "guardIlOffset": 7261,
               "effects": [
                 {
                   "stat": "damage",
@@ -3660,7 +3660,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 7297
+                  "ilOffset": 7285
                 }
               ]
             }
@@ -3672,7 +3672,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2391,
+              "guardIlOffset": 2379,
               "effects": [
                 {
                   "stat": "critChance",
@@ -3681,7 +3681,7 @@
                   "operation": "add",
                   "value": 4.0,
                   "units": "percentage_points",
-                  "ilOffset": 2407
+                  "ilOffset": 2395
                 }
               ]
             }
@@ -3693,7 +3693,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2419,
+              "guardIlOffset": 2407,
               "effects": [
                 {
                   "stat": "damage",
@@ -3702,7 +3702,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 2443
+                  "ilOffset": 2431
                 }
               ]
             }
@@ -3714,7 +3714,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2459,
+              "guardIlOffset": 2447,
               "effects": [
                 {
                   "stat": "critChance",
@@ -3723,7 +3723,7 @@
                   "operation": "add",
                   "value": 4.0,
                   "units": "percentage_points",
-                  "ilOffset": 2475
+                  "ilOffset": 2463
                 }
               ]
             }
@@ -3735,7 +3735,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7620,
+              "guardIlOffset": 7608,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3743,7 +3743,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7631
+                  "ilOffset": 7619
                 },
                 {
                   "stat": "maximumSentries",
@@ -3751,7 +3751,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7645
+                  "ilOffset": 7633
                 },
                 {
                   "stat": "damage",
@@ -3760,7 +3760,7 @@
                   "operation": "add",
                   "value": 0.22,
                   "units": "additive_fraction",
-                  "ilOffset": 7672
+                  "ilOffset": 7660
                 }
               ]
             }
@@ -3772,7 +3772,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7701,
+              "guardIlOffset": 7689,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3780,7 +3780,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "slots",
-                  "ilOffset": 7712
+                  "ilOffset": 7700
                 },
                 {
                   "stat": "whipRangeMultiplier",
@@ -3788,7 +3788,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 7730
+                  "ilOffset": 7718
                 },
                 {
                   "stat": "damage",
@@ -3797,7 +3797,7 @@
                   "operation": "add",
                   "value": 0.22,
                   "units": "additive_fraction",
-                  "ilOffset": 7757
+                  "ilOffset": 7745
                 }
               ]
             }
@@ -3809,7 +3809,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7701,
+              "guardIlOffset": 7689,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -3817,7 +3817,7 @@
                   "operation": "add",
                   "value": 2,
                   "units": "slots",
-                  "ilOffset": 7712
+                  "ilOffset": 7700
                 },
                 {
                   "stat": "whipRangeMultiplier",
@@ -3825,7 +3825,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 7730
+                  "ilOffset": 7718
                 },
                 {
                   "stat": "damage",
@@ -3834,7 +3834,7 @@
                   "operation": "add",
                   "value": 0.22,
                   "units": "additive_fraction",
-                  "ilOffset": 7757
+                  "ilOffset": 7745
                 }
               ]
             }
@@ -3846,14 +3846,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1870,
+              "guardIlOffset": 1858,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.slowFall",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 1874
+                  "ilOffset": 1862
                 }
               ]
             }
@@ -3865,7 +3865,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1910,
+              "guardIlOffset": 1898,
               "effects": [
                 {
                   "stat": "damage",
@@ -3874,7 +3874,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 1934
+                  "ilOffset": 1922
                 },
                 {
                   "stat": "damage",
@@ -3883,7 +3883,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 1961
+                  "ilOffset": 1949
                 }
               ]
             }
@@ -3895,7 +3895,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1977,
+              "guardIlOffset": 1965,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -3903,7 +3903,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 1989
+                  "ilOffset": 1977
                 },
                 {
                   "stat": "damage",
@@ -3912,7 +3912,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 2016
+                  "ilOffset": 2004
                 },
                 {
                   "stat": "maximumMinions",
@@ -3920,7 +3920,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 2030
+                  "ilOffset": 2018
                 }
               ]
             }
@@ -3932,7 +3932,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2046,
+              "guardIlOffset": 2034,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -3940,7 +3940,7 @@
                   "operation": "add",
                   "value": 40,
                   "units": "points",
-                  "ilOffset": 2058
+                  "ilOffset": 2046
                 },
                 {
                   "stat": "damage",
@@ -3949,7 +3949,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 2085
+                  "ilOffset": 2073
                 },
                 {
                   "stat": "maximumMinions",
@@ -3957,7 +3957,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 2099
+                  "ilOffset": 2087
                 }
               ]
             }
@@ -3969,14 +3969,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 2317,
+              "guardIlOffset": 2305,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.nightVision",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 2321
+                  "ilOffset": 2309
                 }
               ]
             }
@@ -3988,7 +3988,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 6272,
+              "guardIlOffset": 6260,
               "effects": [
                 {
                   "stat": "maximumMana",
@@ -3996,7 +3996,7 @@
                   "operation": "add",
                   "value": 60,
                   "units": "points",
-                  "ilOffset": 6284
+                  "ilOffset": 6272
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -4004,7 +4004,7 @@
                   "operation": "add",
                   "value": -0.13,
                   "units": "additive_fraction",
-                  "ilOffset": 6302
+                  "ilOffset": 6290
                 }
               ]
             }
@@ -4016,14 +4016,14 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 1890,
+              "guardIlOffset": 1878,
               "effects": [
                 {
                   "nativeMember": "Terraria.Player.canFloatInWater",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 1894
+                  "ilOffset": 1882
                 }
               ]
             }
@@ -4035,7 +4035,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5035,
+              "guardIlOffset": 5023,
               "effects": [
                 {
                   "stat": "damage",
@@ -4044,7 +4044,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 5059
+                  "ilOffset": 5047
                 },
                 {
                   "stat": "maximumMinions",
@@ -4052,7 +4052,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 5073
+                  "ilOffset": 5061
                 }
               ]
             }
@@ -4064,7 +4064,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4884,
+              "guardIlOffset": 4872,
               "effects": [
                 {
                   "stat": "critChance",
@@ -4073,7 +4073,7 @@
                   "operation": "add",
                   "value": 10.0,
                   "units": "percentage_points",
-                  "ilOffset": 4900
+                  "ilOffset": 4888
                 },
                 {
                   "stat": "damage",
@@ -4082,7 +4082,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 4923
+                  "ilOffset": 4911
                 },
                 {
                   "stat": "attackSpeed",
@@ -4091,7 +4091,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 4942
+                  "ilOffset": 4930
                 }
               ]
             }
@@ -4103,7 +4103,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4967,
+              "guardIlOffset": 4955,
               "effects": [
                 {
                   "stat": "damage",
@@ -4112,7 +4112,7 @@
                   "operation": "add",
                   "value": 0.15,
                   "units": "additive_fraction",
-                  "ilOffset": 4991
+                  "ilOffset": 4979
                 },
                 {
                   "stat": "critChance",
@@ -4121,7 +4121,7 @@
                   "operation": "add",
                   "value": 8.0,
                   "units": "percentage_points",
-                  "ilOffset": 5010
+                  "ilOffset": 4998
                 }
               ]
             }
@@ -4133,7 +4133,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 4801,
+              "guardIlOffset": 4789,
               "effects": [
                 {
                   "stat": "damage",
@@ -4142,7 +4142,7 @@
                   "operation": "add",
                   "value": 0.12,
                   "units": "additive_fraction",
-                  "ilOffset": 4825
+                  "ilOffset": 4813
                 },
                 {
                   "stat": "critChance",
@@ -4151,7 +4151,7 @@
                   "operation": "add",
                   "value": 12.0,
                   "units": "percentage_points",
-                  "ilOffset": 4844
+                  "ilOffset": 4832
                 },
                 {
                   "stat": "maximumMana",
@@ -4159,7 +4159,7 @@
                   "operation": "add",
                   "value": 100,
                   "units": "points",
-                  "ilOffset": 4855
+                  "ilOffset": 4843
                 }
               ]
             }
@@ -4171,7 +4171,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5035,
+              "guardIlOffset": 5023,
               "effects": [
                 {
                   "stat": "damage",
@@ -4180,7 +4180,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 5059
+                  "ilOffset": 5047
                 },
                 {
                   "stat": "maximumMinions",
@@ -4188,7 +4188,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 5073
+                  "ilOffset": 5061
                 }
               ]
             }
@@ -4200,7 +4200,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5102,
+              "guardIlOffset": 5090,
               "effects": [
                 {
                   "stat": "critChance",
@@ -4209,7 +4209,7 @@
                   "operation": "add",
                   "value": 7.0,
                   "units": "percentage_points",
-                  "ilOffset": 5118
+                  "ilOffset": 5106
                 }
               ]
             }
@@ -4221,7 +4221,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5143,
+              "guardIlOffset": 5131,
               "effects": [
                 {
                   "stat": "damage",
@@ -4230,7 +4230,7 @@
                   "operation": "add",
                   "value": 0.07,
                   "units": "additive_fraction",
-                  "ilOffset": 5167
+                  "ilOffset": 5155
                 },
                 {
                   "stat": "movementSpeed",
@@ -4238,7 +4238,7 @@
                   "operation": "add",
                   "value": 0.08,
                   "units": "additive_fraction",
-                  "ilOffset": 5185
+                  "ilOffset": 5173
                 }
               ]
             }
@@ -4250,7 +4250,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5201,
+              "guardIlOffset": 5189,
               "effects": [
                 {
                   "stat": "critChance",
@@ -4259,7 +4259,7 @@
                   "operation": "add",
                   "value": 5.0,
                   "units": "percentage_points",
-                  "ilOffset": 5217
+                  "ilOffset": 5205
                 },
                 {
                   "stat": "manaCostMultiplier",
@@ -4267,7 +4267,7 @@
                   "operation": "add",
                   "value": -0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 5231
+                  "ilOffset": 5219
                 }
               ]
             }
@@ -4279,7 +4279,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5247,
+              "guardIlOffset": 5235,
               "effects": [
                 {
                   "stat": "damage",
@@ -4288,14 +4288,14 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 5271
+                  "ilOffset": 5259
                 },
                 {
                   "nativeMember": "Terraria.Player.huntressAmmoCost90",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 5278
+                  "ilOffset": 5266
                 }
               ]
             }
@@ -4307,7 +4307,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 5294,
+              "guardIlOffset": 5282,
               "effects": [
                 {
                   "stat": "attackSpeed",
@@ -4316,7 +4316,7 @@
                   "operation": "add",
                   "value": 0.1,
                   "units": "additive_fraction",
-                  "ilOffset": 5310
+                  "ilOffset": 5298
                 },
                 {
                   "stat": "movementSpeed",
@@ -4324,7 +4324,7 @@
                   "operation": "add",
                   "value": 0.2,
                   "units": "additive_fraction",
-                  "ilOffset": 5324
+                  "ilOffset": 5312
                 }
               ]
             }
@@ -4336,7 +4336,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 108,
+              "guardIlOffset": 96,
               "effects": [
                 {
                   "stat": "movementSpeed",
@@ -4344,14 +4344,14 @@
                   "operation": "add",
                   "value": 0.25,
                   "units": "additive_fraction",
-                  "ilOffset": 123
+                  "ilOffset": 111
                 },
                 {
                   "nativeMember": "Terraria.Player.moonLordLegs",
                   "operation": "set",
                   "value": true,
                   "units": "boolean_state",
-                  "ilOffset": 130
+                  "ilOffset": 118
                 }
               ]
             }
@@ -4363,7 +4363,7 @@
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
             {
-              "guardIlOffset": 7004,
+              "guardIlOffset": 6992,
               "effects": [
                 {
                   "stat": "maximumMinions",
@@ -4371,7 +4371,7 @@
                   "operation": "add",
                   "value": 1,
                   "units": "slots",
-                  "ilOffset": 7015
+                  "ilOffset": 7003
                 },
                 {
                   "stat": "damage",
@@ -4380,7 +4380,7 @@
                   "operation": "add",
                   "value": 0.05,
                   "units": "additive_fraction",
-                  "ilOffset": 7042
+                  "ilOffset": 7030
                 }
               ]
             }
@@ -4419,10 +4419,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 407
+              "ilOffset": 395
             }
           ],
-          "guardIlOffset": 350
+          "guardIlOffset": 338
         },
         {
           "condition": {
@@ -4449,10 +4449,10 @@
               "operation": "add",
               "value": 0.1,
               "units": "additive_fraction",
-              "ilOffset": 830
+              "ilOffset": 818
             }
           ],
-          "guardIlOffset": 762
+          "guardIlOffset": 750
         },
         {
           "condition": {
@@ -4477,10 +4477,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 889
+              "ilOffset": 877
             }
           ],
-          "guardIlOffset": 835
+          "guardIlOffset": 823
         },
         {
           "condition": {
@@ -4506,10 +4506,10 @@
               "operation": "add",
               "value": 0.2,
               "units": "additive_fraction",
-              "ilOffset": 953
+              "ilOffset": 941
             }
           ],
-          "guardIlOffset": 894
+          "guardIlOffset": 882
         },
         {
           "condition": {
@@ -4534,10 +4534,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 1015
+              "ilOffset": 1003
             }
           ],
-          "guardIlOffset": 958
+          "guardIlOffset": 946
         },
         {
           "condition": {
@@ -4565,10 +4565,10 @@
               "operation": "add",
               "value": 10.0,
               "units": "percentage_points",
-              "ilOffset": 1087
+              "ilOffset": 1075
             }
           ],
-          "guardIlOffset": 1020
+          "guardIlOffset": 1008
         },
         {
           "condition": {
@@ -4596,10 +4596,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 2805
+              "ilOffset": 2793
             }
           ],
-          "guardIlOffset": 2730
+          "guardIlOffset": 2718
         },
         {
           "condition": {
@@ -4624,10 +4624,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 2858
+              "ilOffset": 2846
             }
           ],
-          "guardIlOffset": 2810
+          "guardIlOffset": 2798
         },
         {
           "condition": {
@@ -4652,10 +4652,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 2994
+              "ilOffset": 2982
             }
           ],
-          "guardIlOffset": 2943
+          "guardIlOffset": 2931
         },
         {
           "condition": {
@@ -4680,10 +4680,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 3044
+              "ilOffset": 3032
             }
           ],
-          "guardIlOffset": 2999
+          "guardIlOffset": 2987
         },
         {
           "condition": {
@@ -4708,7 +4708,7 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 3097
+              "ilOffset": 3085
             },
             {
               "stat": "damage",
@@ -4717,7 +4717,7 @@
               "operation": "add",
               "value": 0.1,
               "units": "additive_fraction",
-              "ilOffset": 3124
+              "ilOffset": 3112
             },
             {
               "stat": "damage",
@@ -4726,10 +4726,10 @@
               "operation": "add",
               "value": 0.1,
               "units": "additive_fraction",
-              "ilOffset": 3151
+              "ilOffset": 3139
             }
           ],
-          "guardIlOffset": 3049
+          "guardIlOffset": 3037
         },
         {
           "condition": {
@@ -4758,10 +4758,10 @@
               "operation": "add",
               "value": -0.16,
               "units": "additive_fraction",
-              "ilOffset": 3242
+              "ilOffset": 3230
             }
           ],
-          "guardIlOffset": 3156
+          "guardIlOffset": 3144
         },
         {
           "condition": {
@@ -4787,10 +4787,10 @@
               "operation": "add",
               "value": -0.1,
               "units": "additive_fraction",
-              "ilOffset": 3485
+              "ilOffset": 3473
             }
           ],
-          "guardIlOffset": 3426
+          "guardIlOffset": 3414
         },
         {
           "condition": {
@@ -4816,10 +4816,10 @@
               "operation": "add",
               "value": -0.1,
               "units": "additive_fraction",
-              "ilOffset": 3552
+              "ilOffset": 3540
             }
           ],
-          "guardIlOffset": 3490
+          "guardIlOffset": 3478
         },
         {
           "condition": {
@@ -4844,10 +4844,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 3814
+              "ilOffset": 3802
             }
           ],
-          "guardIlOffset": 3760
+          "guardIlOffset": 3748
         },
         {
           "condition": {
@@ -4872,10 +4872,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 3867
+              "ilOffset": 3855
             }
           ],
-          "guardIlOffset": 3819
+          "guardIlOffset": 3807
         },
         {
           "condition": {
@@ -4902,10 +4902,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 4478
+              "ilOffset": 4466
             }
           ],
-          "guardIlOffset": 4410
+          "guardIlOffset": 4398
         },
         {
           "condition": {
@@ -4932,10 +4932,10 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 4551
+              "ilOffset": 4539
             }
           ],
-          "guardIlOffset": 4483
+          "guardIlOffset": 4471
         },
         {
           "condition": {
@@ -4961,7 +4961,7 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 5068
+              "ilOffset": 5056
             },
             {
               "stat": "whipRangeMultiplier",
@@ -4969,10 +4969,10 @@
               "operation": "add",
               "value": 0.2,
               "units": "additive_fraction",
-              "ilOffset": 5086
+              "ilOffset": 5074
             }
           ],
-          "guardIlOffset": 5013
+          "guardIlOffset": 5001
         },
         {
           "condition": {
@@ -4999,10 +4999,10 @@
               "operation": "add",
               "value": 0.25,
               "units": "additive_fraction",
-              "ilOffset": 5162
+              "ilOffset": 5150
             }
           ],
-          "guardIlOffset": 5091
+          "guardIlOffset": 5079
         },
         {
           "condition": {
@@ -5029,10 +5029,10 @@
               "operation": "add",
               "value": 0.12,
               "units": "additive_fraction",
-              "ilOffset": 5361
+              "ilOffset": 5349
             }
           ],
-          "guardIlOffset": 5287
+          "guardIlOffset": 5275
         },
         {
           "condition": {
@@ -5057,7 +5057,7 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 6751
+              "ilOffset": 6739
             },
             {
               "stat": "maximumSentries",
@@ -5065,10 +5065,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 6765
+              "ilOffset": 6753
             }
           ],
-          "guardIlOffset": 6694
+          "guardIlOffset": 6682
         },
         {
           "condition": {
@@ -5093,7 +5093,7 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 6827
+              "ilOffset": 6815
             },
             {
               "stat": "maximumSentries",
@@ -5101,10 +5101,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 6841
+              "ilOffset": 6829
             }
           ],
-          "guardIlOffset": 6770
+          "guardIlOffset": 6758
         },
         {
           "condition": {
@@ -5130,7 +5130,7 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 6916
+              "ilOffset": 6904
             },
             {
               "stat": "maximumSentries",
@@ -5138,10 +5138,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 6930
+              "ilOffset": 6918
             }
           ],
-          "guardIlOffset": 6846
+          "guardIlOffset": 6834
         },
         {
           "condition": {
@@ -5166,7 +5166,7 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 6992
+              "ilOffset": 6980
             },
             {
               "stat": "maximumSentries",
@@ -5174,10 +5174,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 7006
+              "ilOffset": 6994
             }
           ],
-          "guardIlOffset": 6935
+          "guardIlOffset": 6923
         },
         {
           "condition": {
@@ -5202,14 +5202,14 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7068
+              "ilOffset": 7056
             },
             {
               "nativeMember": "Terraria.Player.setSquireT2",
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7075
+              "ilOffset": 7063
             },
             {
               "stat": "maximumSentries",
@@ -5217,10 +5217,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 7089
+              "ilOffset": 7077
             }
           ],
-          "guardIlOffset": 7011
+          "guardIlOffset": 6999
         },
         {
           "condition": {
@@ -5245,14 +5245,14 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7151
+              "ilOffset": 7139
             },
             {
               "nativeMember": "Terraria.Player.setApprenticeT2",
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7158
+              "ilOffset": 7146
             },
             {
               "stat": "maximumSentries",
@@ -5260,10 +5260,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 7172
+              "ilOffset": 7160
             }
           ],
-          "guardIlOffset": 7094
+          "guardIlOffset": 7082
         },
         {
           "condition": {
@@ -5289,14 +5289,14 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7247
+              "ilOffset": 7235
             },
             {
               "nativeMember": "Terraria.Player.setHuntressT2",
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7254
+              "ilOffset": 7242
             },
             {
               "stat": "maximumSentries",
@@ -5304,10 +5304,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 7268
+              "ilOffset": 7256
             }
           ],
-          "guardIlOffset": 7177
+          "guardIlOffset": 7165
         },
         {
           "condition": {
@@ -5332,14 +5332,14 @@
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7330
+              "ilOffset": 7318
             },
             {
               "nativeMember": "Terraria.Player.setMonkT2",
               "operation": "set",
               "value": true,
               "units": "boolean_state",
-              "ilOffset": 7337
+              "ilOffset": 7325
             },
             {
               "stat": "maximumSentries",
@@ -5347,10 +5347,10 @@
               "operation": "add",
               "value": 1,
               "units": "slots",
-              "ilOffset": 7351
+              "ilOffset": 7339
             }
           ],
-          "guardIlOffset": 7273
+          "guardIlOffset": 7261
         }
       ]
     }

@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from generate_native_hit_status import decode
+from generate_native_hit_status import decode, read_method_body
 from native_ammo_fact_analysis import ammo_method_facts, default_ammo_selection, item_type_mentions
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,8 +17,6 @@ REPORT = ROOT / "contracts/reports/native_ammo_sources.generated.json"
 def hook_dispatch_trace(path):
     """Read direct dispatcher call sites from this exact assembly, not tML docs."""
     import dnfile
-    from dncil.cil.body import CilMethodBody
-    from dncil.cil.body.reader import CilMethodBodyReaderBytes
     pe = dnfile.dnPE(str(path))
     owners = {id(m.row): str(t.TypeNamespace) + "." + str(t.TypeName)
               for t in pe.net.mdtables.TypeDef for m in t.MethodList}
@@ -27,7 +25,7 @@ def hook_dispatch_trace(path):
                          ("Terraria.ModLoader.CombinedHooks", ("ModifyShootStats", "Shoot"))):
         for name in names:
             method = next(m for m in pe.net.mdtables.MethodDef if owners[id(m)] == owner and str(m.Name) == name)
-            body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(method.Rva, 100_000)))
+            body = read_method_body(pe, method.Rva)
             calls = []
             for ins in body.instructions:
                 if ins.opcode.name not in ("call", "callvirt"):
@@ -54,12 +52,10 @@ def hook_dispatch_trace(path):
 def native_ammo_category_literals(path):
     """Read only literal static field initializers; no .cctor execution."""
     import dnfile
-    from dncil.cil.body import CilMethodBody
-    from dncil.cil.body.reader import CilMethodBodyReaderBytes
     pe = dnfile.dnPE(str(path))
     owner = next(t for t in pe.net.mdtables.TypeDef if str(t.TypeNamespace) == "Terraria.ID" and str(t.TypeName) == "AmmoID")
     method = next(m.row for m in owner.MethodList if str(m.row.Name) == ".cctor")
-    body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(method.Rva, 10000)))
+    body = read_method_body(pe, method.Rva)
     values = {}
     for literal, store in zip(body.instructions, body.instructions[1:]):
         if not literal.opcode.name.startswith("ldc.i4") or store.opcode.name != "stsfld":

@@ -11,6 +11,30 @@ using Terraria.ModLoader;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void ParentHitStatusCoordinatesResolveInNativeIL()
+    {
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(typeof(Projectile).Assembly.Location);
+        foreach (var (key, kind) in NativeHitStatusCatalog.SourceKinds)
+        {
+            var owner = kind == "contact" ? typeof(Player) : typeof(Projectile);
+            string methodName = kind == "contact" ? "StatusToNPC" : "StatusNPC";
+            var method = assembly.MainModule.GetType(owner.FullName!).Methods.Single(m => m.Name == methodName);
+            var calls = method.Body.Instructions.Where(i => i.Operand is Mono.Cecil.MethodReference)
+                .ToDictionary(i => i.Offset, i => (Mono.Cecil.MethodReference)i.Operand);
+            void CheckSite(int offset, string type, string name)
+                => Equal(true, calls.TryGetValue(offset, out var call) && call.DeclaringType.FullName == type && call.Name == name,
+                    methodName + " IL_" + offset.ToString("x4") + " resolves to " + type + "." + name);
+            foreach (var fact in NativeHitStatusCatalog.Sources[key].Values.SelectMany(rows => rows))
+                CheckSite(fact.IlOffset, "Terraria.NPC", "AddBuff");
+            foreach (var choice in NativeHitStatusCatalog.RandomSources[key].Values.SelectMany(rows => rows))
+            {
+                CheckSite(choice.SourceRandomCallIlOffset, "Terraria.Utilities.UnifiedRandom", "Next");
+                foreach (var fact in choice.Alternatives.SelectMany(a => a.Effects))
+                    CheckSite(fact.IlOffset, "Terraria.NPC", "AddBuff");
+            }
+        }
+    }
+
     private static void ParentHitStatusFactsAreCertifiedAndMatchNativeRequests()
     {
         using var state = new NativeActorState();

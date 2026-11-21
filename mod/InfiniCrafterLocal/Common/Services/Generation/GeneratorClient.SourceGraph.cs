@@ -158,6 +158,7 @@ public sealed partial class GeneratorClient
         {
             "AltFunctionUse", "CanUseItem", "CanShoot", "UseItem", "UseStyle", "HoldItem", "HoldStyle", "UseAnimation",
             "ModifyWeaponDamage", "ModifyWeaponCrit", "ModifyWeaponKnockback",
+            "UseSpeedMultiplier", "UseTimeMultiplier", "UseAnimationMultiplier", "ModifyManaCost", "ModifyItemScale",
             "Shoot", "ModifyShootStats", "OnHitNPC", "ModifyHitNPC", "CanHitNPC", "OnHitPvp", "ModifyHitPvp", "CanHitPvp",
             "UpdateEquip", "UpdateAccessory", "UpdateVanity", "UpdateInventory", "IsArmorSet", "UpdateArmorSet",
             "CanEquipAccessory", "UseItemHitbox", "MeleeEffects", "OnConsumeItem", "ConsumeItem",

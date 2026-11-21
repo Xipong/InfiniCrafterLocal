@@ -62,7 +62,7 @@ public sealed partial class GeneratorClient
         {
             if (records.Count == 0) return;
             for (int i = gaps.Count - 1; i >= 0; i--)
-                if (gaps[i]?.GetValue<string>() == "no_admitted_Item_type_equality_region; absence_not_proved") gaps.RemoveAt(i);
+                if (gaps[i]?.GetValue<string>() == "no_admitted_Item_type_region; absence_not_proved") gaps.RemoveAt(i);
         }
         foreach (var invocation in document.Declaration.Body.Descendants.OfType<InvocationExpression>())
         {
@@ -89,10 +89,10 @@ public sealed partial class GeneratorClient
                 // and avoids borrowing a cached document from another owner.
                 if (!helpers.TryGetValue(target, out var helper))
                     helpers.Add(target, helper = new NativeCSharpDocument(target, document.Module, cancellation));
-                // The admitted helper shape has only lexical blocks/if guards.
+                // The admitted helper shape has lexical blocks, if guards and bounded switch excerpts.
                 // Other control needs a separate source-context proof.
                 if (helper.Declaration.Body.Descendants.Any(node => node is ForStatement or ForeachStatement or WhileStatement or DoWhileStatement
-                    or SwitchStatement or TryCatchStatement or UsingStatement or LockStatement or GotoStatement or LabelStatement
+                    or TryCatchStatement or UsingStatement or LockStatement or GotoStatement or LabelStatement
                     or LambdaExpression or AnonymousMethodExpression or LocalFunctionDeclarationStatement)) continue;
                 var variables = helper.Declaration.Body.Descendants.OfType<IdentifierExpression>().Select(node => node.GetILVariable())
                     .Where(variable => variable is not null && variable.Kind == VariableKind.Parameter && variable.Index == parameter).Distinct().ToArray();
@@ -101,7 +101,7 @@ public sealed partial class GeneratorClient
                 BuildNativeItemDispatchRegionsCore(helper, itemType, candidates, cancellation, regionLimit, regionCharacters, totalCharacters,
                     value => value is IdentifierExpression identifier && identifier.GetILVariable() == variables[0]);
                 foreach (var gap in candidates["unknowns"]!.AsArray())
-                    if (gap!.GetValue<string>() != "no_admitted_Item_type_equality_region; absence_not_proved") gaps.Add("helper:" + gap.GetValue<string>());
+                    if (gap!.GetValue<string>() != "no_admitted_Item_type_region; absence_not_proved") gaps.Add("helper:" + gap.GetValue<string>());
                 if (candidates["records"]!.AsArray().Count == 0) continue;
                 var binding = MethodSourceIdentity(document.Method);
                 binding["sourceCallIlOffset"] = offset; binding["parameterIndex"] = parameter;

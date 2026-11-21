@@ -10,6 +10,12 @@ Conditional arithmetic shot variants содержат provenance, исходну
 
 Author получает исходники с guards, alias scopes, child-profile links и unknowns. Reversible shared-source/identifier/diagnostic notation сокращает повторения; literal tooltips и generated parents не переинтерпретируются. Inventory/fallback projectile profiles проходят тот же source-selection путь, что direct/effective/replacement profiles. Main source-projection cache сохраняет complete-method isolation, immutable values и cancellation перед warm hit.
 
+Координаты инструкций в offline-каталогах и live-графе отсчитываются от первого байта IL метода. Заголовок PE-метода исключается также из целей переходов и `switch`. Native-проверка разрешает опубликованные позиции статусов обратно в вызовы `NPC.AddBuff` и `UnifiedRandom.Next` в DLL.
+
+Для прикреплённых ModItem/GlobalItem граф читает также изменения скорости и времени использования, анимации, расхода маны и размера. Условные множители остаются в теле хука. Разбор `OnHitNPC` сохраняет неопределённость аргумента баффа, если адрес его локальной переменной использовался в методе, или если мог измениться получатель.
+
+В item dispatch положительное сравнение `Item.type` и секция целочисленного `switch` дают условные выдержки. При отказе по размеру вложенная короткая выдержка может сохраниться вместе с внешними условиями. Каждый участок имеет собственную идентичность внутри метода, в том числе при совпадающем тексте в двух позициях.
+
 ### Конечные integer-кандидаты spawn
 
 Строгий source collector сохраняет прежние literal-кандидаты и их порядок внутри callsite, затем добавляет ограниченные finite int32 alternatives для constants, copies, joins и `+`/`-`. Captured identity требует отдельного receiver/per-read доказательства; Unchecked int32 arithmetic сохраняет wraparound; runtime expressions, cycles и signed checked overflow остаются unknown. Это source facts без исполнения, не exclusion proof; бюджеты и границы описаны в [native facts](PARENT_NATIVE_FACTS_RU.md).

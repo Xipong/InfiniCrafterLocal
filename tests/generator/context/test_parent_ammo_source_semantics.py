@@ -318,12 +318,12 @@ def test_exact_native_state_guard_rewrite_extraction():
     sources = extract(installed)
     rows = {r["itemId"]: r for s in sources if s["method"] == "Player.ItemCheck_Shoot" for r in s["records"]}
     rule, = rows[4953]["rules"]
-    assert rule["outputProjectileId"] == 932 and rule["sourceStoreIlOffset"] == 10873
+    assert rule["outputProjectileId"] == 932 and rule["sourceStoreIlOffset"] == 10861
     predicate = rule["whenSourceCondition"]
-    assert predicate["sourceBranchIlOffset"] == 10866
+    assert predicate["sourceBranchIlOffset"] == 10854
     assert predicate["opcode"] == "bne" and predicate["taken"] is False
     value = predicate["left"]["value"]
-    assert predicate["left"]["sourceStoreIlOffset"] == 10599
+    assert predicate["left"]["sourceStoreIlOffset"] == 10587
     assert value["operator"] == "div" and value["right"]["value"] == 2
     assert value["left"]["operator"] == "sub"
     assert value["left"]["left"]["member"] == "Terraria.Player.itemAnimationMax"
@@ -331,8 +331,8 @@ def test_exact_native_state_guard_rewrite_extraction():
     assert rows[4953]["unrecognizedProjectileWriteOffsets"] == []
     assert rows[3859]["rules"][0]["outputProjectileId"] == 710
     assert "whenSourceCondition" not in rows[3859]["rules"][0]
-    assert rows[3542]["unrecognizedProjectileWriteOffsets"] == [319]
-    assert rows[1157]["unrecognizedProjectileWriteOffsets"] == [16434]
+    assert rows[3542]["unrecognizedProjectileWriteOffsets"] == [307]
+    assert rows[1157]["unrecognizedProjectileWriteOffsets"] == [16422]
 
 
 def test_native_ammo_cfg_drops_irrelevant_opaque_diamond_but_not_controlling_call():
@@ -494,7 +494,7 @@ def _assert_ammo_observations(mechanics, packet, name):
         for match in matches:
             assert name == "eventide"
             assert match == {"method": "Player.PickAmmo", "rule": {
-                "outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383}}
+                "outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 371}}
     if name != "terra":
         rows = ammo["playerInventoryAmmoRaw"]
         assert [row["inventorySlot"] for row in rows] == [0, 54, 55]
@@ -537,13 +537,13 @@ def _assert_eventide_state(mechanics, native):
     assert [len(stage["rules"]) for stage in stages] == [1, 1]
     pick, state = [stage["rules"][0] for stage in stages]
     assert state.keys() == native["projectileSemanticsReference"]["stages"][1]["rules"][0].keys() - {"sourceStoreIlOffset"}
-    assert pick == {"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383}
-    assert state["outputProjectileId"] == 932 and state["sourceGuardIlOffset"] == 10517
+    assert pick == {"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 371}
+    assert state["outputProjectileId"] == 932 and state["sourceGuardIlOffset"] == 10505
     assert state["sourceScope"] == native["projectileSemanticsReference"]["stages"][1]["rules"][0]["sourceScope"]
     match = re.fullmatch(r"not\(bne\((snapshot[0-9]+), 2\)\)", state["whenSourceCondition"])
     assert match is not None, "state-conditioned rewrite became unconditional or changed its predicate"
     snapshot = mechanics["expressions"]["snapshots"][match[1]]
-    assert snapshot["sourceStoreIlOffset"] == 10599 and snapshot["scope"] == "value_at_store"
+    assert snapshot["sourceStoreIlOffset"] == 10587 and snapshot["scope"] == "value_at_store"
     assert snapshot["value"] == "div(sub(arg0.[Terraria.Player.itemAnimationMax], arg0.[Terraria.Player.itemAnimation]), 2)"
     # Match both old profile references to their distinct surviving rule sites.
     references = native["nativeReplacementProjectileRaw"][0]["sourceReferences"]
@@ -552,7 +552,7 @@ def _assert_eventide_state(mechanics, native):
         assert reference["sourcePath"] == f"projectileSemanticsReference.stages[{index}].rules[0]"
         assert reference["method"] == stages[index]["method"]
         assert reference["sourceFact"] == native["projectileSemanticsReference"]["stages"][index]["rules"][0]
-        assert reference["sourceFact"]["sourceStoreIlOffset"] == (396, 10873)[index]
+        assert reference["sourceFact"]["sourceStoreIlOffset"] == (384, 10861)[index]
         assert reference["conditionStatus"] == "source_conditions_not_evaluated"
         assert reference["dispatchStatus"] == "source_site_only_not_guaranteed_execution"
         assert stages[index]["rules"][0]["outputProjectileId"] == reference["sourceFact"]["outputProjectileId"]
@@ -597,7 +597,7 @@ def _assert_spawn_mechanics(mechanics, native, name):
         for actual_stage, native_stage in zip(mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"],
                                                native["projectileSemanticsReference"]["stages"], strict=True):
             assert actual_stage["rules"] == native_stage["rules"] == []
-    expected_offsets = {"eventide": [10958, 10992], "terra": [23695, 23759], "daedalus": [4157]}
+    expected_offsets = {"eventide": [10946, 10980], "terra": [23683, 23747], "daedalus": [4145]}
     assert [site["sourceSpawnIlOffset"] for site in sites] == expected_offsets[name]
     for site, source in zip(sites, originals, strict=True):
         assert site.keys() == source.keys()
@@ -615,7 +615,7 @@ def _assert_spawn_mechanics(mechanics, native, name):
                 assert inputs[field] == json.dumps(value["value"])
         if name == "eventide":
             guard = source["whenSourceCondition"]
-            assert guard["sourceBranchIlOffset"] == 10886 and guard["opcode"] == "bne"
+            assert guard["sourceBranchIlOffset"] == 10874 and guard["opcode"] == "bne"
             assert guard["left"]["kind"] == "unknown" and guard["right"]["value"] == 932
             # Literal unknown operands are deliberately not reinterpreted by Author.
             operand = json.dumps(guard["left"], ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -632,17 +632,17 @@ def _assert_spawn_mechanics(mechanics, native, name):
         first, second = sites
         damage = list(_source_nodes(first["spawnInputs"]["damage"]))
         assert any(node.get("operator") == "mul" and node["right"].get("value") == 2 for node in damage)
-        assert any(node.get("sourceBranchIlOffset") == 10866 for node in damage)
+        assert any(node.get("sourceBranchIlOffset") == 10854 for node in damage)
         assert any(node.get("member") == "Terraria.Player.itemAnimationMax" for node in damage)
         velocity = expressions["snapshots"][first["spawnInputs"]["velocity"]]
-        assert velocity["sourceStoreIlOffset"] == 10932
+        assert velocity["sourceStoreIlOffset"] == 10920
         assert velocity["value"].startswith("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(")
         assert ", 2.0))" in velocity["value"] and ", mul(" in velocity["value"]
-        assert expressions["snapshots"][second["spawnInputs"]["velocity"]]["sourceStoreIlOffset"] == 10861
+        assert expressions["snapshots"][second["spawnInputs"]["velocity"]]["sourceStoreIlOffset"] == 10849
         assert first["spawnInputs"]["position"] == second["spawnInputs"]["position"]
-        assert expressions["snapshots"][first["spawnInputs"]["position"]]["sourceStoreIlOffset"] == 10695
+        assert expressions["snapshots"][first["spawnInputs"]["position"]]["sourceStoreIlOffset"] == 10683
         ai = expressions["snapshots"][first["spawnInputs"]["ai1"]]
-        assert ai["sourceStoreIlOffset"] == 10906
+        assert ai["sourceStoreIlOffset"] == 10894
         assert ai["value"] == "rem(mul(unexecuted Terraria.Player.get_miscCounterNormalized(arg0), 12.0), 1.0)"
         assert second["spawnInputs"]["ai1"] == "0.0"
     elif name == "terra":
@@ -698,40 +698,40 @@ def _assert_exact_ammo_expressions(mechanics, native, name):
     sites = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]["spawnSites"]
     if name == "eventide":
         inputs = [
-            {"position": "[[store:10695]]", "velocity": "[[store:10932]]", "owner": "arg1",
-             "ai0": "0.0", "ai1": "[[store:10906]]", "ai2": "0.0"},
-            {"position": "[[store:10695]]", "velocity": "[[store:10861]]", "owner": "arg1",
+            {"position": "[[store:10683]]", "velocity": "[[store:10920]]", "owner": "arg1",
+             "ai0": "0.0", "ai1": "[[store:10894]]", "ai2": "0.0"},
+            {"position": "[[store:10683]]", "velocity": "[[store:10849]]", "owner": "arg1",
              "ai0": "0.0", "ai1": "0.0", "ai2": "0.0"},
         ]
         values = {
-            10599: "div(sub(arg0.[Terraria.Player.itemAnimationMax], arg0.[Terraria.Player.itemAnimation]), 2)",
-            10664: {"kind": "unknown", "reason": "unsupported_stack_operation", "sourceIlOffset": 10664},
-            10677: "unexecuted Microsoft.Xna.Framework.Vector2.op_Subtraction([[store:10664]], [[unknown:address_exposed_local:134@10670]])",
-            10695: "unexecuted Microsoft.Xna.Framework.Vector2.op_Addition([[unknown:address_exposed_local:8@10686]], local138 path_value{when [[branch:brtrue@10666:True]]: [[store:10664]]; when [[branch:brtrue@10666:False]]: [[store:10677]]})",
-            10684: "unexecuted Terraria.Main.get_MouseWorld()",
-            10800: "unexecuted Terraria.Utils.GetLerpValue(100.0, 40.0, unexecuted Terraria.Utils.Distance([[store:10684]], unexecuted Terraria.Entity.get_Center(arg0)), 1)",
-            10721: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo([[store:10695]], [[store:10684]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
-            10769: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo(unexecuted Terraria.Entity.get_Center(arg0), unexecuted Microsoft.Xna.Framework.Vector2.op_Addition(unexecuted Terraria.Entity.get_Center(arg0), construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10735]], [[unknown:branch_entry_value_unknown:14@10737]]))), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
-            10851: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Microsoft.Xna.Framework.Vector2.Lerp([[store:10721]], [[store:10769]], [[store:10800]]), unexecuted Terraria.Utils.SafeNormalize(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10822]], [[unknown:branch_entry_value_unknown:14@10824]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY())))",
-            10861: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(local141 path_value{when ble.un([[store:10800]], 0.0): [[store:10721]]; when not(ble.un([[store:10800]], 0.0)): [[store:10851]]}, [[unknown:address_exposed_local:1@10855]])",
-            10932: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(unexecuted Terraria.Utils.SafeNormalize([[store:10861]], unexecuted Microsoft.Xna.Framework.Vector2.get_Zero()), mul([[unknown:address_exposed_local:1@10920]], 2.0))",
-            10906: "rem(mul(unexecuted Terraria.Player.get_miscCounterNormalized(arg0), 12.0), 1.0)",
+            10587: "div(sub(arg0.[Terraria.Player.itemAnimationMax], arg0.[Terraria.Player.itemAnimation]), 2)",
+            10652: {"kind": "unknown", "reason": "unsupported_stack_operation", "sourceIlOffset": 10652},
+            10665: "unexecuted Microsoft.Xna.Framework.Vector2.op_Subtraction([[store:10652]], [[unknown:address_exposed_local:134@10658]])",
+            10683: "unexecuted Microsoft.Xna.Framework.Vector2.op_Addition([[unknown:address_exposed_local:8@10674]], local138 path_value{when [[branch:brtrue@10654:True]]: [[store:10652]]; when [[branch:brtrue@10654:False]]: [[store:10665]]})",
+            10672: "unexecuted Terraria.Main.get_MouseWorld()",
+            10788: "unexecuted Terraria.Utils.GetLerpValue(100.0, 40.0, unexecuted Terraria.Utils.Distance([[store:10672]], unexecuted Terraria.Entity.get_Center(arg0)), 1)",
+            10709: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo([[store:10683]], [[store:10672]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
+            10757: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Terraria.Utils.DirectionTo(unexecuted Terraria.Entity.get_Center(arg0), unexecuted Microsoft.Xna.Framework.Vector2.op_Addition(unexecuted Terraria.Entity.get_Center(arg0), construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10723]], [[unknown:branch_entry_value_unknown:14@10725]]))), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY()))",
+            10839: "unexecuted Terraria.Utils.SafeNormalize(unexecuted Microsoft.Xna.Framework.Vector2.Lerp([[store:10709]], [[store:10757]], [[store:10788]]), unexecuted Terraria.Utils.SafeNormalize(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@10810]], [[unknown:branch_entry_value_unknown:14@10812]]), unexecuted Microsoft.Xna.Framework.Vector2.op_UnaryNegation(unexecuted Microsoft.Xna.Framework.Vector2.get_UnitY())))",
+            10849: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(local141 path_value{when ble.un([[store:10788]], 0.0): [[store:10709]]; when not(ble.un([[store:10788]], 0.0)): [[store:10839]]}, [[unknown:address_exposed_local:1@10843]])",
+            10920: "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(unexecuted Terraria.Utils.SafeNormalize([[store:10849]], unexecuted Microsoft.Xna.Framework.Vector2.get_Zero()), mul([[unknown:address_exposed_local:1@10908]], 2.0))",
+            10894: "rem(mul(unexecuted Terraria.Player.get_miscCounterNormalized(arg0), 12.0), 1.0)",
         }
     elif name == "terra":
         common = {"position": "unexecuted Terraria.Player.get_MountedCenter(arg0)", "owner": "arg1",
                   "ai0": "mul(conv.r4(arg0.[Terraria.Entity.direction]), arg0.[Terraria.Player.gravDir])",
-                  "ai2": "[[store:23627]]"}
+                  "ai2": "[[store:23615]]"}
         inputs = [
             {**common, "velocity": "construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c](conv.r4(arg0.[Terraria.Entity.direction]), 0.0)",
              "type": "984", "ai1": "conv.r4(arg0.[Terraria.Player.itemAnimationMax])"},
-            {**common, "velocity": "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@23709]], [[unknown:branch_entry_value_unknown:14@23711]]), 5.0)",
+            {**common, "velocity": "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(construct Microsoft.Xna.Framework.Vector2..ctor[2002010c0c]([[unknown:branch_entry_value_unknown:13@23697]], [[unknown:branch_entry_value_unknown:14@23699]]), 5.0)",
              "ai1": "18.0"},
         ]
-        values = {23627: "unexecuted Terraria.Player.GetAdjustedItemScale(arg0, arg2)"}
+        values = {23615: "unexecuted Terraria.Player.GetAdjustedItemScale(arg0, arg2)"}
     else:
         assert name == "daedalus"
-        inputs = [{"positionX": "[[unknown:address_exposed_local:8@4118]].[Microsoft.Xna.Framework.Vector2.X]",
-                   "positionY": "[[unknown:address_exposed_local:8@4125]].[Microsoft.Xna.Framework.Vector2.Y]",
+        inputs = [{"positionX": "[[unknown:address_exposed_local:8@4106]].[Microsoft.Xna.Framework.Vector2.X]",
+                   "positionY": "[[unknown:address_exposed_local:8@4113]].[Microsoft.Xna.Framework.Vector2.Y]",
                    "owner": "arg1", "ai0": "0.0", "ai1": "0.0", "ai2": "0.0"}]
         values = {}
     assert [{key: observed(value) for key, value in site["spawnInputs"].items() if isinstance(value, str)}
@@ -962,15 +962,15 @@ def test_exact_native_spawn_argument_source_fields():
     sources = extract(installed)
     rows = {r['itemId']: r for s in sources if s['method'] == 'Player.ItemCheck_Shoot' for r in s['records']}
     a, b = rows[4953]['spawnSites']
-    assert (a['sourceSpawnIlOffset'], b['sourceSpawnIlOffset']) == (10958, 10992)
+    assert (a['sourceSpawnIlOffset'], b['sourceSpawnIlOffset']) == (10946, 10980)
     nodes = list(_source_nodes(a['spawnInputs']['damage']))
     assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2 for n in nodes)
-    assert any(n.get('sourceBranchIlOffset') == 10866 for n in nodes)
+    assert any(n.get('sourceBranchIlOffset') == 10854 for n in nodes)
     assert any(n.get('member') == 'Terraria.Player.itemAnimationMax' for n in nodes)
     velocity = list(_source_nodes(a['spawnInputs']['velocity']))
     assert any(n.get('operator') == 'mul' and n['right'].get('value') == 2.0 for n in velocity)
-    assert any(n.get('sourceStoreIlOffset') == 10932 for n in velocity)
-    assert any(n.get('sourceBranchIlOffset') == 10886 for n in _source_nodes(a['whenSourceCondition']))
+    assert any(n.get('sourceStoreIlOffset') == 10920 for n in velocity)
+    assert any(n.get('sourceBranchIlOffset') == 10874 for n in _source_nodes(a['whenSourceCondition']))
     ai = list(_source_nodes(a['spawnInputs']['ai1']))
     assert any(n.get('operator') == 'rem' for n in ai)
     assert any(n.get('member') == 'Terraria.Player.get_miscCounterNormalized' for n in ai)
@@ -1208,7 +1208,7 @@ def test_literal_ammo_observer_rejects_information_loss(actual_ammo_observer_inp
 
 
 @pytest.mark.parametrize("name,defect", [
-    *[("eventide", f"snapshot_{store}") for store in (10664, 10677, 10695, 10684, 10800, 10721, 10769, 10851, 10861)],
+    *[("eventide", f"snapshot_{store}") for store in (10652, 10665, 10683, 10672, 10788, 10709, 10757, 10839, 10849)],
     ("eventide", "velocity_operand"), ("terra", "companion_velocity"), ("terra", "companion_ai1"),
     ("terra", "direct_vector"), ("daedalus", "positionX"), ("daedalus", "positionY"),
     ("terra", "false_pick_rewrite"), ("daedalus", "false_pick_rewrite"),
@@ -1219,7 +1219,7 @@ def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observe
     stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
     sites = stages[1]["spawnSites"]
     if defect.startswith("snapshot_") or defect == "velocity_operand":
-        store = int(defect.removeprefix("snapshot_")) if defect.startswith("snapshot_") else 10932
+        store = int(defect.removeprefix("snapshot_")) if defect.startswith("snapshot_") else 10920
         snapshot = next(row for row in mechanics["expressions"]["snapshots"].values()
                         if row["sourceStoreIlOffset"] == store)
         snapshot["value"] = ("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, mul(0.0, 2.0))"
@@ -1229,7 +1229,7 @@ def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observe
     elif defect == "direct_vector":
         sites[1]["spawnInputs"]["velocity"] = "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, 5.0)"
     elif defect == "false_pick_rewrite":
-        stages[0]["rules"].append({"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 383})
+        stages[0]["rules"].append({"outputProjectileId": 932, "whenInputProjectileId": 1, "sourceGuardIlOffset": 371})
     else:
         sites[0]["spawnInputs"][defect] = "0.0"
     with pytest.raises((AssertionError, KeyError)):

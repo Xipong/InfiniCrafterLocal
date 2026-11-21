@@ -15,32 +15,32 @@
       "totalMethodAddBuffSites": 100,
       "coveredMethodAddBuffSites": 74,
       "uncoveredMethodAddBuffOffsets": [
-        120,
-        148,
-        176,
-        206,
-        234,
-        263,
-        277,
-        615,
-        1003,
-        1045,
-        1087,
-        1129,
-        1348,
-        1543,
-        1567,
-        1635,
-        1663,
-        1743,
-        1767,
-        1853,
-        2674,
-        2739,
-        2768,
-        2784,
-        3003,
-        3606
+        108,
+        136,
+        164,
+        194,
+        222,
+        251,
+        265,
+        603,
+        991,
+        1033,
+        1075,
+        1117,
+        1336,
+        1531,
+        1555,
+        1623,
+        1651,
+        1731,
+        1755,
+        1841,
+        2662,
+        2727,
+        2756,
+        2772,
+        2991,
+        3594
       ],
       "excludedTypeSiteCounts": {
         "conditional_player_world_ai_or_random_path": 11242,
@@ -53,7 +53,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 2881,
+              "sourceRandomCallIlOffset": 2869,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -63,7 +63,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 2897,
+                      "ilOffset": 2885,
                       "buffId": 24,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -93,7 +93,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3064,
+              "sourceRandomCallIlOffset": 3052,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -103,7 +103,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3083,
+                      "ilOffset": 3071,
                       "buffId": 24,
                       "durationTicksMin": 360,
                       "durationTicksMax": 360,
@@ -132,7 +132,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3154,
+              "sourceRandomCallIlOffset": 3142,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -142,7 +142,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3173,
+                      "ilOffset": 3161,
                       "buffId": 20,
                       "durationTicksMin": 420,
                       "durationTicksMax": 420,
@@ -171,7 +171,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3247,
+              "sourceRandomCallIlOffset": 3235,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -181,7 +181,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3281,
+                      "ilOffset": 3269,
                       "buffId": 24,
                       "durationTicksMin": 240,
                       "durationTicksMax": 479,
@@ -210,7 +210,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3365,
+              "sourceRandomCallIlOffset": 3353,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -220,7 +220,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3384,
+                      "ilOffset": 3372,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -248,7 +248,7 @@
           "projectileName": "DarkLance",
           "effects": [
             {
-              "ilOffset": 2176,
+              "ilOffset": 2164,
               "buffId": 153,
               "durationTicksMin": 240,
               "durationTicksMax": 299,
@@ -264,7 +264,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3410,
+              "sourceRandomCallIlOffset": 3398,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -274,7 +274,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3429,
+                      "ilOffset": 3417,
                       "buffId": 20,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -303,7 +303,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3519,
+              "sourceRandomCallIlOffset": 3507,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 5,
               "alternatives": [
@@ -324,7 +324,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3548,
+                      "ilOffset": 3536,
                       "buffId": 31,
                       "durationTicksMin": 120,
                       "durationTicksMax": 240,
@@ -344,7 +344,7 @@
           "projectileName": "CursedFlameFriendly",
           "effects": [
             {
-              "ilOffset": 3703,
+              "ilOffset": 3691,
               "buffId": 39,
               "durationTicksMin": 420,
               "durationTicksMax": 420,
@@ -359,7 +359,7 @@
           "projectileName": "PoisonDart",
           "effects": [
             {
-              "ilOffset": 3960,
+              "ilOffset": 3948,
               "buffId": 20,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -374,7 +374,7 @@
           "projectileName": "CursedArrow",
           "effects": [
             {
-              "ilOffset": 3703,
+              "ilOffset": 3691,
               "buffId": 39,
               "durationTicksMin": 420,
               "durationTicksMax": 420,
@@ -389,7 +389,7 @@
           "projectileName": "CursedBullet",
           "effects": [
             {
-              "ilOffset": 3703,
+              "ilOffset": 3691,
               "buffId": 39,
               "durationTicksMin": 420,
               "durationTicksMax": 420,
@@ -405,7 +405,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3109,
+              "sourceRandomCallIlOffset": 3097,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -415,7 +415,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3128,
+                      "ilOffset": 3116,
                       "buffId": 44,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -443,7 +443,7 @@
           "projectileName": "FrostBoltSword",
           "effects": [
             {
-              "ilOffset": 342,
+              "ilOffset": 330,
               "buffId": 324,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -459,7 +459,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3876,
+              "sourceRandomCallIlOffset": 3864,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -469,7 +469,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3892,
+                      "ilOffset": 3880,
                       "buffId": 24,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -487,7 +487,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3908,
+                      "ilOffset": 3896,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -508,7 +508,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 2921,
+              "sourceRandomCallIlOffset": 2909,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -518,7 +518,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 2940,
+                      "ilOffset": 2928,
                       "buffId": 44,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -547,7 +547,7 @@
           "projectileName": "PoisonDartTrap",
           "effects": [
             {
-              "ilOffset": 3988,
+              "ilOffset": 3976,
               "buffId": 20,
               "durationTicksMin": 900,
               "durationTicksMax": 900,
@@ -562,7 +562,7 @@
           "projectileName": "FlamesTrap",
           "effects": [
             {
-              "ilOffset": 3641,
+              "ilOffset": 3629,
               "buffId": 323,
               "durationTicksMin": 1200,
               "durationTicksMax": 1200,
@@ -577,7 +577,7 @@
           "projectileName": "PygmySpear",
           "effects": [
             {
-              "ilOffset": 315,
+              "ilOffset": 303,
               "buffId": 70,
               "durationTicksMin": 300,
               "durationTicksMax": 600,
@@ -592,7 +592,7 @@
           "projectileName": "BallofFrost",
           "effects": [
             {
-              "ilOffset": 3038,
+              "ilOffset": 3026,
               "buffId": 324,
               "durationTicksMin": 480,
               "durationTicksMax": 480,
@@ -607,7 +607,7 @@
           "projectileName": "PoisonFang",
           "effects": [
             {
-              "ilOffset": 4044,
+              "ilOffset": 4032,
               "buffId": 20,
               "durationTicksMin": 1800,
               "durationTicksMax": 1800,
@@ -623,7 +623,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3458,
+              "sourceRandomCallIlOffset": 3446,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -633,7 +633,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3474,
+                      "ilOffset": 3462,
                       "buffId": 20,
                       "durationTicksMin": 3600,
                       "durationTicksMax": 3600,
@@ -651,7 +651,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3493,
+                      "ilOffset": 3481,
                       "buffId": 20,
                       "durationTicksMin": 1800,
                       "durationTicksMax": 1800,
@@ -671,7 +671,7 @@
           "projectileName": "IchorArrow",
           "effects": [
             {
-              "ilOffset": 3758,
+              "ilOffset": 3746,
               "buffId": 69,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -686,7 +686,7 @@
           "projectileName": "IchorBullet",
           "effects": [
             {
-              "ilOffset": 3758,
+              "ilOffset": 3746,
               "buffId": 69,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -701,7 +701,7 @@
           "projectileName": "GoldenShowerFriendly",
           "effects": [
             {
-              "ilOffset": 3758,
+              "ilOffset": 3746,
               "buffId": 69,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -716,7 +716,7 @@
           "projectileName": "VenomArrow",
           "effects": [
             {
-              "ilOffset": 3800,
+              "ilOffset": 3788,
               "buffId": 70,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -731,7 +731,7 @@
           "projectileName": "VenomBullet",
           "effects": [
             {
-              "ilOffset": 3800,
+              "ilOffset": 3788,
               "buffId": 70,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -747,7 +747,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 2832,
+              "sourceRandomCallIlOffset": 2820,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -757,7 +757,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 2848,
+                      "ilOffset": 2836,
                       "buffId": 31,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -775,7 +775,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 2861,
+                      "ilOffset": 2849,
                       "buffId": 31,
                       "durationTicksMin": 60,
                       "durationTicksMax": 60,
@@ -795,7 +795,7 @@
           "projectileName": "GoldenBullet",
           "effects": [
             {
-              "ilOffset": 2808,
+              "ilOffset": 2796,
               "buffId": 72,
               "durationTicksMin": 120,
               "durationTicksMax": 120,
@@ -810,7 +810,7 @@
           "projectileName": "InfernoFriendlyBolt",
           "effects": [
             {
-              "ilOffset": 2595,
+              "ilOffset": 2583,
               "buffId": 323,
               "durationTicksMin": 480,
               "durationTicksMax": 900,
@@ -825,7 +825,7 @@
           "projectileName": "InfernoFriendlyBlast",
           "effects": [
             {
-              "ilOffset": 2595,
+              "ilOffset": 2583,
               "buffId": 323,
               "durationTicksMin": 480,
               "durationTicksMax": 900,
@@ -840,7 +840,7 @@
           "projectileName": "FrostBlastFriendly",
           "effects": [
             {
-              "ilOffset": 372,
+              "ilOffset": 360,
               "buffId": 324,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -856,7 +856,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3876,
+              "sourceRandomCallIlOffset": 3864,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -866,7 +866,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3892,
+                      "ilOffset": 3880,
                       "buffId": 24,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -884,7 +884,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3908,
+                      "ilOffset": 3896,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -904,7 +904,7 @@
           "projectileName": "VenomFang",
           "effects": [
             {
-              "ilOffset": 4072,
+              "ilOffset": 4060,
               "buffId": 70,
               "durationTicksMin": 1800,
               "durationTicksMax": 1800,
@@ -919,7 +919,7 @@
           "projectileName": "FrostBoltStaff",
           "effects": [
             {
-              "ilOffset": 402,
+              "ilOffset": 390,
               "buffId": 324,
               "durationTicksMin": 420,
               "durationTicksMax": 420,
@@ -934,7 +934,7 @@
           "projectileName": "HornetStinger",
           "effects": [
             {
-              "ilOffset": 2454,
+              "ilOffset": 2442,
               "buffId": 20,
               "durationTicksMin": 240,
               "durationTicksMax": 360,
@@ -949,7 +949,7 @@
           "projectileName": "ImpFireball",
           "effects": [
             {
-              "ilOffset": 2491,
+              "ilOffset": 2479,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -964,7 +964,7 @@
           "projectileName": "BabySpider",
           "effects": [
             {
-              "ilOffset": 2367,
+              "ilOffset": 2355,
               "buffId": 70,
               "durationTicksMin": 120,
               "durationTicksMax": 240,
@@ -979,7 +979,7 @@
           "projectileName": "VenomSpider",
           "effects": [
             {
-              "ilOffset": 2417,
+              "ilOffset": 2405,
               "buffId": 70,
               "durationTicksMin": 120,
               "durationTicksMax": 240,
@@ -994,7 +994,7 @@
           "projectileName": "JumperSpider",
           "effects": [
             {
-              "ilOffset": 2417,
+              "ilOffset": 2405,
               "buffId": 70,
               "durationTicksMin": 120,
               "durationTicksMax": 240,
@@ -1009,7 +1009,7 @@
           "projectileName": "DangerousSpider",
           "effects": [
             {
-              "ilOffset": 2417,
+              "ilOffset": 2405,
               "buffId": 70,
               "durationTicksMin": 120,
               "durationTicksMax": 240,
@@ -1024,7 +1024,7 @@
           "projectileName": "MolotovCocktail",
           "effects": [
             {
-              "ilOffset": 2541,
+              "ilOffset": 2529,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1039,7 +1039,7 @@
           "projectileName": "MolotovFire",
           "effects": [
             {
-              "ilOffset": 2541,
+              "ilOffset": 2529,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1054,7 +1054,7 @@
           "projectileName": "MolotovFire2",
           "effects": [
             {
-              "ilOffset": 2541,
+              "ilOffset": 2529,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1069,7 +1069,7 @@
           "projectileName": "MolotovFire3",
           "effects": [
             {
-              "ilOffset": 2541,
+              "ilOffset": 2529,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1084,7 +1084,7 @@
           "projectileName": "SoulDrain",
           "effects": [
             {
-              "ilOffset": 2203,
+              "ilOffset": 2191,
               "buffId": 151,
               "durationTicksMin": 30,
               "durationTicksMax": 30,
@@ -1099,7 +1099,7 @@
           "projectileName": "CursedDart",
           "effects": [
             {
-              "ilOffset": 2292,
+              "ilOffset": 2280,
               "buffId": 39,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1114,7 +1114,7 @@
           "projectileName": "IchorDart",
           "effects": [
             {
-              "ilOffset": 2330,
+              "ilOffset": 2318,
               "buffId": 69,
               "durationTicksMin": 420,
               "durationTicksMax": 840,
@@ -1129,7 +1129,7 @@
           "projectileName": "CursedDartFlame",
           "effects": [
             {
-              "ilOffset": 2292,
+              "ilOffset": 2280,
               "buffId": 39,
               "durationTicksMin": 180,
               "durationTicksMax": 360,
@@ -1144,7 +1144,7 @@
           "projectileName": "ClingerStaff",
           "effects": [
             {
-              "ilOffset": 3703,
+              "ilOffset": 3691,
               "buffId": 39,
               "durationTicksMin": 420,
               "durationTicksMax": 420,
@@ -1159,7 +1159,7 @@
           "projectileName": "ShadowFlameArrow",
           "effects": [
             {
-              "ilOffset": 2047,
+              "ilOffset": 2035,
               "buffId": 153,
               "durationTicksMin": 120,
               "durationTicksMax": 299,
@@ -1174,7 +1174,7 @@
           "projectileName": "ShadowFlame",
           "effects": [
             {
-              "ilOffset": 2134,
+              "ilOffset": 2122,
               "buffId": 153,
               "durationTicksMin": 240,
               "durationTicksMax": 479,
@@ -1189,7 +1189,7 @@
           "projectileName": "ShadowFlameKnife",
           "effects": [
             {
-              "ilOffset": 2089,
+              "ilOffset": 2077,
               "buffId": 153,
               "durationTicksMin": 60,
               "durationTicksMax": 179,
@@ -1204,7 +1204,7 @@
           "projectileName": "ToxicBubble",
           "effects": [
             {
-              "ilOffset": 2242,
+              "ilOffset": 2230,
               "buffId": 20,
               "durationTicksMin": 600,
               "durationTicksMax": 1740,
@@ -1219,7 +1219,7 @@
           "projectileName": "IchorSplash",
           "effects": [
             {
-              "ilOffset": 1463,
+              "ilOffset": 1451,
               "buffId": 69,
               "durationTicksMin": 180,
               "durationTicksMax": 420,
@@ -1235,7 +1235,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 1877,
+              "sourceRandomCallIlOffset": 1865,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1245,7 +1245,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 1905,
+                      "ilOffset": 1893,
                       "buffId": 24,
                       "durationTicksMin": 60,
                       "durationTicksMax": 239,
@@ -1275,7 +1275,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 1974,
+              "sourceRandomCallIlOffset": 1962,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1294,7 +1294,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 2005,
+                      "ilOffset": 1993,
                       "buffId": 324,
                       "durationTicksMin": 120,
                       "durationTicksMax": 319,
@@ -1314,7 +1314,7 @@
           "projectileName": "HelFire",
           "effects": [
             {
-              "ilOffset": 1950,
+              "ilOffset": 1938,
               "buffId": 323,
               "durationTicksMin": 180,
               "durationTicksMax": 479,
@@ -1329,7 +1329,7 @@
           "projectileName": "SporeTrap",
           "effects": [
             {
-              "ilOffset": 961,
+              "ilOffset": 949,
               "buffId": 20,
               "durationTicksMin": 300,
               "durationTicksMax": 600,
@@ -1344,7 +1344,7 @@
           "projectileName": "SporeTrap2",
           "effects": [
             {
-              "ilOffset": 961,
+              "ilOffset": 949,
               "buffId": 20,
               "durationTicksMin": 300,
               "durationTicksMax": 600,
@@ -1359,7 +1359,7 @@
           "projectileName": "NurseSyringeHurt",
           "effects": [
             {
-              "ilOffset": 1426,
+              "ilOffset": 1414,
               "buffId": 20,
               "durationTicksMin": 180,
               "durationTicksMax": 300,
@@ -1374,7 +1374,7 @@
           "projectileName": "ClothiersCurse",
           "effects": [
             {
-              "ilOffset": 1389,
+              "ilOffset": 1377,
               "buffId": 153,
               "durationTicksMin": 300,
               "durationTicksMax": 600,
@@ -1389,7 +1389,7 @@
           "projectileName": "SolarWhipSword",
           "effects": [
             {
-              "ilOffset": 1159,
+              "ilOffset": 1147,
               "buffId": 189,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -1404,7 +1404,7 @@
           "projectileName": "SolarWhipSwordExplosion",
           "effects": [
             {
-              "ilOffset": 1189,
+              "ilOffset": 1177,
               "buffId": 189,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -1420,7 +1420,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 776,
+              "sourceRandomCallIlOffset": 764,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1430,7 +1430,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 802,
+                      "ilOffset": 790,
                       "buffId": 24,
                       "durationTicksMin": 180,
                       "durationTicksMax": 300,
@@ -1460,7 +1460,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 826,
+              "sourceRandomCallIlOffset": 814,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -1470,7 +1470,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 856,
+                      "ilOffset": 844,
                       "buffId": 323,
                       "durationTicksMin": 180,
                       "durationTicksMax": 480,
@@ -1499,7 +1499,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 880,
+              "sourceRandomCallIlOffset": 868,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1518,7 +1518,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 910,
+                      "ilOffset": 898,
                       "buffId": 323,
                       "durationTicksMin": 360,
                       "durationTicksMax": 480,
@@ -1538,7 +1538,7 @@
           "projectileName": "DD2PhoenixBowShot",
           "effects": [
             {
-              "ilOffset": 1306,
+              "ilOffset": 1294,
               "buffId": 323,
               "durationTicksMin": 480,
               "durationTicksMax": 480,
@@ -1553,7 +1553,7 @@
           "projectileName": "ApprenticeStaffT3Shot",
           "effects": [
             {
-              "ilOffset": 1276,
+              "ilOffset": 1264,
               "buffId": 203,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -1568,7 +1568,7 @@
           "projectileName": "BlandWhip",
           "effects": [
             {
-              "ilOffset": 512,
+              "ilOffset": 500,
               "buffId": 307,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1583,7 +1583,7 @@
           "projectileName": "SwordWhip",
           "effects": [
             {
-              "ilOffset": 556,
+              "ilOffset": 544,
               "buffId": 309,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1598,7 +1598,7 @@
           "projectileName": "MaceWhip",
           "effects": [
             {
-              "ilOffset": 733,
+              "ilOffset": 721,
               "buffId": 319,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1613,7 +1613,7 @@
           "projectileName": "ScytheWhip",
           "effects": [
             {
-              "ilOffset": 578,
+              "ilOffset": 566,
               "buffId": 310,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1628,7 +1628,7 @@
           "projectileName": "CoolWhip",
           "effects": [
             {
-              "ilOffset": 651,
+              "ilOffset": 639,
               "buffId": 340,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1636,7 +1636,7 @@
               "buffName": "CoolWhipNPCDebuff"
             },
             {
-              "ilOffset": 668,
+              "ilOffset": 656,
               "buffId": 324,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1651,7 +1651,7 @@
           "projectileName": "FireWhip",
           "effects": [
             {
-              "ilOffset": 632,
+              "ilOffset": 620,
               "buffId": 323,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1666,7 +1666,7 @@
           "projectileName": "ThornWhip",
           "effects": [
             {
-              "ilOffset": 687,
+              "ilOffset": 675,
               "buffId": 315,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1676,7 +1676,7 @@
           ],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 698,
+              "sourceRandomCallIlOffset": 686,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 5,
               "alternatives": [
@@ -1686,7 +1686,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 714,
+                      "ilOffset": 702,
                       "buffId": 20,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -1717,7 +1717,7 @@
           "projectileName": "RainbowWhip",
           "effects": [
             {
-              "ilOffset": 752,
+              "ilOffset": 740,
               "buffId": 316,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1733,7 +1733,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3310,
+              "sourceRandomCallIlOffset": 3298,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 6,
               "alternatives": [
@@ -1743,7 +1743,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3339,
+                      "ilOffset": 3327,
                       "buffId": 24,
                       "durationTicksMin": 120,
                       "durationTicksMax": 180,
@@ -1775,7 +1775,7 @@
           "projectileName": "BoneWhip",
           "effects": [
             {
-              "ilOffset": 534,
+              "ilOffset": 522,
               "buffId": 326,
               "durationTicksMin": 240,
               "durationTicksMax": 240,
@@ -1790,7 +1790,7 @@
           "projectileName": "DaybreakExplosion",
           "effects": [
             {
-              "ilOffset": 1246,
+              "ilOffset": 1234,
               "buffId": 189,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -1806,7 +1806,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3202,
+              "sourceRandomCallIlOffset": 3190,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 4,
               "alternatives": [
@@ -1816,7 +1816,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3221,
+                      "ilOffset": 3209,
                       "buffId": 20,
                       "durationTicksMin": 420,
                       "durationTicksMax": 420,
@@ -1846,7 +1846,7 @@
           "projectileName": "Volcano",
           "effects": [
             {
-              "ilOffset": 1216,
+              "ilOffset": 1204,
               "buffId": 24,
               "durationTicksMin": 180,
               "durationTicksMax": 180,
@@ -1861,7 +1861,7 @@
           "projectileName": "VenomDartTrap",
           "effects": [
             {
-              "ilOffset": 4016,
+              "ilOffset": 4004,
               "buffId": 70,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -1877,7 +1877,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3876,
+              "sourceRandomCallIlOffset": 3864,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1887,7 +1887,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3892,
+                      "ilOffset": 3880,
                       "buffId": 24,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -1905,7 +1905,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3908,
+                      "ilOffset": 3896,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -1925,7 +1925,7 @@
           "projectileName": "CursedFlare",
           "effects": [
             {
-              "ilOffset": 3935,
+              "ilOffset": 3923,
               "buffId": 39,
               "durationTicksMin": 600,
               "durationTicksMax": 600,
@@ -1941,7 +1941,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3876,
+              "sourceRandomCallIlOffset": 3864,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -1951,7 +1951,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3892,
+                      "ilOffset": 3880,
                       "buffId": 24,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -1969,7 +1969,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3908,
+                      "ilOffset": 3896,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -1990,7 +1990,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 3876,
+              "sourceRandomCallIlOffset": 3864,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -2000,7 +2000,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3892,
+                      "ilOffset": 3880,
                       "buffId": 24,
                       "durationTicksMin": 600,
                       "durationTicksMax": 600,
@@ -2018,7 +2018,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 3908,
+                      "ilOffset": 3896,
                       "buffId": 24,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -2046,17 +2046,17 @@
       "totalMethodAddBuffSites": 20,
       "coveredMethodAddBuffSites": 9,
       "uncoveredMethodAddBuffOffsets": [
-        59,
-        98,
-        137,
-        178,
-        217,
-        257,
-        283,
-        325,
-        369,
-        407,
-        429
+        47,
+        86,
+        125,
+        166,
+        205,
+        245,
+        271,
+        313,
+        357,
+        395,
+        417
       ],
       "excludedTypeSiteCounts": {
         "conditional_player_world_ai_or_random_path": 60005
@@ -2066,7 +2066,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 588,
+              "sourceRandomCallIlOffset": 576,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 2,
               "alternatives": [
@@ -2076,7 +2076,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 613,
+                      "ilOffset": 601,
                       "buffId": 24,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -2105,7 +2105,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 706,
+              "sourceRandomCallIlOffset": 694,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 10,
               "alternatives": [
@@ -2115,7 +2115,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 728,
+                      "ilOffset": 716,
                       "buffId": 24,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -2152,7 +2152,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 740,
+              "sourceRandomCallIlOffset": 728,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 4,
               "alternatives": [
@@ -2162,7 +2162,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 762,
+                      "ilOffset": 750,
                       "buffId": 20,
                       "durationTicksMin": 420,
                       "durationTicksMax": 420,
@@ -2193,7 +2193,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 774,
+              "sourceRandomCallIlOffset": 762,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 5,
               "alternatives": [
@@ -2203,7 +2203,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 796,
+                      "ilOffset": 784,
                       "buffId": 24,
                       "durationTicksMin": 180,
                       "durationTicksMax": 180,
@@ -2235,7 +2235,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 809,
+              "sourceRandomCallIlOffset": 797,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 10,
               "alternatives": [
@@ -2261,7 +2261,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 828,
+                      "ilOffset": 816,
                       "buffId": 31,
                       "durationTicksMin": 120,
                       "durationTicksMax": 120,
@@ -2281,7 +2281,7 @@
         {
           "effects": [
             {
-              "ilOffset": 468,
+              "ilOffset": 456,
               "buffId": 69,
               "durationTicksMin": 300,
               "durationTicksMax": 540,
@@ -2297,7 +2297,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 625,
+              "sourceRandomCallIlOffset": 613,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 4,
               "alternatives": [
@@ -2307,7 +2307,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 653,
+                      "ilOffset": 641,
                       "buffId": 323,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,
@@ -2337,7 +2337,7 @@
         {
           "effects": [
             {
-              "ilOffset": 496,
+              "ilOffset": 484,
               "buffId": 120,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
@@ -2353,7 +2353,7 @@
           "effects": [],
           "randomOutcomes": [
             {
-              "sourceRandomCallIlOffset": 665,
+              "sourceRandomCallIlOffset": 653,
               "randomMinimumInclusive": 0,
               "randomMaximumExclusive": 3,
               "alternatives": [
@@ -2363,7 +2363,7 @@
                   ],
                   "effects": [
                     {
-                      "ilOffset": 693,
+                      "ilOffset": 681,
                       "buffId": 323,
                       "durationTicksMin": 300,
                       "durationTicksMax": 300,

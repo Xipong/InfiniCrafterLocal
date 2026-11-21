@@ -50,6 +50,14 @@ internal static partial class EngineRuntimeChecks
                 default: damage = 999; break;
             }
         }
+        public void Nested()
+        {
+            if (type == 91)
+            {
+                damage++; knockBack++; damage++; knockBack++;
+                if (aiStyle == 5) damage--;
+            }
+        }
         public void SwitchGoto()
         {
             switch (type)
@@ -105,7 +113,7 @@ internal static partial class EngineRuntimeChecks
             new ICSharpCode.Decompiler.CSharp.Syntax.PrimitiveExpression(91));
         var negated = new ICSharpCode.Decompiler.CSharp.Syntax.UnaryOperatorExpression(
             ICSharpCode.Decompiler.CSharp.Syntax.UnaryOperatorType.Not, positive);
-        Equal(false, (bool)CSharpOwner.GetMethod("PositiveInteractionEquality", CSharpFlags)!.Invoke(null, new object[] { positive, negated })!, "an equality nested under boolean negation cannot qualify even if the decompiler retains that AST");
+        Equal(false, (bool)CSharpOwner.GetMethod("PositiveIdentityEquality", CSharpFlags)!.Invoke(null, new object[] { positive, negated })!, "an equality nested under boolean negation cannot qualify even if the decompiler retains that AST");
         var style = InteractionFixtureSource(nameof(InteractionSourceFixture.SharedStyle));
         Equal(1, style["records"]!.AsArray().Count, "style family source remains discoverable without item ID rules");
         Equal(true, style["records"]![0]!["code"]!.GetValue<string>().Contains("type != 96", StringComparison.Ordinal), "negative type guard is retained literally, not evaluated or dropped");
@@ -132,6 +140,10 @@ internal static partial class EngineRuntimeChecks
         var bounded = InteractionFixtureSource(nameof(InteractionSourceFixture.ExternalDamage), characterLimit: 1);
         Equal(0, bounded["records"]!.AsArray().Count, "oversize region is refused whole");
         Equal(true, bounded["unresolved"]!.ToJsonString().Contains("interaction_region_character_bound", StringComparison.Ordinal), "exact bound retained");
+        var nested = InteractionFixtureSource(nameof(InteractionSourceFixture.Nested), style: 5, characterLimit: 70);
+        var child = nested["records"]!.AsArray().Single()!;
+        Equal(true, ((string)child["entryCondition"]!).Contains("aiStyle") && child["enclosingConditions"]!.ToJsonString().Contains("type == 91"),
+            "an omitted parent does not suppress the child or erase its outer guard");
         using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
         CSharpSourceRefuses(() => InteractionFixtureSource(nameof(InteractionSourceFixture.ExternalDamage), cancellation: cancelled.Token), "canceled");
         Equal(0, InteractionSourceFixture.Executions, "source inspection never executes fixture/gameplay");

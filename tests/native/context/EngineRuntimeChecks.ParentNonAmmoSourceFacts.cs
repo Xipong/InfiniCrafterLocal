@@ -67,7 +67,7 @@ internal static partial class EngineRuntimeChecks
             var companion = value.GetProperty("nativeReplacementProjectileRaw").EnumerateArray().Single(row => row.GetProperty("type").GetInt32() == 984);
             var reference = companion.GetProperty("sourceReferences").EnumerateArray().Single(row => row.GetProperty("kind").GetString() == "native_fixed_projectile_spawn");
             Equal("projectileSemanticsReference.stages[1].spawnSites[0]", reference.GetProperty("sourcePath").GetString(), "profile links to exact source site");
-            Equal(23695, reference.GetProperty("sourceFact").GetProperty("sourceSpawnIlOffset").GetInt32(), "profile preserves certified spawn offset");
+            Equal(23683, reference.GetProperty("sourceFact").GetProperty("sourceSpawnIlOffset").GetInt32(), "profile preserves certified spawn offset");
             Equal("source_conditions_not_evaluated", reference.GetProperty("conditionStatus").GetString(), "source condition remains unevaluated");
             Equal("source_site_only_not_guaranteed_execution", reference.GetProperty("dispatchStatus").GetString(), "source admission remains unknown");
             Equal(false, companion.TryGetProperty("itemShootSpeed", out _), "weapon speed is not asserted as companion spawn speed");

@@ -23,7 +23,15 @@ internal static partial class EngineRuntimeChecks
         }
         private static void ApplyCritDelta(ref float crit) => crit += 23f;
     }
-    private sealed class CritSourceItem : CritSourceItemBase { }
+    private sealed class CritSourceItem : CritSourceItemBase
+    {
+        public override float UseSpeedMultiplier(Player player) => player.altFunctionUse == 2 ? 0.5f : 1f;
+        public override void ModifyManaCost(Player player, ref float reduce, ref float mult)
+        { if (player.altFunctionUse == 2) mult *= 2f; }
+        public override void ModifyShootStats(Player player, ref Microsoft.Xna.Framework.Vector2 position,
+            ref Microsoft.Xna.Framework.Vector2 velocity, ref int type, ref int damage, ref float knockback)
+        { if (player.altFunctionUse == 2) type = ProjectileID.FrostBoltSword; }
+    }
     private sealed class CritSourceGlobal : GlobalItem
     {
         public override void ModifyWeaponCrit(Item item, Player player, ref float crit)
@@ -111,6 +119,20 @@ internal static partial class EngineRuntimeChecks
             object snapshot = capture.Invoke(null, new object?[] { item, null })!;
             var facts = (JsonObject)snapshot.GetType().GetProperty("RuntimeFacts")!.GetValue(snapshot)!;
             JsonObject graph = facts["parentSourceGraph"]!.AsObject();
+            if (owner == "item")
+            {
+                foreach (var (hook, literal) in new[] { ("UseSpeedMultiplier", 0.5f), ("ModifyManaCost", 2f),
+                    ("ModifyShootStats", (float)ProjectileID.FrostBoltSword) })
+                {
+                    var root = graph["roots"]!.AsArray().Single(r => (string?)r!["event"] == hook)!;
+                    var body = graph["nodes"]!.AsArray().Single(n => (int)n!["id"]! == (int)root["node"]!)!;
+                    var hookValues = body["values"]!.AsObject().Select(p => p.Value!.AsArray()).ToArray();
+                    Equal(true, hookValues.Any(v => (string?)v[0] == "ldfld" &&
+                        ((string?)graph["members"]![(int)v[1]!["member"]!]!["name"])!.EndsWith(".altFunctionUse")), hook + " retains its input");
+                    Equal(true, hookValues.Any(v => ((string?)v[0] is "ldc.r4" or "const")
+                        && float.Parse(v[1]!.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture) == literal), hook + " retains its operand");
+                }
+            }
             string? output = Environment.GetEnvironmentVariable("INFINI_PARENT_CRIT_CAPTURE_DIR");
             if (!string.IsNullOrEmpty(output))
             {
