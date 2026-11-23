@@ -349,6 +349,20 @@ def _known_identity_receipt_fields(receipt: Any) -> bool:
     return True
 
 
+def _same_projectile_identity(left: Any, right: Any) -> bool:
+    fields = {"Projectile.type", "Projectile.aiStyle"}
+    return (isinstance(left, dict) and isinstance(right, dict) and left.keys() == right.keys() == fields
+            and all(type(left[key]) is int and type(right[key]) is int and left[key] == right[key] for key in fields))
+
+
+def _identity_edge(edge: Any) -> tuple[int, int, str, int] | None:
+    if (not isinstance(edge, dict) or set(edge) != {"at", "block", "op", "successor"}
+            or any(type(edge[key]) is not int or edge[key] < 0 for key in ("at", "block", "successor"))
+            or not isinstance(edge["op"], str)):
+        return None
+    return edge["at"], edge["block"], edge["op"], edge["successor"]
+
+
 def _selected_program(value: dict, identity: Any) -> dict:
     """Consume only the native producer's same-method, same-identity CFG slice.
 
@@ -362,18 +376,9 @@ def _selected_program(value: dict, identity: Any) -> dict:
     if (not _known_identity_receipt_fields(receipt)
             or receipt["source"] != "certified_receiver_identity_cfg"
             or type(receipt["version"]) is not int or receipt["version"] != 1
-            or not isinstance(identity, dict) or set(identity) != {"Projectile.type", "Projectile.aiStyle"}
-            or any(type(item) is not int for item in identity.values())
-            or not isinstance(receipt["identityPredicates"], dict)
-            or any(type(item) is not int for item in receipt["identityPredicates"].values())
-            or receipt["identityPredicates"] != identity or not isinstance(receipt["scope"], str)
-            or not isinstance(receipt["selectedEdges"], list)):
+            or not _same_projectile_identity(identity, receipt["identityPredicates"]) or not isinstance(receipt["scope"], str)
+            or not isinstance(receipt["selectedEdges"], list) or any(_identity_edge(edge) is None for edge in receipt["selectedEdges"])):
         return value
-    for edge in receipt["selectedEdges"]:
-        if (not isinstance(edge, dict) or set(edge) != {"at", "block", "op", "successor"}
-                or any(type(edge[key]) is not int for key in ("at", "block", "successor"))
-                or not isinstance(edge["op"], str)):
-            return value
     if (not set(selected) <= _PROGRAM_FIELDS | {"identitySelection"}
             or any(type(value.get(key)) is not str or selected.get(key) != value[key]
                    for key in ("method", "sourceModuleVersionId", "sourceMethodSha256"))

@@ -6,7 +6,8 @@ import hashlib
 import re
 from typing import Any
 
-from infini_local.pipelines.context.csharp_source_view import _CERT, _certificate, _identity, _integer, _sha
+from infini_local.pipelines.context.attack_behavior import _same_projectile_identity
+from infini_local.pipelines.context.csharp_source_view import _CERT, _certificate, _integer, _sha
 
 _SOURCE = "verified_conditional_native_interaction_csharp"
 _SCOPE = ("Conditional source only: reach the shown guard first. Enclosing flow, hooks, captured-entry identity preservation, external local values and unshown callees remain unknown. Live predicates are not evaluated; no record proves execution or absence of other effects. Helper bodies are one-hop source, not inlined or executed.")
@@ -21,8 +22,7 @@ def project_interaction_source(reference: dict[str, Any]) -> dict[str, Any]:
     if (reference.get("source") != "read_only_native_attack_source" or type(reference.get("version")) is not int
             or reference["version"] != 1 or not isinstance(value, dict) or set(value) != {"source", "version", "relevanceIdentity", "scope", "roots"}
             or value["source"] != _SOURCE or type(value["version"]) is not int or value["version"] != 1
-            or value["scope"] != _SCOPE or not _identity(value["relevanceIdentity"])
-            or value["relevanceIdentity"] != reference.get("identityPredicates")
+            or value["scope"] != _SCOPE or not _same_projectile_identity(value["relevanceIdentity"], reference.get("identityPredicates"))
             or not isinstance(value["roots"], list)):
         return out
     projected = []

@@ -10,7 +10,9 @@ import hashlib
 import re
 from typing import Any
 
-from infini_local.pipelines.context.attack_behavior import _PROGRAM_FIELDS, _ROW_FIELDS
+from infini_local.pipelines.context.attack_behavior import (
+    _PROGRAM_FIELDS, _ROW_FIELDS, _identity_edge, _known_identity_receipt_fields, _same_projectile_identity,
+)
 
 SOURCE_READING = (
     "Read-only decompiled C# source, never executable Author code or an imported behavior. "
@@ -56,7 +58,7 @@ def project_lifecycle_source(reference: dict[str, Any]) -> dict[str, Any]:
     if (not isinstance(value, dict) or set(value) != fields
             or value["source"] != "verified_conditional_native_lifecycle_csharp"
             or type(value["version"]) is not int or value["version"] != 1 or value["root"] != "Kill"
-            or not _identity(value["relevanceIdentity"]) or value["relevanceIdentity"] != reference.get("identityPredicates")
+            or not _same_projectile_identity(value["relevanceIdentity"], reference.get("identityPredicates"))
             or value["scope"] != _LIFECYCLE_SCOPE
             or not isinstance(value["unresolved"], list) or any(not isinstance(row, str) for row in value["unresolved"])
             or not isinstance(value["records"], list)):
@@ -155,7 +157,9 @@ def _model_records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | Non
             return None
         if record["coverage"] == "identity_specialized_method":
             identity = record.get("identitySpecialization")
-            if not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"} or not _identity(identity["identityPredicates"]) or identity["scope"] not in _IDENTITY_SCOPES:
+            if (not isinstance(identity, dict) or set(identity) != {"identityPredicates", "scope"}
+                    or not _same_projectile_identity(identity["identityPredicates"], reference.get("identityPredicates"))
+                    or identity["scope"] not in _IDENTITY_SCOPES):
                 return None
         elif "identitySpecialization" in record:
             return None
@@ -548,8 +552,13 @@ _IDENTITY_SCOPES = (_IDENTITY_SCOPE,
 
 
 
-def _identity(value: Any) -> bool:
-    return isinstance(value, dict) and set(value) == {"Projectile.type", "Projectile.aiStyle"} and all(type(v) is int for v in value.values())
+def _same_source_locations(candidate: Any, verified: list) -> bool:
+    # Source maps mirror validated flat location rows. Python equality alone
+    # would also accept True or 1.0 for an integer line or IL offset.
+    return (isinstance(candidate, list) and len(candidate) == len(verified)
+            and all(isinstance(row, dict) and row.keys() == original.keys()
+                    and all(type(row[key]) is type(value) and row[key] == value for key, value in original.items())
+                    for row, original in zip(candidate, verified)))
 
 
 def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> dict[str, Any] | None:
@@ -560,8 +569,8 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
     proof = view["proof"]
     if (not isinstance(proof, dict) or set(proof) != {"version", "source", "originalCodeSha256", "identityPredicates", "scope", "selectedEdges", "removedGuards"}
             or type(proof["version"]) is not int or proof["version"] != 1 or proof["source"] != "certified_receiver_identity_ast"
-            or proof["originalCodeSha256"] != record["codeSha256"] or not _identity(proof["identityPredicates"])
-            or proof["identityPredicates"] != reference.get("identityPredicates") or proof["scope"] not in _IDENTITY_SCOPES
+            or proof["originalCodeSha256"] != record["codeSha256"]
+            or not _same_projectile_identity(proof["identityPredicates"], reference.get("identityPredicates")) or proof["scope"] not in _IDENTITY_SCOPES
             or view["coverage"] != "identity_specialized_method" or record["coverage"] != "whole_method"
             or not isinstance(view["code"], str) or not view["code"].strip()
             or hashlib.sha256(view["code"].encode()).hexdigest() != view["codeSha256"]):
@@ -569,11 +578,17 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
     identity = proof["identityPredicates"]
     if view["id"] != f'csharp-specialized:{record["id"]}:{view["codeSha256"]}:{identity["Projectile.type"]}:{identity["Projectile.aiStyle"]}':
         return None
-    edges = proof["selectedEdges"]
-    if (not isinstance(edges, list) or not edges or any(not isinstance(e, dict) or set(e) != {"at", "block", "op", "successor"}
-            or any(not _integer(e[k]) for k in ("at", "block", "successor")) or not isinstance(e["op"], str) for e in edges)
-            or not isinstance(proof["removedGuards"], list) or not proof["removedGuards"]
-            or any(not _integer(at) or at not in {e["at"] for e in edges} for at in proof["removedGuards"])):
+    if not isinstance(proof["selectedEdges"], list) or not proof["selectedEdges"]:
+        return None
+    edges = set()
+    for raw_edge in proof["selectedEdges"]:
+        edge = _identity_edge(raw_edge)
+        if edge is None:
+            return None
+        edges.add(edge)
+    offsets = {edge[0] for edge in edges}
+    if (not isinstance(proof["removedGuards"], list) or not proof["removedGuards"]
+            or any(not _integer(at) or at not in offsets for at in proof["removedGuards"])):
         return None
     matched_receipt = False
     for path in record["graphPaths"]:
@@ -585,11 +600,11 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
         receipt = selected.get("identitySelection") if isinstance(selected, dict) else None
         if isinstance(selected, dict) and "identitySelection" not in selected:
             continue
-        if (not isinstance(receipt, dict) or receipt.get("source") != "certified_receiver_identity_cfg"
+        if (not _known_identity_receipt_fields(receipt) or receipt["source"] != "certified_receiver_identity_cfg"
                 or type(receipt.get("version")) is not int or receipt["version"] != 1
-                or any(receipt.get(k) != proof[k] for k in ("identityPredicates", "scope"))
+                or receipt["scope"] != proof["scope"] or not _same_projectile_identity(receipt["identityPredicates"], identity)
                 or not isinstance(receipt.get("selectedEdges"), list)
-                or any(edge not in edges for edge in receipt["selectedEdges"])):
+                or any(_identity_edge(edge) not in edges for edge in receipt["selectedEdges"])):
             return None
         matched_receipt = True
     if not matched_receipt:
@@ -598,15 +613,19 @@ def _specialized_record(reference: dict[str, Any], record: dict[str, Any]) -> di
     if not isinstance(locations, list) or len(locations) != len(record["locations"]):
         return None
     for old, row in zip(record["locations"], locations):
-        if not isinstance(row, dict) or row.get("ilOffset") != old["ilOffset"]:
+        if not isinstance(row, dict) or not _integer(row.get("ilOffset")) or row["ilOffset"] != old["ilOffset"]:
             return None
         if set(row) == {"ilOffset", "unresolved"}:
-            if row["unresolved"] not in {"decompiler_source_location_unavailable", "excluded_by_identity_proof"}:
+            if row["unresolved"] not in ("decompiler_source_location_unavailable", "excluded_by_identity_proof"):
                 return None
         elif (set(row) != {"ilOffset", "startLine", "endLine"} or not _integer(row["startLine"])
               or not _integer(row["endLine"]) or not 1 <= row["startLine"] <= row["endLine"] <= len(view["code"].split("\n"))):
             return None
-    if view["sourceMap"] != {"kind": "il_source_locations_v1", "original": record["locations"], "specialized": locations}:
+    source_map = view["sourceMap"]
+    if (not isinstance(source_map, dict) or set(source_map) != {"kind", "original", "specialized"}
+            or source_map["kind"] != "il_source_locations_v1"
+            or not _same_source_locations(source_map["original"], record["locations"])
+            or not _same_source_locations(source_map["specialized"], locations)):
         return None
     return {**record, **{k: copy.deepcopy(view[k]) for k in ("code", "codeSha256", "coverage", "locations")},
             "identitySpecialization": {k: copy.deepcopy(proof[k]) for k in ("identityPredicates", "scope")}}

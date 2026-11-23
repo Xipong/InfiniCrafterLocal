@@ -312,10 +312,21 @@ def test_specialized_source_remaps_locations_and_preserves_identity():
     assert reference == before
 
 
-@pytest.mark.parametrize("mutation", ["hash", "identity", "original", "future", "map", "method"])
+@pytest.mark.parametrize("mutation", ["hash", "identity", "original", "future", "map", "method",
+    "reference_bool", "receipt_float", "edge_bool", "offset_float", "map_bool", "unresolved_list", "future_receipt"])
 def test_invalid_specialization_preserves_full_source(mutation):
     reference, calls, record = _specialized_fixture()
     view = record["identitySpecialized"]
+    receipt = reference["motion"]["programs"][0]["identitySelected"]["identitySelection"]
+    if mutation == "reference_bool": reference["identityPredicates"] = {**reference["identityPredicates"], "Projectile.type": True}
+    if mutation == "receipt_float": receipt["identityPredicates"] = {**receipt["identityPredicates"], "Projectile.aiStyle": 1.0}
+    if mutation == "edge_bool": receipt["selectedEdges"] = [{**receipt["selectedEdges"][0], "block": False}]
+    if mutation == "future_receipt": receipt["futureSelectionRule"] = 1
+    if mutation == "offset_float":
+        view["locations"][0]["ilOffset"] = float(view["locations"][0]["ilOffset"])
+        view["sourceMap"]["specialized"] = copy.deepcopy(view["locations"])
+    if mutation == "map_bool": view["sourceMap"]["specialized"][0]["startLine"] = True
+    if mutation == "unresolved_list": view["locations"][1]["unresolved"] = []
     if mutation == "hash": view["codeSha256"] = "f" * 64
     if mutation == "identity": view["proof"]["identityPredicates"] = {"Projectile.type": 2, "Projectile.aiStyle": 1}
     if mutation == "original": view["proof"]["originalCodeSha256"] = "f" * 64
@@ -327,6 +338,13 @@ def test_invalid_specialization_preserves_full_source(mutation):
         assert projected == reference and linked == calls
     else:
         assert projected["nativeCSharpSource"]["records"][0]["code"] == record["code"]
+
+
+def test_compact_specialization_is_bound_to_parent_identity():
+    reference, calls, _ = _specialized_fixture()
+    projected, _ = native_csharp_source_for_llm(reference, calls)
+    projected["identityPredicates"] = {**reference["identityPredicates"], "Projectile.aiStyle": 2}
+    assert not known_native_csharp_context(projected)
 
 
 @pytest.mark.parametrize("variant", ["valid", "conflict", "absent", "certificate"])

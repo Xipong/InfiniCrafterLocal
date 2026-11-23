@@ -158,6 +158,14 @@ def _interaction_reference():
     return reference
 
 
+@pytest.mark.parametrize("invalid_style", [True, 1.0])
+def test_mistyped_parent_identity_preserves_direct_source_certificates(invalid_style):
+    reference, calls = _reference()
+    reference["interactionSources"] = _interaction_reference()["interactionSources"]
+    reference["identityPredicates"]["Projectile.aiStyle"] = invalid_style
+    assert native_csharp_source_for_llm(reference, calls) == (reference, calls)
+
+
 def test_interaction_source_preserves_locals_helpers_and_actual_author():
     reference = _interaction_reference()
     reference["interactionSources"]["roots"][0]["records"][0]["enclosingConditions"] = [
