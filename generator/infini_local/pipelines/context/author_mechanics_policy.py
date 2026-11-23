@@ -8,6 +8,7 @@ import copy
 import hashlib
 import json
 from typing import Any
+from .attack_behavior import _method_definition_token
 from .csharp_source_view import _records, _certificate, _at_path, _model_source_record, _specialized_record
 
 POLICY = (
@@ -21,7 +22,7 @@ POLICY = (
 def _definition(value: Any) -> tuple | None:
     cert = _certificate(value)
     token = value.get('metadataToken') if isinstance(value, dict) else None
-    if cert is None or type(token) is not int or token & 0xff000000 != 0x06000000 or not token & 0xffffff:
+    if cert is None or not _method_definition_token(token):
         return None
     return (*cert, token)
 

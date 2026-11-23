@@ -628,7 +628,7 @@ def test_new_source_call_token_cannot_link_an_overload():
     assert result['motion']['programs'][0] == {'nativeCSharpSourceRef': 's0'}
     assert 'metadataToken' not in json.dumps(linked)
 
-@pytest.mark.parametrize('selected_token', [None, 0x06000002])
+@pytest.mark.parametrize('selected_token', [None, 0x06000002, float(0x06000001)])
 def test_new_selection_cannot_claim_another_or_unbound_definition(selected_token):
     parent = _parent()
     reference, _ = _parts(parent)

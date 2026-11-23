@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from infini_local.pipelines.context.attack_behavior import (
-    _PROGRAM_FIELDS, _ROW_FIELDS, _identity_edge, _known_identity_receipt_fields, _same_projectile_identity,
+    _PROGRAM_FIELDS, _ROW_FIELDS, _identity_edge, _known_identity_receipt_fields, _same_graph_definition, _same_projectile_identity,
 )
 
 SOURCE_READING = (
@@ -230,10 +230,7 @@ def _certificate(value: Any) -> tuple[str, str, str] | None:
 def _token_matches(graph: dict[str, Any], record: dict[str, Any]) -> bool:
     # Existing captures keep their old contract. A newly supplied definition
     # token must bind exactly; never infer a missing token from a source row.
-    if "metadataToken" not in graph:
-        return True
-    token = graph["metadataToken"]
-    return type(token) is int and token & 0xff000000 == 0x06000000 and token & 0xffffff != 0 and token == record.get("metadataToken")
+    return "metadataToken" not in graph or _same_graph_definition(graph, record)
 
 
 def _records(reference: dict[str, Any]) -> dict[str, dict[str, Any]] | None:
@@ -348,7 +345,7 @@ def _known_graph(program: Any) -> bool:
         return False  # A separate callee graph requires its own explicit replacement.
     selected = program.get("identitySelected")
     return selected is None or (_known_graph(selected) and _certificate(selected) == _certificate(program)
-                                and selected.get("metadataToken") == program.get("metadataToken"))
+                                and _same_graph_definition(selected, program))
 
 
 def _at_path(reference: dict[str, Any], path: list[str | int]) -> tuple[Any, str | int, Any] | None:

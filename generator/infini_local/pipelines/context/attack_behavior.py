@@ -349,6 +349,18 @@ def _known_identity_receipt_fields(receipt: Any) -> bool:
     return True
 
 
+def _method_definition_token(value: Any) -> bool:
+    # ECMA-335 MethodDef table (0x06) with a nonzero 24-bit row index.
+    return type(value) is int and 0x06000001 <= value <= 0x06FFFFFF
+
+
+def _same_graph_definition(left: dict, right: dict) -> bool:
+    if "metadataToken" not in left and "metadataToken" not in right:
+        return True
+    first, second = left.get("metadataToken"), right.get("metadataToken")
+    return _method_definition_token(first) and _method_definition_token(second) and first == second
+
+
 def _same_projectile_identity(left: Any, right: Any) -> bool:
     fields = {"Projectile.type", "Projectile.aiStyle"}
     return (isinstance(left, dict) and isinstance(right, dict) and left.keys() == right.keys() == fields
@@ -382,7 +394,7 @@ def _selected_program(value: dict, identity: Any) -> dict:
     if (not set(selected) <= _PROGRAM_FIELDS | {"identitySelection"}
             or any(type(value.get(key)) is not str or selected.get(key) != value[key]
                    for key in ("method", "sourceModuleVersionId", "sourceMethodSha256"))
-            or selected.get("metadataToken") != value.get("metadataToken")
+            or not _same_graph_definition(selected, value)
             or not isinstance(selected.get("observations"), list)
             or not isinstance(selected.get("dependencies"), dict)
             or not isinstance(selected.get("predicates"), list)

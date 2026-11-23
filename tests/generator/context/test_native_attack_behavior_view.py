@@ -229,6 +229,18 @@ def identity_selection_reference():
     return source
 
 
+@pytest.mark.parametrize("original, selected", [
+    (0x06000001, float(0x06000001)), (None, None), (True, True),
+    (0x106000001, 0x106000001), (0x06000000, 0x06000000),
+])
+def test_invalid_method_tokens_preserve_full_behavior_graph(original, selected):
+    reference = identity_selection_reference()
+    graph = reference["motion"]["programs"][0]
+    graph["metadataToken"] = original
+    graph["identitySelected"]["metadataToken"] = selected
+    assert project_attack_behavior(reference) == reference
+
+
 def identity_refusal_diagnostics():
     return {"blockedIdentityReads": [{"branchAt": 36, "readAt": 29, "field": "Projectile.type",
         "hazardAt": 25, "hazardOp": "call", "hazardMember": "Terraria.Projectile.Kill()",
