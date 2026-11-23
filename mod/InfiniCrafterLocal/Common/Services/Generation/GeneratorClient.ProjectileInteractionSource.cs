@@ -175,7 +175,7 @@ public sealed partial class GeneratorClient
         return result;
     }
 
-    private static bool PositiveInteractionEquality(BinaryOperatorExpression comparison, Expression condition)
+    private static bool PositiveIdentityEquality(BinaryOperatorExpression comparison, Expression condition)
     {
         AstNode current = comparison;
         while (current != condition)
@@ -188,9 +188,30 @@ public sealed partial class GeneratorClient
         return true;
     }
 
+    // The immediate parent owns the shown arm/section. Preserve the surrounding
+    // lexical conditions in order, including switch selectors and shared labels.
+    private static JsonArray EnclosingSourceConditions(AstNode body)
+    {
+        var ancestors = body.Ancestors.ToHashSet();
+        var result = new JsonArray();
+        foreach (var node in body.Ancestors.Skip(1).Reverse())
+        {
+            if (node is IfElseStatement branch)
+            {
+                string arm = ancestors.Contains(branch.TrueStatement) ? "true"
+                    : ancestors.Contains(branch.FalseStatement) ? "false" : "condition";
+                result.Add(new JsonObject { ["condition"] = RenderCSharp(branch.Condition, false).Code.Trim(), ["requiredArm"] = arm });
+            }
+            else if (node is SwitchSection section && section.Parent is SwitchStatement switched)
+                result.Add(new JsonObject { ["selector"] = RenderCSharp(switched.Expression, false).Code.Trim(),
+                    ["caseLabels"] = new JsonArray(section.CaseLabels.Select(label => (JsonNode?)JsonValue.Create(RenderCSharp(label, false).Code.Trim())).ToArray()) });
+        }
+        return result;
+    }
+
     private sealed record InteractionRegion(AstNode Body, Func<Statement> Materialize, Expression Condition, JsonArray Witnesses);
 
-    private static SwitchStatement CloneInteractionSwitchSection(SwitchStatement source, SwitchSection selected)
+    private static SwitchStatement CloneSelectedSwitchSection(SwitchStatement source, SwitchSection selected)
     {
         var original = source.SwitchSections.ToArray();
         try
@@ -214,7 +235,7 @@ public sealed partial class GeneratorClient
             {
                 var witnesses = new JsonArray();
                 foreach (var comparison in branch.Condition.DescendantsAndSelf.OfType<BinaryOperatorExpression>())
-                    if (PositiveInteractionEquality(comparison, branch.Condition)
+                    if (PositiveIdentityEquality(comparison, branch.Condition)
                         && LifecycleIdentityEquality(comparison, out var field, out int literal) && literal == (field == "type" ? type : style))
                         witnesses.Add(new JsonObject { ["field"] = "Terraria.Projectile." + field, ["literal"] = literal });
                 if (witnesses.Count > 0) yield return new(branch.TrueStatement, () => CloneCSharpTrueArm(branch), branch.Condition, witnesses);
@@ -228,7 +249,7 @@ public sealed partial class GeneratorClient
             {
                 var witnesses = new JsonArray(new JsonObject { ["field"] = "Terraria.Projectile." + field.Name,
                     ["literal"] = field.Name == "type" ? type : style });
-                yield return new(section, () => CloneInteractionSwitchSection(switched, section), switched.Expression, witnesses);
+                yield return new(section, () => CloneSelectedSwitchSection(switched, section), switched.Expression, witnesses);
             }
         }
     }
@@ -247,18 +268,19 @@ public sealed partial class GeneratorClient
             ["unresolved"] = new JsonArray("other_regions_and_callees_unresolved; absence_not_proved") };
         var records = result["records"]!.AsArray(); var helpers = result["helpers"]!.AsArray(); var gaps = result["unresolved"]!.AsArray();
         var candidates = InteractionRegions(document, type, style, cancellation).ToArray();
-        var selectedArms = candidates.Select(region => region.Body).ToHashSet();
+        var selectedArms = new HashSet<AstNode>();
+        var refusedArms = new HashSet<AstNode>();
         var helperAttempts = new Dictionary<MethodInfo, string?>();
         NativeSourceCallIndex? callIndex = null;
-        int count = 0, characters = 0;
+        int count = 0, attempts = 0, characters = 0;
         foreach (var region in candidates)
         {
             cancellation.ThrowIfCancellationRequested();
             if (region.Body.Ancestors.Any(selectedArms.Contains)) continue;
-            string label = "region:" + (count + 1).ToString(CultureInfo.InvariantCulture);
+            string label = "region:" + (++attempts).ToString(CultureInfo.InvariantCulture);
             try
             {
-                if (++count > regionLimit) throw new NotSupportedException("interaction_region_count_bound");
+                if (count >= regionLimit) { gaps.Add(label + ":interaction_region_count_bound"); break; }
                 if (region.Body is SwitchSection section && section.CaseLabels.Any(label => label.Expression is not PrimitiveExpression { Value: int }))
                     throw new NotSupportedException("interaction_switch_label_unsupported");
                 if (region.Body.Ancestors.Any(node => node is TryCatchStatement or UsingStatement or LockStatement))
@@ -282,13 +304,15 @@ public sealed partial class GeneratorClient
                 if (characters + size > totalCharacters) throw new NotSupportedException("interaction_total_character_bound");
                 // AST statement ranges can be coarse/nonlocal. This is only
                 // an ordered region index; only matched callsites claim IL at.
-                record["regionIndex"] = count;
+                record["regionIndex"] = count + 1;
+                if (region.Body.Ancestors.Any(refusedArms.Contains))
+                    record["enclosingConditions"] = EnclosingSourceConditions(region.Body);
                 record["entryCondition"] = RenderCSharp(region.Condition, includeLocations: false).Code.Trim();
                 record["externalInputs"] = InteractionExternalInputs(excerpt);
                 record["identityWitnesses"] = region.Witnesses.DeepClone();
                 record["spawnSites"] = InteractionSpawnSites(document, excerpt, gaps, cancellation);
                 var links = new JsonArray(); record["helperCalls"] = links;
-                records.Add(record); characters += size;
+                records.Add(record); selectedArms.Add(region.Body); count++; characters += size;
                 foreach (var invocation in region.Body.DescendantsAndSelf.OfType<InvocationExpression>())
                 {
                     cancellation.ThrowIfCancellationRequested();
@@ -324,7 +348,7 @@ public sealed partial class GeneratorClient
                 }
             }
             catch (Exception error) when (error is not OutOfMemoryException && error is not OperationCanceledException)
-            { gaps.Add(label + ":" + (error is NotSupportedException ? error.Message : error.GetType().Name)); }
+            { refusedArms.Add(region.Body); gaps.Add(label + ":" + (error is NotSupportedException ? error.Message : error.GetType().Name)); }
         }
         if (records.Count == 0) gaps.Add("no_admitted_matching_region; absence_not_proved");
         cancellation.ThrowIfCancellationRequested();

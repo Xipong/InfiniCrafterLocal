@@ -81,6 +81,12 @@ internal static partial class EngineRuntimeChecks
         JsonObject merged = Read(typeof(ConditionalIdentitySource));
         Equal(0, merged["requests"]!.AsArray().Count, "a local with conditional definitions must not select one buff ID");
         Equal(1, merged["unresolvedDirectAddBuffOffsets"]!.AsArray().Count, "conditional identity remains explicit unknown");
+        foreach (Type changed in new[] { typeof(EscapedStatusSource), typeof(ReplacedHitTarget) })
+        {
+            JsonObject uncertain = Read(changed);
+            Equal(0, uncertain["requests"]!.AsArray().Count, "unproved duration or target must not become a hit fact");
+            Equal(1, uncertain["unresolvedDirectAddBuffOffsets"]!.AsArray().Count, "call remains at its original offset");
+        }
         var potion = new Item(ItemID.MiningPotion);
         typeof(Item).GetProperty(nameof(Item.ModItem))!.SetValue(potion, new StatusSourceItem());
         var capture = typeof(GeneratorClient).GetMethod("CaptureParentNativeFacts", BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -107,6 +113,30 @@ internal static partial class EngineRuntimeChecks
     {
         public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
             => target.AddBuff(BuffID.Poisoned, damageDone);
+    }
+    private sealed class EscapedStatusSource : ModProjectile
+    {
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static ref int Alias(ref int value) => ref value;
+        public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            int ticks = damageDone;
+            ref int alias = ref Alias(ref ticks);
+            ticks = 60;
+            alias = 300;
+            target.AddBuff(BuffID.Poisoned, ticks);
+        }
+    }
+    private sealed class ReplacedHitTarget : ModProjectile
+    {
+        public override void OnHitNPC(NPC target, NPC.HitInfo hit, int damageDone)
+        {
+            target = Terraria.Main.npc[damageDone];
+            // Taking the argument's address prevents Roslyn from folding the reassignment.
+            Observe(ref target);
+            target.AddBuff(BuffID.Poisoned, 60);
+        }
+        private static void Observe(ref NPC npc) { }
     }
     private sealed class ConditionalIdentitySource : ModProjectile
     {

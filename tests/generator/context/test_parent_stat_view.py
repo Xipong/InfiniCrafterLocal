@@ -112,7 +112,7 @@ def test_actual_author_request_uses_one_source_vocabulary_without_mutating_paren
     assert effect['stat'] == 'miningUseTimeMultiplier' and effect['value'] == -0.1
     buff = dossier['parents']['B']['packet']['raw']['item']['nativeBuffEffectReference']
     assert buff['fragments'][0]['operations'][0]['value'] == 2
-    assert buff['fragments'][0]['condition']['nativeControlFlowMustReachTest'] == 469
+    assert buff['fragments'][0]['condition'] == b['nativeBuffEffectReference']['fragments'][0]['condition']
     assert (a, b) == before
     assert raw_parent_card_for_llm(a)['raw']['item']['lifeRegen'] == 4
 

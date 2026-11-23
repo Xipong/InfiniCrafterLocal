@@ -156,8 +156,15 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
             return self.cache[name]
 
     instructions.method_provenance = MethodProvenance()
+    from dncil.cil.enums import OperandType
     for ins in body.instructions:
         op, arg = ins.opcode.name, ins.operand
+        # dncil positions include the method header. Reflection, ILSpy and
+        # published source certificates address the first IL opcode as zero.
+        if ins.opcode.operand_type in (OperandType.ShortInlineBrTarget, OperandType.InlineBrTarget):
+            arg -= body.header_size
+        elif ins.opcode.operand_type == OperandType.InlineSwitch:
+            arg = [target - body.header_size for target in arg]
         if op.startswith("ldc.i4"):
             arg = arg if op in ("ldc.i4", "ldc.i4.s") else (-1 if op.endswith(".m1") else int(op.rsplit(".", 1)[1]))
             op = "const"
@@ -200,7 +207,7 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
             op = "bne"
         elif op.endswith(".s"):
             op = op[:-2]
-        instructions.append(Instruction(ins.offset, op, arg))
+        instructions.append(Instruction(ins.offset - body.header_size, op, arg))
     assembly = pe.net.mdtables.Assembly.rows[0]
     version = ".".join(str(getattr(assembly, key)) for key in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber"))
     raw = body.raw_bytes[body.header_size:body.header_size + body.code_size]

@@ -10,8 +10,8 @@
       "records": [
         {
           "itemId": 1319,
-          "sourceGuardIlOffset": 4878,
-          "sourceSpawnIlOffset": 4973,
+          "sourceGuardIlOffset": 4866,
+          "sourceSpawnIlOffset": 4961,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -26,7 +26,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1319,
-              "sourceIlOffset": 4878
+              "sourceIlOffset": 4866
             }
           ],
           "spawnInputs": {
@@ -56,7 +56,7 @@
             "velocityX": {
               "kind": "local_definition",
               "local": 43,
-              "sourceStoreIlOffset": 4904,
+              "sourceStoreIlOffset": 4892,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -116,7 +116,7 @@
             "velocityY": {
               "kind": "local_definition",
               "local": 44,
-              "sourceStoreIlOffset": 4930,
+              "sourceStoreIlOffset": 4918,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -219,8 +219,8 @@
         },
         {
           "itemId": 3107,
-          "sourceGuardIlOffset": 4991,
-          "sourceSpawnIlOffset": 5086,
+          "sourceGuardIlOffset": 4979,
+          "sourceSpawnIlOffset": 5074,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -235,7 +235,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3107,
-              "sourceIlOffset": 4991
+              "sourceIlOffset": 4979
             }
           ],
           "spawnInputs": {
@@ -265,7 +265,7 @@
             "velocityX": {
               "kind": "local_definition",
               "local": 45,
-              "sourceStoreIlOffset": 5017,
+              "sourceStoreIlOffset": 5005,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -325,7 +325,7 @@
             "velocityY": {
               "kind": "local_definition",
               "local": 46,
-              "sourceStoreIlOffset": 5043,
+              "sourceStoreIlOffset": 5031,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -428,8 +428,8 @@
         },
         {
           "itemId": 3053,
-          "sourceGuardIlOffset": 5341,
-          "sourceSpawnIlOffset": 5630,
+          "sourceGuardIlOffset": 5329,
+          "sourceSpawnIlOffset": 5618,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -444,7 +444,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3053,
-              "sourceIlOffset": 5341
+              "sourceIlOffset": 5329
             }
           ],
           "spawnInputs": {
@@ -537,8 +537,8 @@
         },
         {
           "itemId": 3019,
-          "sourceGuardIlOffset": 5648,
-          "sourceSpawnIlOffset": 6039,
+          "sourceGuardIlOffset": 5636,
+          "sourceSpawnIlOffset": 6027,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -553,7 +553,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3019,
-              "sourceIlOffset": 5648
+              "sourceIlOffset": 5636
             }
           ],
           "spawnInputs": {
@@ -646,8 +646,8 @@
         },
         {
           "itemId": 2270,
-          "sourceGuardIlOffset": 6397,
-          "sourceSpawnIlOffset": 6572,
+          "sourceGuardIlOffset": 6385,
+          "sourceSpawnIlOffset": 6560,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -662,7 +662,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 2270,
-              "sourceIlOffset": 6397
+              "sourceIlOffset": 6385
             }
           ],
           "spawnInputs": {
@@ -745,8 +745,8 @@
         },
         {
           "itemId": 5065,
-          "sourceGuardIlOffset": 8459,
-          "sourceSpawnIlOffset": 8509,
+          "sourceGuardIlOffset": 8447,
+          "sourceSpawnIlOffset": 8497,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -761,7 +761,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 5065,
-              "sourceIlOffset": 8459
+              "sourceIlOffset": 8447
             }
           ],
           "spawnInputs": {
@@ -773,7 +773,7 @@
             "position": {
               "kind": "local_definition",
               "local": 93,
-              "sourceStoreIlOffset": 8473,
+              "sourceStoreIlOffset": 8461,
               "scope": "value_at_store",
               "value": {
                 "kind": "call",
@@ -812,7 +812,7 @@
             "velocity": {
               "kind": "local_definition",
               "local": 94,
-              "sourceStoreIlOffset": 8480,
+              "sourceStoreIlOffset": 8468,
               "scope": "value_at_store",
               "value": {
                 "kind": "call",
@@ -872,8 +872,8 @@
         },
         {
           "itemId": 1929,
-          "sourceGuardIlOffset": 9128,
-          "sourceSpawnIlOffset": 9223,
+          "sourceGuardIlOffset": 9116,
+          "sourceSpawnIlOffset": 9211,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -888,7 +888,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1929,
-              "sourceIlOffset": 9128
+              "sourceIlOffset": 9116
             }
           ],
           "spawnInputs": {
@@ -918,7 +918,7 @@
             "velocityX": {
               "kind": "local_definition",
               "local": 109,
-              "sourceStoreIlOffset": 9154,
+              "sourceStoreIlOffset": 9142,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -978,7 +978,7 @@
             "velocityY": {
               "kind": "local_definition",
               "local": 110,
-              "sourceStoreIlOffset": 9180,
+              "sourceStoreIlOffset": 9168,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -1081,8 +1081,8 @@
         },
         {
           "itemId": 1553,
-          "sourceGuardIlOffset": 9241,
-          "sourceSpawnIlOffset": 9336,
+          "sourceGuardIlOffset": 9229,
+          "sourceSpawnIlOffset": 9324,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -1097,7 +1097,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1553,
-              "sourceIlOffset": 9241
+              "sourceIlOffset": 9229
             }
           ],
           "spawnInputs": {
@@ -1127,7 +1127,7 @@
             "velocityX": {
               "kind": "local_definition",
               "local": 111,
-              "sourceStoreIlOffset": 9267,
+              "sourceStoreIlOffset": 9255,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -1187,7 +1187,7 @@
             "velocityY": {
               "kind": "local_definition",
               "local": 112,
-              "sourceStoreIlOffset": 9293,
+              "sourceStoreIlOffset": 9281,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -1290,8 +1290,8 @@
         },
         {
           "itemId": 518,
-          "sourceGuardIlOffset": 9354,
-          "sourceSpawnIlOffset": 9457,
+          "sourceGuardIlOffset": 9342,
+          "sourceSpawnIlOffset": 9445,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -1306,7 +1306,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 518,
-              "sourceIlOffset": 9354
+              "sourceIlOffset": 9342
             }
           ],
           "spawnInputs": {
@@ -1389,8 +1389,8 @@
         },
         {
           "itemId": 534,
-          "sourceGuardIlOffset": 11025,
-          "sourceSpawnIlOffset": 11150,
+          "sourceGuardIlOffset": 11013,
+          "sourceSpawnIlOffset": 11138,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -1405,7 +1405,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 534,
-              "sourceIlOffset": 11025
+              "sourceIlOffset": 11013
             }
           ],
           "spawnInputs": {
@@ -1488,8 +1488,8 @@
         },
         {
           "itemId": 4270,
-          "sourceGuardIlOffset": 11506,
-          "sourceSpawnIlOffset": 11700,
+          "sourceGuardIlOffset": 11494,
+          "sourceSpawnIlOffset": 11688,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -1504,7 +1504,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 4270,
-              "sourceIlOffset": 11506
+              "sourceIlOffset": 11494
             }
           ],
           "spawnInputs": {
@@ -1519,7 +1519,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 159,
-                "sourceStoreIlOffset": 11594,
+                "sourceStoreIlOffset": 11582,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -1536,7 +1536,7 @@
                         {
                           "kind": "local_definition",
                           "local": 158,
-                          "sourceStoreIlOffset": 11553,
+                          "sourceStoreIlOffset": 11541,
                           "scope": "value_at_store",
                           "value": {
                             "kind": "call",
@@ -1685,7 +1685,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 159,
-                "sourceStoreIlOffset": 11594,
+                "sourceStoreIlOffset": 11582,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -1702,7 +1702,7 @@
                         {
                           "kind": "local_definition",
                           "local": 158,
-                          "sourceStoreIlOffset": 11553,
+                          "sourceStoreIlOffset": 11541,
                           "scope": "value_at_store",
                           "value": {
                             "kind": "call",
@@ -1851,7 +1851,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 160,
-                "sourceStoreIlOffset": 11630,
+                "sourceStoreIlOffset": 11618,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -1868,7 +1868,7 @@
                             {
                               "kind": "local_definition",
                               "local": 158,
-                              "sourceStoreIlOffset": 11553,
+                              "sourceStoreIlOffset": 11541,
                               "scope": "value_at_store",
                               "value": {
                                 "kind": "call",
@@ -1926,7 +1926,7 @@
                             {
                               "kind": "local_definition",
                               "local": 159,
-                              "sourceStoreIlOffset": 11594,
+                              "sourceStoreIlOffset": 11582,
                               "scope": "value_at_store",
                               "value": {
                                 "kind": "call",
@@ -1943,7 +1943,7 @@
                                       {
                                         "kind": "local_definition",
                                         "local": 158,
-                                        "sourceStoreIlOffset": 11553,
+                                        "sourceStoreIlOffset": 11541,
                                         "scope": "value_at_store",
                                         "value": {
                                           "kind": "call",
@@ -2146,7 +2146,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 160,
-                "sourceStoreIlOffset": 11630,
+                "sourceStoreIlOffset": 11618,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -2163,7 +2163,7 @@
                             {
                               "kind": "local_definition",
                               "local": 158,
-                              "sourceStoreIlOffset": 11553,
+                              "sourceStoreIlOffset": 11541,
                               "scope": "value_at_store",
                               "value": {
                                 "kind": "call",
@@ -2221,7 +2221,7 @@
                             {
                               "kind": "local_definition",
                               "local": 159,
-                              "sourceStoreIlOffset": 11594,
+                              "sourceStoreIlOffset": 11582,
                               "scope": "value_at_store",
                               "value": {
                                 "kind": "call",
@@ -2238,7 +2238,7 @@
                                       {
                                         "kind": "local_definition",
                                         "local": 158,
-                                        "sourceStoreIlOffset": 11553,
+                                        "sourceStoreIlOffset": 11541,
                                         "scope": "value_at_store",
                                         "value": {
                                           "kind": "call",
@@ -2520,8 +2520,8 @@
         },
         {
           "itemId": 4715,
-          "sourceGuardIlOffset": 11718,
-          "sourceSpawnIlOffset": 12076,
+          "sourceGuardIlOffset": 11706,
+          "sourceSpawnIlOffset": 12064,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -2536,7 +2536,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 4715,
-              "sourceIlOffset": 11718
+              "sourceIlOffset": 11706
             }
           ],
           "spawnInputs": {
@@ -2637,8 +2637,8 @@
         },
         {
           "itemId": 1258,
-          "sourceGuardIlOffset": 13286,
-          "sourceSpawnIlOffset": 13456,
+          "sourceGuardIlOffset": 13274,
+          "sourceSpawnIlOffset": 13444,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -2653,7 +2653,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1258,
-              "sourceIlOffset": 13286
+              "sourceIlOffset": 13274
             }
           ],
           "spawnInputs": {
@@ -2736,8 +2736,8 @@
         },
         {
           "itemId": 964,
-          "sourceGuardIlOffset": 13474,
-          "sourceSpawnIlOffset": 13599,
+          "sourceGuardIlOffset": 13462,
+          "sourceSpawnIlOffset": 13587,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -2752,7 +2752,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 964,
-              "sourceIlOffset": 13474
+              "sourceIlOffset": 13462
             }
           ],
           "spawnInputs": {
@@ -2835,8 +2835,8 @@
         },
         {
           "itemId": 1155,
-          "sourceGuardIlOffset": 15059,
-          "sourceSpawnIlOffset": 15184,
+          "sourceGuardIlOffset": 15047,
+          "sourceSpawnIlOffset": 15172,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -2851,7 +2851,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1155,
-              "sourceIlOffset": 15059
+              "sourceIlOffset": 15047
             }
           ],
           "spawnInputs": {
@@ -2934,8 +2934,8 @@
         },
         {
           "itemId": 1801,
-          "sourceGuardIlOffset": 15214,
-          "sourceSpawnIlOffset": 15339,
+          "sourceGuardIlOffset": 15202,
+          "sourceSpawnIlOffset": 15327,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -2950,7 +2950,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1801,
-              "sourceIlOffset": 15214
+              "sourceIlOffset": 15202
             }
           ],
           "spawnInputs": {
@@ -3033,8 +3033,8 @@
         },
         {
           "itemId": 679,
-          "sourceGuardIlOffset": 15369,
-          "sourceSpawnIlOffset": 15477,
+          "sourceGuardIlOffset": 15357,
+          "sourceSpawnIlOffset": 15465,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3049,7 +3049,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 679,
-              "sourceIlOffset": 15369
+              "sourceIlOffset": 15357
             }
           ],
           "spawnInputs": {
@@ -3132,8 +3132,8 @@
         },
         {
           "itemId": 1156,
-          "sourceGuardIlOffset": 15506,
-          "sourceSpawnIlOffset": 15614,
+          "sourceGuardIlOffset": 15494,
+          "sourceSpawnIlOffset": 15602,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3148,7 +3148,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1156,
-              "sourceIlOffset": 15506
+              "sourceIlOffset": 15494
             }
           ],
           "spawnInputs": {
@@ -3231,8 +3231,8 @@
         },
         {
           "itemId": 4682,
-          "sourceGuardIlOffset": 15643,
-          "sourceSpawnIlOffset": 15751,
+          "sourceGuardIlOffset": 15631,
+          "sourceSpawnIlOffset": 15739,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3247,7 +3247,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 4682,
-              "sourceIlOffset": 15643
+              "sourceIlOffset": 15631
             }
           ],
           "spawnInputs": {
@@ -3330,8 +3330,8 @@
         },
         {
           "itemId": 2623,
-          "sourceGuardIlOffset": 15780,
-          "sourceSpawnIlOffset": 15888,
+          "sourceGuardIlOffset": 15768,
+          "sourceSpawnIlOffset": 15876,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3346,7 +3346,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 2623,
-              "sourceIlOffset": 15780
+              "sourceIlOffset": 15768
             }
           ],
           "spawnInputs": {
@@ -3429,8 +3429,8 @@
         },
         {
           "itemId": 3210,
-          "sourceGuardIlOffset": 15917,
-          "sourceSpawnIlOffset": 16157,
+          "sourceGuardIlOffset": 15905,
+          "sourceSpawnIlOffset": 16145,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3445,7 +3445,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3210,
-              "sourceIlOffset": 15917
+              "sourceIlOffset": 15905
             }
           ],
           "spawnInputs": {
@@ -3565,8 +3565,8 @@
         },
         {
           "itemId": 434,
-          "sourceGuardIlOffset": 16175,
-          "sourceSpawnIlOffset": 16394,
+          "sourceGuardIlOffset": 16163,
+          "sourceSpawnIlOffset": 16382,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3581,7 +3581,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 434,
-              "sourceIlOffset": 16175
+              "sourceIlOffset": 16163
             }
           ],
           "spawnInputs": {
@@ -3664,8 +3664,8 @@
         },
         {
           "itemId": 3006,
-          "sourceGuardIlOffset": 18594,
-          "sourceSpawnIlOffset": 18657,
+          "sourceGuardIlOffset": 18582,
+          "sourceSpawnIlOffset": 18645,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3680,7 +3680,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3006,
-              "sourceIlOffset": 18594
+              "sourceIlOffset": 18582
             }
           ],
           "spawnInputs": {
@@ -3695,7 +3695,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 8,
-                "sourceStoreIlOffset": 18608,
+                "sourceStoreIlOffset": 18596,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -3738,7 +3738,7 @@
               "receiver": {
                 "kind": "local_definition",
                 "local": 8,
-                "sourceStoreIlOffset": 18608,
+                "sourceStoreIlOffset": 18596,
                 "scope": "value_at_store",
                 "value": {
                   "kind": "call",
@@ -3829,8 +3829,8 @@
         },
         {
           "itemId": 3384,
-          "sourceGuardIlOffset": 19380,
-          "sourceSpawnIlOffset": 19440,
+          "sourceGuardIlOffset": 19368,
+          "sourceSpawnIlOffset": 19428,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3845,7 +3845,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3384,
-              "sourceIlOffset": 19380
+              "sourceIlOffset": 19368
             }
           ],
           "spawnInputs": {
@@ -3933,8 +3933,8 @@
         },
         {
           "itemId": 3473,
-          "sourceGuardIlOffset": 19458,
-          "sourceSpawnIlOffset": 19563,
+          "sourceGuardIlOffset": 19446,
+          "sourceSpawnIlOffset": 19551,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -3949,7 +3949,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3473,
-              "sourceIlOffset": 19458
+              "sourceIlOffset": 19446
             }
           ],
           "spawnInputs": {
@@ -4023,7 +4023,7 @@
             "ai1": {
               "kind": "local_definition",
               "local": 277,
-              "sourceStoreIlOffset": 19482,
+              "sourceStoreIlOffset": 19470,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -4085,8 +4085,8 @@
         },
         {
           "itemId": 4956,
-          "sourceGuardIlOffset": 19581,
-          "sourceSpawnIlOffset": 19956,
+          "sourceGuardIlOffset": 19569,
+          "sourceSpawnIlOffset": 19944,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4101,7 +4101,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 4956,
-              "sourceIlOffset": 19581
+              "sourceIlOffset": 19569
             }
           ],
           "spawnInputs": {
@@ -4145,7 +4145,7 @@
             "ai0": {
               "kind": "local_definition",
               "local": 284,
-              "sourceStoreIlOffset": 19916,
+              "sourceStoreIlOffset": 19904,
               "scope": "value_at_store",
               "value": {
                 "kind": "conversion",
@@ -4210,8 +4210,8 @@
         },
         {
           "itemId": 3836,
-          "sourceGuardIlOffset": 19974,
-          "sourceSpawnIlOffset": 20047,
+          "sourceGuardIlOffset": 19962,
+          "sourceSpawnIlOffset": 20035,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4226,7 +4226,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3836,
-              "sourceIlOffset": 19974
+              "sourceIlOffset": 19962
             }
           ],
           "spawnInputs": {
@@ -4270,7 +4270,7 @@
             "ai0": {
               "kind": "local_definition",
               "local": 288,
-              "sourceStoreIlOffset": 20002,
+              "sourceStoreIlOffset": 19990,
               "scope": "value_at_store",
               "value": {
                 "kind": "binary",
@@ -4353,8 +4353,8 @@
         },
         {
           "itemId": 3787,
-          "sourceGuardIlOffset": 21419,
-          "sourceSpawnIlOffset": 21843,
+          "sourceGuardIlOffset": 21407,
+          "sourceSpawnIlOffset": 21831,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4369,7 +4369,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3787,
-              "sourceIlOffset": 21419
+              "sourceIlOffset": 21407
             }
           ],
           "spawnInputs": {
@@ -4434,8 +4434,8 @@
         },
         {
           "itemId": 46,
-          "sourceGuardIlOffset": 22345,
-          "sourceSpawnIlOffset": 22742,
+          "sourceGuardIlOffset": 22333,
+          "sourceSpawnIlOffset": 22730,
           "damageMultiplierAtSpawn": 0.5,
           "damageIntegerConversion": "native_truncate_toward_zero",
           "shotDamageLocalMayBeModifiedInBranch": true,
@@ -4450,7 +4450,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 46,
-              "sourceIlOffset": 22345
+              "sourceIlOffset": 22333
             }
           ],
           "spawnInputs": {
@@ -4548,8 +4548,8 @@
         },
         {
           "itemId": 368,
-          "sourceGuardIlOffset": 22982,
-          "sourceSpawnIlOffset": 23055,
+          "sourceGuardIlOffset": 22970,
+          "sourceSpawnIlOffset": 23043,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4564,7 +4564,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 368,
-              "sourceIlOffset": 22982
+              "sourceIlOffset": 22970
             }
           ],
           "spawnInputs": {
@@ -4675,7 +4675,7 @@
             "ai2": {
               "kind": "local_definition",
               "local": 322,
-              "sourceStoreIlOffset": 22991,
+              "sourceStoreIlOffset": 22979,
               "scope": "value_at_store",
               "value": {
                 "kind": "call",
@@ -4712,8 +4712,8 @@
         },
         {
           "itemId": 1826,
-          "sourceGuardIlOffset": 23107,
-          "sourceSpawnIlOffset": 23180,
+          "sourceGuardIlOffset": 23095,
+          "sourceSpawnIlOffset": 23168,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4728,7 +4728,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1826,
-              "sourceIlOffset": 23107
+              "sourceIlOffset": 23095
             }
           ],
           "spawnInputs": {
@@ -4839,7 +4839,7 @@
             "ai2": {
               "kind": "local_definition",
               "local": 323,
-              "sourceStoreIlOffset": 23116,
+              "sourceStoreIlOffset": 23104,
               "scope": "value_at_store",
               "value": {
                 "kind": "call",
@@ -4876,8 +4876,8 @@
         },
         {
           "itemId": 190,
-          "sourceGuardIlOffset": 23811,
-          "sourceSpawnIlOffset": 24632,
+          "sourceGuardIlOffset": 23799,
+          "sourceSpawnIlOffset": 24620,
           "damageMultiplierAtSpawn": 0.25,
           "damageIntegerConversion": "native_truncate_toward_zero",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4892,7 +4892,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 190,
-              "sourceIlOffset": 23811
+              "sourceIlOffset": 23799
             }
           ],
           "spawnInputs": {
@@ -4979,8 +4979,8 @@
         },
         {
           "itemId": 3475,
-          "sourceGuardIlOffset": 24684,
-          "sourceSpawnIlOffset": 24742,
+          "sourceGuardIlOffset": 24672,
+          "sourceSpawnIlOffset": 24730,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -4995,7 +4995,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3475,
-              "sourceIlOffset": 24684
+              "sourceIlOffset": 24672
             }
           ],
           "spawnInputs": {
@@ -5118,8 +5118,8 @@
         },
         {
           "itemId": 3930,
-          "sourceGuardIlOffset": 24760,
-          "sourceSpawnIlOffset": 24818,
+          "sourceGuardIlOffset": 24748,
+          "sourceSpawnIlOffset": 24806,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5134,7 +5134,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3930,
-              "sourceIlOffset": 24760
+              "sourceIlOffset": 24748
             }
           ],
           "spawnInputs": {
@@ -5257,8 +5257,8 @@
         },
         {
           "itemId": 3540,
-          "sourceGuardIlOffset": 24836,
-          "sourceSpawnIlOffset": 24883,
+          "sourceGuardIlOffset": 24824,
+          "sourceSpawnIlOffset": 24871,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5273,7 +5273,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3540,
-              "sourceIlOffset": 24836
+              "sourceIlOffset": 24824
             }
           ],
           "spawnInputs": {
@@ -5355,8 +5355,8 @@
         },
         {
           "itemId": 5451,
-          "sourceGuardIlOffset": 24901,
-          "sourceSpawnIlOffset": 25045,
+          "sourceGuardIlOffset": 24889,
+          "sourceSpawnIlOffset": 25033,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5371,7 +5371,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 5451,
-              "sourceIlOffset": 24901
+              "sourceIlOffset": 24889
             }
           ],
           "spawnInputs": {
@@ -5454,8 +5454,8 @@
         },
         {
           "itemId": 3854,
-          "sourceGuardIlOffset": 25063,
-          "sourceSpawnIlOffset": 25110,
+          "sourceGuardIlOffset": 25051,
+          "sourceSpawnIlOffset": 25098,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5470,7 +5470,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3854,
-              "sourceIlOffset": 25063
+              "sourceIlOffset": 25051
             }
           ],
           "spawnInputs": {
@@ -5552,8 +5552,8 @@
         },
         {
           "itemId": 3350,
-          "sourceGuardIlOffset": 25420,
-          "sourceSpawnIlOffset": 25658,
+          "sourceGuardIlOffset": 25408,
+          "sourceSpawnIlOffset": 25646,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5568,7 +5568,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 3350,
-              "sourceIlOffset": 25420
+              "sourceIlOffset": 25408
             }
           ],
           "spawnInputs": {
@@ -5708,8 +5708,8 @@
         },
         {
           "itemId": 65,
-          "sourceGuardIlOffset": 26344,
-          "sourceSpawnIlOffset": 26552,
+          "sourceGuardIlOffset": 26332,
+          "sourceSpawnIlOffset": 26540,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5724,7 +5724,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 65,
-              "sourceIlOffset": 26344
+              "sourceIlOffset": 26332
             }
           ],
           "spawnInputs": {
@@ -5794,8 +5794,8 @@
         },
         {
           "itemId": 4923,
-          "sourceGuardIlOffset": 26570,
-          "sourceSpawnIlOffset": 26627,
+          "sourceGuardIlOffset": 26558,
+          "sourceSpawnIlOffset": 26615,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5810,7 +5810,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 4923,
-              "sourceIlOffset": 26570
+              "sourceIlOffset": 26558
             }
           ],
           "spawnInputs": {
@@ -5876,7 +5876,7 @@
             "ai1": {
               "kind": "local_definition",
               "local": 361,
-              "sourceStoreIlOffset": 26579,
+              "sourceStoreIlOffset": 26567,
               "scope": "value_at_store",
               "value": {
                 "kind": "call",
@@ -5917,8 +5917,8 @@
         },
         {
           "itemId": 1910,
-          "sourceGuardIlOffset": 26645,
-          "sourceSpawnIlOffset": 26688,
+          "sourceGuardIlOffset": 26633,
+          "sourceSpawnIlOffset": 26676,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -5933,7 +5933,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 1910,
-              "sourceIlOffset": 26645
+              "sourceIlOffset": 26633
             }
           ],
           "spawnInputs": {
@@ -6016,8 +6016,8 @@
         },
         {
           "itemId": 5134,
-          "sourceGuardIlOffset": 26706,
-          "sourceSpawnIlOffset": 26749,
+          "sourceGuardIlOffset": 26694,
+          "sourceSpawnIlOffset": 26737,
           "damageMultiplierAtSpawn": 1.0,
           "damageIntegerConversion": "none",
           "shotDamageLocalMayBeModifiedInBranch": false,
@@ -6032,7 +6032,7 @@
               "argument": 2,
               "operator": "equals",
               "literal": 5134,
-              "sourceIlOffset": 26706
+              "sourceIlOffset": 26694
             }
           ],
           "spawnInputs": {
@@ -6124,8 +6124,8 @@
       "records": [
         {
           "projectileId": 974,
-          "sourceGuardIlOffset": 1595,
-          "sourceCollisionCallIlOffset": 1735,
+          "sourceGuardIlOffset": 1583,
+          "sourceCollisionCallIlOffset": 1723,
           "halfLengthTimesProjectileScale": 46.0,
           "lineWidthTimesProjectileScale": 8.0,
           "center": "projectile.Center",

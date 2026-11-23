@@ -158,14 +158,26 @@ def _interaction_reference():
     return reference
 
 
+@pytest.mark.parametrize("invalid_style", [True, 1.0])
+def test_mistyped_parent_identity_preserves_direct_source_certificates(invalid_style):
+    reference, calls = _reference()
+    reference["interactionSources"] = _interaction_reference()["interactionSources"]
+    reference["identityPredicates"]["Projectile.aiStyle"] = invalid_style
+    assert native_csharp_source_for_llm(reference, calls) == (reference, calls)
+
+
 def test_interaction_source_preserves_locals_helpers_and_actual_author():
     reference = _interaction_reference()
+    reference["interactionSources"]["roots"][0]["records"][0]["enclosingConditions"] = [
+        {"selector": "tileStyle", "caseLabels": ["case 2:", "case 3:"]},
+        {"condition": "allowed", "requiredArm": "false"},
+    ]
     before = copy.deepcopy(reference)
     view, _ = native_csharp_source_for_llm(reference)
     root = view["interactionSources"]["roots"][0]
     assert view["interactionSources"]["source"] == "read_only_conditional_native_interaction_csharp"
     assert root["records"][0]["helperCalls"][0]["sourceRecord"] == root["helpers"][0]["id"]
-    for key in ("code", "externalInputs", "entryCondition", "identityWitnesses", "coverage"):
+    for key in ("code", "externalInputs", "entryCondition", "enclosingConditions", "identityWitnesses", "coverage"):
         assert root["records"][0][key] == reference["interactionSources"]["roots"][0]["records"][0][key]
     assert reference == before
     assert native_csharp_source_for_llm(view)[0] == view
@@ -185,6 +197,7 @@ def test_interaction_source_preserves_locals_helpers_and_actual_author():
     lambda value: value["roots"][0].update(root={}),
     lambda value: value.update(source=[]),
     lambda value: value["roots"][0]["records"][0]["externalInputs"][0].update(kind=[]),
+    lambda value: value["roots"][0]["records"][0].update(enclosingConditions=[{"condition": "guard", "requiredArm": "unknown"}]),
     lambda value: value["roots"][0]["records"][0].update(code="if (true) {}"),
     lambda value: value["roots"][0]["records"][0].update(coverage="whole_method"),
     lambda value: value["roots"][0]["records"][0]["identityWitnesses"][0].update(field=[]),

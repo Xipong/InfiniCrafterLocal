@@ -7,7 +7,7 @@ import hashlib
 import uuid
 from pathlib import Path
 
-from generate_native_hit_status import decode
+from generate_native_hit_status import decode, read_method_body
 from native_environment_fact_analysis import aura_branches, scene_regen_additions, certified_placement_mapping
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,8 +18,6 @@ REPORT = ROOT / "contracts/reports/native_environment_sources.generated.json"
 def placement_sources(path: Path):
     """Read method bodies/identity from metadata; do not load the assembly."""
     import dnfile
-    from dncil.cil.body import CilMethodBody
-    from dncil.cil.body.reader import CilMethodBodyReaderBytes
 
     pe = dnfile.dnPE(str(path))
     methods = [("Terraria", "TileObject", "Place"),
@@ -31,7 +29,7 @@ def placement_sources(path: Path):
         native = next(m.row for t in pe.net.mdtables.TypeDef
             if str(t.TypeNamespace) == namespace and str(t.TypeName) == owner
             for m in t.MethodList if str(m.row.Name) == method)
-        body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(native.Rva, 100_000)))
+        body = read_method_body(pe, native.Rva)
         yield {"method": owner + "." + method, "overloadIndex": 0,
             "assemblyVersion": ".".join(str(getattr(version, k)) for k in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber")),
             "sourceMethodSha256": hashlib.sha256(pe.get_data(native.Rva + body.header_size, body.code_size)).hexdigest(),

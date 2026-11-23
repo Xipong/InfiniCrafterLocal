@@ -6,7 +6,8 @@ import hashlib
 import re
 from typing import Any
 
-from infini_local.pipelines.context.csharp_source_view import _CERT, _certificate, _identity, _integer, _sha
+from infini_local.pipelines.context.attack_behavior import _same_projectile_identity
+from infini_local.pipelines.context.csharp_source_view import _CERT, _certificate, _integer, _sha
 
 _SOURCE = "verified_conditional_native_interaction_csharp"
 _SCOPE = ("Conditional source only: reach the shown guard first. Enclosing flow, hooks, captured-entry identity preservation, external local values and unshown callees remain unknown. Live predicates are not evaluated; no record proves execution or absence of other effects. Helper bodies are one-hop source, not inlined or executed.")
@@ -21,8 +22,7 @@ def project_interaction_source(reference: dict[str, Any]) -> dict[str, Any]:
     if (reference.get("source") != "read_only_native_attack_source" or type(reference.get("version")) is not int
             or reference["version"] != 1 or not isinstance(value, dict) or set(value) != {"source", "version", "relevanceIdentity", "scope", "roots"}
             or value["source"] != _SOURCE or type(value["version"]) is not int or value["version"] != 1
-            or value["scope"] != _SCOPE or not _identity(value["relevanceIdentity"])
-            or value["relevanceIdentity"] != reference.get("identityPredicates")
+            or value["scope"] != _SCOPE or not _same_projectile_identity(value["relevanceIdentity"], reference.get("identityPredicates"))
             or not isinstance(value["roots"], list)):
         return out
     projected = []
@@ -76,7 +76,9 @@ def project_interaction_source(reference: dict[str, Any]) -> dict[str, Any]:
                     **({"sourceRecord": helper_ids[cert]} if cert in helper_ids and "unresolved" not in call else {}),
                     **({"unresolved": call["unresolved"]} if "unresolved" in call else {})})
             regions.append({**{key: copy.deepcopy(record[key]) for key in ("method", "coverage", "code", "regionIndex",
-                "entryCondition", "externalInputs", "identityWitnesses", "spawnSites")}, "helperCalls": calls})
+                "entryCondition", "externalInputs", "identityWitnesses", "spawnSites")},
+                **({"enclosingConditions": copy.deepcopy(record["enclosingConditions"])} if "enclosingConditions" in record else {}),
+                "helperCalls": calls})
         projected.append({"root": root["root"], "records": regions, "helpers": helpers, "unresolved": copy.deepcopy(root["unresolved"])})
     out["interactionSources"] = {**{key: copy.deepcopy(value[key]) for key in ("version", "relevanceIdentity", "scope")},
         "source": "read_only_conditional_native_interaction_csharp", "roots": projected}
@@ -85,6 +87,15 @@ def project_interaction_source(reference: dict[str, Any]) -> dict[str, Any]:
 
 def _record(value: Any, *, helper: bool) -> bool:
     fields = _COMMON if helper else _COMMON | _REGION
+    if not helper and isinstance(value, dict) and "enclosingConditions" in value:
+        guards = value["enclosingConditions"]
+        if not isinstance(guards, list) or not all(isinstance(g, dict) and (
+            set(g) == {"condition", "requiredArm"} and isinstance(g["condition"], str) and g["requiredArm"] in ("true", "false", "condition")
+            or set(g) == {"selector", "caseLabels"} and isinstance(g["selector"], str)
+            and isinstance(g["caseLabels"], list) and all(isinstance(label, str) for label in g["caseLabels"])
+        ) for g in guards):
+            return False
+        fields = fields | {"enclosingConditions"}
     if (not isinstance(value, dict) or set(value) != fields or _certificate(value) is None
             or not _sha(value["sourceMethodSha256"]) or not value["method"].startswith("Terraria.Projectile.")
             or not _integer(value["metadataToken"]) or not _sha(value["assemblySha256"])
