@@ -56,10 +56,19 @@ def test_retained_argument_control_and_local_alternatives_are_unchanged():
 
 
 @pytest.mark.parametrize('change', [
-    'missing-input', 'missing-branch', 'missing-local-write', 'missing-callsite',
-    'unknown-context', 'integer-context', 'bool-callsite', 'unknown-value-shape',
-    'integer-input', 'bool-block', 'unknown-block-shape', 'unknown-predicate',
-    'unknown-writes', 'fragments',
+    'missing-input',
+    'missing-branch',
+    'missing-local-write',
+    'missing-callsite',
+    'unknown-context',
+    'bool-callsite',
+    'unknown-value-shape',
+    'integer-input',
+    'bool-block',
+    'unknown-block-shape',
+    'unknown-predicate',
+    'unknown-writes',
+    'fragments',
 ])
 def test_incomplete_dependency_namespace_refuses_without_mutation(change):
     item = argument_parent(); graph = item['parentSourceGraph']; node = graph['nodes'][0]

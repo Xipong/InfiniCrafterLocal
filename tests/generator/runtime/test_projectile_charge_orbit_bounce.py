@@ -23,8 +23,15 @@ def entity(wire):
     return next(e for e in wire['runtimeProgram']['entities'] if e['id'] == 'witness_entity')
 
 
-@pytest.mark.parametrize('updates', [1, 2, 6])
-@pytest.mark.parametrize('rate', [-3.3, 0, 3.3])
+@pytest.mark.parametrize('updates,rate', [
+    (1, -3.3),
+    (1, 0),
+    (1, 3.3),
+    (2, -3.3),
+    (2, 3.3),
+    (6, -3.3),
+    (6, 3.3),
+])
 def test_orbit_rate_projects_world_time_and_keeps_launch_speed_independent(updates, rate):
     doc, call = fixture('orbit')
     call['params']['radiansPerSecond'] = rate

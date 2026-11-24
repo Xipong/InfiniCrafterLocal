@@ -140,15 +140,17 @@ def test_marker_checks_word_in_projected_input_content_only(monkeypatch, api_mod
     assert packet == original
 
 
-@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("provider,base_url,model", [
-    ("openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
-    ("openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "https://inference-api.nousresearch.com.evil.example/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "https://inference-api.nousresearch.com/v1", "other/model"),
-    ("openrouter", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
-    ("local", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+@pytest.mark.parametrize('api_mode,provider,base_url,model', [
+    ("chat_completions", "openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://inference-api.nousresearch.com.evil.example/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://inference-api.nousresearch.com/v1", "other/model"),
+    ("chat_completions", "openrouter", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "local", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("responses", "openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
+    ("responses", "openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
+    ("responses", "openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
 ])
 def test_other_routes_and_models_retain_exact_wire(monkeypatch, api_mode, provider, base_url, model):
     packet = {"model": model, "messages": [{"role": "system", "content": "JSON response."},

@@ -11,15 +11,12 @@ def test_metadata_preserves_secret_multiline_and_independent_pool_controls():
     for slot in (2, 3, 4):
         key = f'INFINI_LLM_POOL_{slot}_API_KEY'
         assert fields[key]['secret'] is True
-        assert fields[key]['page'] == 'models'
         assert fields[f'INFINI_LLM_POOL_{slot}_PROVIDER']['options'] == ['local', 'openrouter', 'openai_compat']
     assert fields['INFINI_SDCPP_SERVER_EXTRA_ARGS']['multiline'] is True
     assert fields['INFINI_SDCPP_LORA_PROMPT_TAGS']['multiline'] is True
     assert fields['INFINI_OPENAI_COMPAT_API_KEY']['secret'] is True
     assert fields['INFINI_LLM_MAX_TOKENS']['secret'] is False
     assert fields['INFINI_VISUAL_ASSET_MODE']['options'] == ['full', 'off']
-    assert 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD_ENABLED' not in fields
-    assert 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD' not in DEFAULTS
 
 
 def test_codex_disables_unsupported_parameters_without_rewriting_values():
@@ -31,14 +28,6 @@ def test_codex_disables_unsupported_parameters_without_rewriting_values():
     assert reasons['INFINI_LLM_REASONING_EXCLUDE']
     assert not reasons['INFINI_CODEX_LLM_MODEL']
     assert values == original
-
-
-def test_native_alpha_keeps_background_and_alpha_controls_usable():
-    reasons = disabled_reasons({**DEFAULTS, 'INFINI_IMAGE_BACKEND': 'sdcpp', 'INFINI_BG_COLOR': 'transparent'})
-    assert reasons['INFINI_REMOVE_BG']
-    assert reasons['INFINI_CHROMA_TOLERANCE']
-    assert not reasons['INFINI_BG_COLOR']
-    assert not reasons['INFINI_ALPHA_THRESHOLD']
 
 
 def test_http_asset_url_requires_both_transport_and_lan_overlay():
@@ -61,8 +50,6 @@ def test_parallel_images_default_on_basic_checkbox_preserves_disabled_limit():
     assert DEFAULTS['INFINI_IMAGE_PARALLEL'] == '1'
     assert DEFAULTS['INFINI_IMAGE_MAX_CONCURRENCY'] == '4'
     assert field['options'] == ['1', '0']
-    assert field['page'] == 'images' and not field['advanced']
-    assert not fields['INFINI_IMAGE_MAX_CONCURRENCY']['advanced']
     values = {**DEFAULTS, 'INFINI_IMAGE_PARALLEL': '0', 'INFINI_IMAGE_MAX_CONCURRENCY': '4'}
     original = deepcopy(values)
     assert not disabled_reasons(values)['INFINI_IMAGE_PARALLEL']

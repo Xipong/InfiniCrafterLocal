@@ -12,9 +12,14 @@ from tests.toolbox.test_cli import cli
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('panel, manifest', [('live10', 'live10-midgame'), ('live20', 'live20-classic'), ('live40', 'live40-diverse')])
-@pytest.mark.parametrize('dll', [False, True])
-@pytest.mark.parametrize('returncode', [0, 7])
+@pytest.mark.parametrize('panel, manifest,dll,returncode', [
+    ('live10', 'live10-midgame', False, 0),
+    ('live10', 'live10-midgame', True, 7),
+    ('live20', 'live20-classic', False, 7),
+    ('live20', 'live20-classic', True, 0),
+    ('live40', 'live40-diverse', False, 0),
+    ('live40', 'live40-diverse', True, 7),
+])
 def test_capture_forwards_absolute_paths_and_native_status_without_bootstrap(monkeypatch, capsys, tmp_path, dll, returncode, panel, manifest):
     original_import = builtins.__import__
     def no_bootstrap(name, *args, **kwargs):

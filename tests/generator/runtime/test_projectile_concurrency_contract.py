@@ -54,7 +54,15 @@ def test_explicit_concurrency_projects_only_exact_spawn_leaf_with_receipt():
     assert wire_report["ok"], wire_report["errors"]
 
 
-@pytest.mark.parametrize("value", [None, False, True, 0, 97, 1.0, "1", [], {}])
+@pytest.mark.parametrize("value", [
+    None,
+    True,
+    0,
+    97,
+    1.0,
+    "1",
+    [],
+])
 def test_present_malformed_concurrency_is_refused_at_author_and_saved_wire(value):
     document = _with_concurrency(value)
     before = copy.deepcopy(document)

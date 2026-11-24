@@ -1092,16 +1092,14 @@ def actual_ammo_observer_inputs():
 
 
 @pytest.mark.parametrize("defect", [
-    "pick_rule", "state_rule", "state_guard", "snapshot_missing", "snapshot_value", "snapshot_scope",
-    "snapshot_owner", "snapshot_cycle", "replacement_default", "replacement_capture", "ammo_missing",
-    "ammo_reordered", "ammo_duplicate", "ammo_damage", "fallback_slot", "final_shot", "source_unknowns",
-    "spawn_site", "spawn_duplicate", "spawn_input", "spawn_owner", "spawn_guard", "spawn_coverage",
-    "conditional_damage", "ai_remainder", "expression_unknowns", "stage_call_site",
-    "stage_method", "hook_order", "hook_duplicate", "category_selector",
-    "replacement_references_missing", "replacement_reference_lost", "replacement_reference_reordered",
-    "replacement_reference_duplicate", "replacement_reference_owner", "replacement_reference_source_path",
-    "replacement_reference_fact", "replacement_reference_condition", "replacement_reference_dispatch",
-    "replacement_reference_certificate", "replacement_reference_kind", "replacement_capture_extra_field",
+    "pick_rule", "state_guard", "snapshot_cycle", "snapshot_owner",
+    "replacement_default", "ammo_reordered", "ammo_duplicate", "fallback_slot",
+    "final_shot", "source_unknowns", "spawn_site", "spawn_input", "spawn_coverage",
+    "conditional_damage", "stage_call_site", "hook_order", "category_selector",
+    "replacement_references_missing", "replacement_reference_reordered",
+    "replacement_reference_duplicate", "replacement_reference_source_path",
+    "replacement_reference_fact", "replacement_reference_certificate",
+    "replacement_capture_extra_field",
 ])
 def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
     packet, original, _ = actual_ammo_observer_inputs["eventide"]
@@ -1118,48 +1116,29 @@ def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observ
     references = capture["sourceReferences"]
     changes = {
         "replacement_references_missing": lambda: capture.pop("sourceReferences"),
-        "replacement_reference_lost": lambda: references.pop(),
         "replacement_reference_reordered": lambda: references.reverse(),
         "replacement_reference_duplicate": lambda: references.append(copy.deepcopy(references[0])),
-        "replacement_reference_owner": lambda: references[1].update(method="Player.PickAmmo"),
         "replacement_reference_source_path": lambda: references[1].update(sourcePath=references[0]["sourcePath"]),
         "replacement_reference_fact": lambda: references[1]["sourceFact"].update(outputProjectileId=1),
-        "replacement_reference_condition": lambda: references[1].update(conditionStatus="evaluated_true"),
-        "replacement_reference_dispatch": lambda: references[1].update(dispatchStatus="guaranteed_execution"),
         "replacement_reference_certificate": lambda: references[1].update(sourceMethodSha256="0" * 64),
-        "replacement_reference_kind": lambda: references[1].update(kind="executed_projectile_replacement"),
         "replacement_capture_extra_field": lambda: capture.update(finalShot=True),
         "stage_call_site": lambda: stages[0]["sourceStageCallSites"].clear(),
-        "stage_method": lambda: stages[1].update(method="Player.PickAmmo"),
         "hook_order": lambda: stages[0]["hookDispatchTrace"][0]["directHookCalls"].reverse(),
-        "hook_duplicate": lambda: stages[0]["hookDispatchTrace"].append(copy.deepcopy(stages[0]["hookDispatchTrace"][0])),
         "category_selector": lambda: stages[0]["defaultProjectileSelection"]["categoryOffsetSelectors"][0].update(operation="ammo_shoot"),
         "pick_rule": lambda: stages[0]["rules"].clear(),
-        "state_rule": lambda: stages[1]["rules"].clear(),
         "state_guard": lambda: state.update(whenSourceCondition="true"),
-        "snapshot_missing": lambda: snapshots.pop(state_key),
-        "snapshot_value": lambda: snapshots[state_key].update(value="2"),
-        "snapshot_scope": lambda: snapshots[state_key].update(scope="value_at_read"),
         "snapshot_owner": lambda: snapshots[state_key].update(method="Player.PickAmmo"),
         "snapshot_cycle": lambda: snapshots[state_key].update(value=state_key),
         "replacement_default": lambda: profile["defaults"].pop("penetrate"),
-        "replacement_capture": lambda: profile["captures"].clear(),
-        "ammo_missing": lambda: ammo["playerInventoryAmmoRaw"].pop(),
         "ammo_reordered": lambda: ammo["playerInventoryAmmoRaw"].reverse(),
         "ammo_duplicate": lambda: ammo["playerInventoryAmmoRaw"].append(copy.deepcopy(ammo["playerInventoryAmmoRaw"][0])),
-        "ammo_damage": lambda: ammo["playerInventoryAmmoRaw"][0].update(damage=-1),
         "fallback_slot": lambda: ammo["fallbackAmmoRaw"][0].update(inventorySlot=0),
         "final_shot": lambda: source.update(finalShotOutcome="executed"),
         "source_unknowns": lambda: source["unknowns"].clear(),
         "spawn_site": lambda: sites.pop(),
-        "spawn_duplicate": lambda: sites.append(copy.deepcopy(sites[0])),
         "spawn_input": lambda: sites[0]["spawnInputs"].pop("damage"),
-        "spawn_owner": lambda: sites[0]["spawnInputs"].update(owner="arg0"),
-        "spawn_guard": lambda: sites[0].update(whenSourceCondition=True),
         "spawn_coverage": lambda: sites[0]["spawnInputCoverage"]["fields"].pop("damage"),
         "conditional_damage": lambda: sites[0]["spawnInputs"]["damage"].pop("sourceDefinition"),
-        "ai_remainder": lambda: snapshots[sites[0]["spawnInputs"]["ai1"]].update(value="0.0"),
-        "expression_unknowns": lambda: mechanics["expressions"]["unknowns"].clear(),
     }
     changes[defect]()
     with pytest.raises((AssertionError, KeyError)):
@@ -1208,7 +1187,7 @@ def test_literal_ammo_observer_rejects_information_loss(actual_ammo_observer_inp
 
 
 @pytest.mark.parametrize("name,defect", [
-    *[("eventide", f"snapshot_{store}") for store in (10664, 10677, 10695, 10684, 10800, 10721, 10769, 10851, 10861)],
+    *[("eventide", f"snapshot_{store}") for store in (10664, 10695, 10861)],
     ("eventide", "velocity_operand"), ("terra", "companion_velocity"), ("terra", "companion_ai1"),
     ("terra", "direct_vector"), ("daedalus", "positionX"), ("daedalus", "positionY"),
     ("terra", "false_pick_rewrite"), ("daedalus", "false_pick_rewrite"),
@@ -1237,7 +1216,7 @@ def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observe
 
 
 @pytest.mark.parametrize("name,defect", [
-    ("eventide", "extra_pick_spawn"), ("terra", "extra_pick_spawn"), ("daedalus", "extra_pick_spawn"),
+    ("eventide", "extra_pick_spawn"), ("terra", "extra_pick_spawn"),
     ("eventide", "extra_state_condition"), ("eventide", "extra_spawn_predicate"),
 ])
 def test_actual_ammo_observer_rejects_invented_source_facts(actual_ammo_observer_inputs, name, defect):

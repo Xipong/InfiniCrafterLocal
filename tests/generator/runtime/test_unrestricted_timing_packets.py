@@ -26,9 +26,10 @@ def _timing_card(card):
         assert not card["params"][key].get("required", False)
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("stage", ["Author", "Repair"])
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
+@pytest.mark.parametrize("mode,stage,fn,member,author_leaf,wire_leaf,value", [
+    *(("json_schema", stage, *case) for stage in ("Author", "Repair") for case in CASES),
+    ("json_object", "Author", *CASES[0]), ("json_object", "Repair", *CASES[-1]),
+])
 def test_actual_cards_advertise_unrestricted_default_and_conditional_pair(
     monkeypatch, mode, stage, fn, member, author_leaf, wire_leaf, value,
 ):
@@ -62,9 +63,11 @@ def test_actual_cards_advertise_unrestricted_default_and_conditional_pair(
     _timing_card(card)
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("form", ["omitted", "pair", "window"])
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
+@pytest.mark.parametrize("mode,form,fn,member,author_leaf,wire_leaf,value", [
+    *(("json_schema", form, *case) for form in ("omitted", "pair", "window") for case in CASES),
+    ("json_object", "omitted", *CASES[0]), ("json_object", "pair", *CASES[1]),
+    ("json_object", "window", *CASES[-1]),
+])
 def test_numeric_repair_cannot_fill_or_rewrite_accepted_timing_in_actual_packets(
     monkeypatch, mode, form, fn, member, author_leaf, wire_leaf, value,
 ):

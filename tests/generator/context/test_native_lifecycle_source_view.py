@@ -253,12 +253,12 @@ def test_actual_mechanics_author_keeps_interaction_namespace(monkeypatch, mode, 
     assert parent == before
 
 
-@pytest.mark.parametrize("reason", [
-    "helper_virtual_or_open_generic_dispatch_unknown",
-    "interaction_helper_count_bound",
-    "interaction_helper_character_bound",
+@pytest.mark.parametrize('reason,mode', [
+    ("helper_virtual_or_open_generic_dispatch_unknown", "json_object"),
+    ("helper_virtual_or_open_generic_dispatch_unknown", "json_schema"),
+    ("interaction_helper_count_bound", "json_object"),
+    ("interaction_helper_character_bound", "json_object"),
 ])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_interaction_refused_overload_does_not_link_colliding_helper(monkeypatch, reason, mode):
     from infini_local.core import llm_config
     from infini_local.pipelines.context.native_interaction_source import project_interaction_source

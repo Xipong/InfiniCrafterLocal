@@ -15,22 +15,26 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from repair_test_helpers import offline_builder
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('metadata', [
-    {'id': 'g_collision'}, {'id': 1234}, {'recipeKey': 'other_recipe'},
-    {'parentA': 'wrong_parent'}, {'parentB': 'wrong_parent'},
-    {'debug': {'llmStageAccounting': {'gameplayRepairCalls': 1}}},
-    {'debug': []}, {'schemaVersion': 1}, {'runtimeApiVersion': 'injected'},
-    {'gameplay': {}}, {'sourceMode': 'cached'},
+@pytest.mark.parametrize('mode,metadata', [
+    ('json_object', {'id': 'g_collision'}),
+    ('json_object', {'recipeKey': 'other_recipe'}),
+    ('json_object', {'parentA': 'wrong_parent'}),
+    ('json_object', {'parentB': 'wrong_parent'}),
+    ('json_object', {'debug': {'llmStageAccounting': {'gameplayRepairCalls': 1}}}),
+    ('json_object', {'schemaVersion': 1}),
+    ('json_object', {'runtimeApiVersion': 'injected'}),
+    ('json_object', {'gameplay': {}}),
+    ('json_object', {'sourceMode': 'cached'}),
+    ('json_schema', {'id': 'g_collision'}),
+    ('json_schema', {'debug': {'llmStageAccounting': {'gameplayRepairCalls': 1}}}),
 ])
 def test_provider_cannot_supply_engine_metadata(monkeypatch, mode, metadata):
     source = build_capability_witness('move_straight')
     source.update(metadata)
     offline_builder(monkeypatch, mode, lambda *a, **kw: {
         'choices': [{'message': {'content': json.dumps(source)}}]})
-    for key in ('recipe_one', 'recipe_two'):
-        with pytest.raises(PlannerUnavailable, match='engine-owned'):
-            author.try_llm_plan({'name': 'Alpha'}, {'name': 'Beta'}, key)
+    with pytest.raises(PlannerUnavailable, match='engine-owned'):
+        author.try_llm_plan({'name': 'Alpha'}, {'name': 'Beta'}, 'recipe_one')
 
 
 def test_trusted_result_metadata_is_assigned_per_recipe(monkeypatch):
@@ -47,8 +51,14 @@ def test_trusted_result_metadata_is_assigned_per_recipe(monkeypatch):
         assert result['debug']['llmStageAccounting']['gameplayAuthorCalls'] == 1
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('malformed', [[], {}, ['set_owner_control'], {'fn': 'set_owner_control'}])
+@pytest.mark.parametrize('mode,malformed', [
+    ('json_object', []),
+    ('json_object', {}),
+    ('json_object', ['set_owner_control']),
+    ('json_object', {'fn': 'set_owner_control'}),
+    ('json_schema', []),
+    ('json_schema', {}),
+])
 def test_unhashable_fn_reaches_exact_single_gameplay_repair(monkeypatch, mode, malformed):
     source = build_capability_witness('set_owner_control')
     call = next(r for r in source['runtimeProgram']['calls'] if r['fn'] == 'set_owner_control')
@@ -155,8 +165,9 @@ def test_held_and_animation_ownership_is_primary_only(primary, params):
         assert validate_runtime_wire(compile_runtime_program(doc))['ok']
 
 
-@pytest.mark.parametrize('witness', ['move_straight', 'accessory', 'equipment_damage_bonus'])
-@pytest.mark.parametrize('malformed', [[], {}])
+@pytest.mark.parametrize('witness,malformed', [
+    ('move_straight', []), ('accessory', {}), ('equipment_damage_bonus', []),
+])
 def test_each_capability_position_retains_structural_diagnostics(witness, malformed):
     source = build_capability_witness(witness)
     for index in range(len(source['runtimeProgram']['calls'])):

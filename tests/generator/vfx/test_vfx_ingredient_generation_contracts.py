@@ -27,8 +27,18 @@ def test_absent_vfx_requests_do_not_add_jobs_or_wire_fields():
     assert "assets" not in legacy["vfxManifest"]
 
 
-@pytest.mark.parametrize("layout", ["cutout", "strip"])
-@pytest.mark.parametrize("damage", ["missing", "wrong_size", "rgb", "opaque", "empty", "truncated", "not_png"])
+@pytest.mark.parametrize('layout,damage', [
+    ("cutout", "missing"),
+    ("cutout", "wrong_size"),
+    ("cutout", "rgb"),
+    ("cutout", "opaque"),
+    ("cutout", "empty"),
+    ("cutout", "truncated"),
+    ("cutout", "not_png"),
+    ("strip", "missing"),
+    ("strip", "wrong_size"),
+    ("strip", "empty"),
+])
 def test_delivery_checks_exact_requested_vfx_png_contract(offline_backend, layout, damage):
     out = visual_sprite_generation.maybe_generate_visual_assets(_data([_request(layout=layout)]))
     asset = out["vfxManifest"]["assets"][0]

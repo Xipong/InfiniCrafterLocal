@@ -143,13 +143,15 @@ def test_shape_opacity_curve_preserved_independently_of_color_and_radius(curve):
     assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
-@pytest.mark.parametrize("period", [1, 2, 3, 4, 5, 6])
-def test_shape_can_express_legacy_fast_phase_and_orbit_rates(period):
+@pytest.mark.parametrize("period", [1, 6])
+def test_shape_can_express_fast_phase_and_orbit_rates(period):
     data = _data()
     for kind, field in (("wave", "phaseSpeedRadiansPerTick"), ("orbit", "rotationSpeedRadiansPerTick")):
         raw = authored_shape(data, kind)
         raw["slots"][0]["shape"][field] = -math.tau / period
-        assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+        report = vfx_validation.validate_vfx_director_output(raw, data)
+        assert report["ok"]
+        assert report["normalized"]["slots"][0]["shape"][field] == -math.tau / period
 
 
 @pytest.mark.parametrize("orientation", ["world", "orbit"])

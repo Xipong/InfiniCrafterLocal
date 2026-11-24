@@ -470,9 +470,18 @@ def test_global_receipts_reject_valid_changed_primary_source(fixture, primary, l
     assert source == frozen_source and wire == frozen_wire
 
 
-@pytest.mark.parametrize("lowerer", [PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "duplicate-input", "status", "split-index", "missing-source"])
-@pytest.mark.parametrize("with_source", [False, True])
+# Missing and split source indices have distinct provenance semantics. Other
+# corruptions exercise both lowerers and both validators without multiplying
+# every structural failure by the presence of the Author document.
+@pytest.mark.parametrize("lowerer,mutation,with_source", [
+    (lowerer, mutation, with_source)
+    for lowerer in (PRIMARY_OWNER_LOWERER_ID, PRIMARY_BINDING_ROLE_LOWERER_ID)
+    for mutation, with_source in (
+        ("drop", False), ("duplicate", True), ("duplicate-input", False), ("status", True),
+        ("split-index", False), ("split-index", True),
+        ("missing-source", False), ("missing-source", True),
+    )
+])
 def test_primary_global_receipts_require_exact_inputs_and_unique_coverage(lowerer, mutation, with_source):
     source = build_runtime_fixture("held_and_deployed")
     wire = compile_runtime_program(source)
@@ -504,8 +513,12 @@ def test_primary_global_receipts_require_exact_inputs_and_unique_coverage(lowere
         assert any(v.get("lowererId") == lowerer for v in report["violations"]), report
 
 
-@pytest.mark.parametrize("mutation", ["source", "same-valued-source", "value-and-wire", "drop", "duplicate", "duplicate-input", "status"])
-@pytest.mark.parametrize("with_source", [False, True])
+@pytest.mark.parametrize("mutation,with_source", [
+    ("source", False), ("source", True),
+    ("same-valued-source", False), ("same-valued-source", True),
+    ("value-and-wire", False), ("value-and-wire", True),
+    ("drop", False), ("duplicate", True), ("duplicate-input", False), ("status", True),
+])
 def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation, with_source):
     source = build_runtime_fixture("held_and_deployed")
     if mutation == "same-valued-source":

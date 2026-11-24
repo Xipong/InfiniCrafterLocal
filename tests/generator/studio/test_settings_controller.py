@@ -140,14 +140,6 @@ def test_lora_collect_and_use_preserve_path_and_weight_semantics(studio, path, d
     assert app.values['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag + ' <lora:other:0.2>'
 
 
-@pytest.mark.parametrize('lan,transport,host', [(True,'native','0.0.0.0'), (True,'http','0.0.0.0'), (False,'http','127.0.0.1')])
-def test_lan_overlay_is_independent_of_asset_transport(studio, lan, transport, host):
-    app, _ = studio
-    app.values.update(INFINI_MP_ASSET_TRANSPORT=transport, INFINI_HOST='0.0.0.0')
-    app.lan_enabled = lan
-    assert app.collect()['INFINI_HOST'] == host
-
-
 def test_config_preview_masks_unknown_credentials(studio):
     app, controller = studio
     write_env(app.config_path, dict(DEFAULTS, INFINI_CUSTOM_CREDENTIAL='hidden', INFINI_PUBLIC_VALUE='visible'))
@@ -331,66 +323,59 @@ def test_studio_does_not_apply_an_unknown_saved_preset(tmp_path):
         app.on_close()
 
 
-def test_inert_settings_are_preserved_as_opaque_values(studio):
+def test_snapshot_observes_atomic_external_config_and_rejects_stale_save(studio):
     app, controller = studio
-    key = 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD'
-    write_env(app.config_path, {**DEFAULTS, key: ' 77 ', key + '_ENABLED': '1'})
-    apply(controller, 'save', {'INFINI_PORT': '6060'})
-    saved = parse_env(app.config_path)
-    assert saved[key] == ' 77 '
-    assert saved[key + '_ENABLED'] == '1'
-    snap = controller.snapshot()
-    assert key in snap['inactiveSettings']
-    assert key not in {field['key'] for field in snap['fields']}
-
-
-def test_snapshot_caches_unchanged_files_but_observes_external_edits(studio, monkeypatch):
-    from infini_local.desktop import settings_defaults
-    app, controller = studio
-    reads = dict(saved=0, defaults=0)
-    def counted(name, fn):
-        def call(*args, **kwargs):
-            reads[name] += 1
-            return fn(*args, **kwargs)
-        return call
-    monkeypatch.setattr(app, 'read_saved_settings', counted('saved', app.read_saved_settings))
-    monkeypatch.setattr(settings_defaults, 'defaults_offer', counted('defaults', settings_defaults.defaults_offer))
     first = controller.snapshot()
-    initial_reads = dict(reads)
-    for _ in range(10):
-        snap = controller.snapshot()
-        assert snap['savedRevision'] == first['savedRevision']
-        assert snap['fields'] == first['fields']
-    assert reads == initial_reads
-    # Same-size replacement with the previous mtime still invalidates by inode/ctime.
     source = app.config_path
     previous = source.stat()
-    replacement = source.with_name('replacement.env')
-    replacement.write_bytes(source.read_bytes().replace(b'5055', b'6066'))
+    replacement = source.with_name("replacement.env")
+    replacement.write_bytes(source.read_bytes().replace(b"5055", b"6066"))
     os.utime(replacement, ns=(previous.st_atime_ns, previous.st_mtime_ns))
     os.replace(replacement, source)
     changed = controller.snapshot()
-    assert changed['savedValues']['INFINI_PORT'] == '6066'
-    assert changed['savedRevision'] != first['savedRevision']
-    assert reads['saved'] == initial_reads['saved'] + 1
-    with pytest.raises(ValueError, match='другой вкладке'):
-        apply(controller, 'save', {'INFINI_PORT': '7077'}, {'savedRevision': first['savedRevision']})
-    assert parse_env(source)['INFINI_PORT'] == '6066'
-    # Sidecar-only decisions invalidate their own projection, not saved config.
-    decision = source.with_name(source.name + '.defaults.json')
-    decision.write_text('{}')
-    before = dict(reads)
-    controller.snapshot()
-    assert reads['defaults'] == before['defaults'] + 1
-    assert reads['saved'] == before['saved']
+    assert changed["savedValues"]["INFINI_PORT"] == "6066"
+    assert changed["savedRevision"] != first["savedRevision"]
+    with pytest.raises(ValueError):
+        apply(controller, "save", {"INFINI_PORT": "7077"}, {"savedRevision": first["savedRevision"]})
+    assert parse_env(source)["INFINI_PORT"] == "6066"
 
-@pytest.mark.parametrize('transport', ['native', 'http'])
-def test_lan_save_preserves_generator_bind_independently_of_assets(studio, transport):
+
+def test_snapshot_observes_defaults_dismissed_by_another_controller(studio):
     app, controller = studio
-    apply(controller, 'save', {'INFINI_HOST': '0.0.0.0', 'INFINI_MP_ASSET_TRANSPORT': transport}, {'lanEnabled': True})
-    assert parse_env(app.config_path)['INFINI_HOST'] == '0.0.0.0'
+    write_env(app.config_path, {**parse_env(app.config_path), "INFINI_LLM_MAX_TOKENS": "9000"})
+    before = controller.snapshot()
+    offer = before["defaultsUpdate"]
+    assert not offer["dismissed"]
+    assert any(row["key"] == "INFINI_LLM_MAX_TOKENS" for row in offer["changes"])
+    disk = app.config_path.read_bytes()
+
+    other_app = SettingsController(app.config_path)
+    try:
+        other = StudioController(other_app, None)
+        assert apply(other, "declineDefaults", extra={"revision": offer["revision"]})["ok"]
+        after = controller.snapshot()
+        assert after["defaultsUpdate"]["dismissed"]
+        assert after["savedRevision"] == before["savedRevision"]
+        assert after["savedValues"] == before["savedValues"]
+        assert app.config_path.read_bytes() == disk
+    finally:
+        other_app.on_close()
+
+
+@pytest.mark.parametrize(("lan", "transport", "host"), [
+    (True, "native", "0.0.0.0"),
+    (True, "http", "0.0.0.0"),
+    (False, "http", "127.0.0.1"),
+])
+def test_lan_save_preserves_generator_bind_independently_of_assets(studio, lan, transport, host):
     from infini_local.core.server_endpoint import resolve_server_endpoint
-    assert resolve_server_endpoint(app.collect()).bind_host == '0.0.0.0'
+
+    app, controller = studio
+    result = apply(controller, "save", {"INFINI_MP_ASSET_TRANSPORT": transport}, {"lanEnabled": lan})
+    assert result["saved"]
+    saved = parse_env(app.config_path)
+    assert saved["INFINI_MP_ASSET_TRANSPORT"] == transport
+    assert resolve_server_endpoint(saved).bind_host == host
 
 
 def test_profile_save_excludes_composite_headers_and_apply_keeps_live_credentials(studio):

@@ -31,8 +31,13 @@ def event_wire(wire, call):
     return next(row for row in entity["events"] if row["id"] == call["id"])
 
 
-@pytest.mark.parametrize("velocity", VELOCITIES)
-@pytest.mark.parametrize("probability", [0, 0.85, 1])
+# Probability is on the parent's hit geometry, while velocity belongs to
+# the separate child spawn. Keep every child shape and both probability edges.
+@pytest.mark.parametrize("velocity,probability", [
+    *((velocity, 0.85) for velocity in VELOCITIES),
+    (VELOCITIES[0], 0), (VELOCITIES[-1], 0),
+    (VELOCITIES[0], 1), (VELOCITIES[-1], 1),
+])
 def test_target_geometry_and_child_velocity_have_exact_provider_inverse_and_native_wire(velocity, probability):
     document, call = fixture()
     call["params"]["geometry"]["beforeProbability"] = probability

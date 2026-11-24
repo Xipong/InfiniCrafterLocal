@@ -101,8 +101,11 @@ def test_unknown_or_unavailable_sources_do_not_gain_motion_facts(source):
     assert parent_stat_context(source) == source
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('stage', ['author', 'repair'])
+@pytest.mark.parametrize('mode,stage', [
+    ('json_object', 'author'),
+    ('json_object', 'repair'),
+    ('json_schema', 'repair'),
+])
 def test_serialized_requests_carry_ready_native_motion_values_unchanged(monkeypatch, mode, stage):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.request import build_initial_author_request

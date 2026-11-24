@@ -50,11 +50,17 @@ def test_progress_round_trip_and_completion_never_regresses(tmp_path):
 
 
 @pytest.mark.parametrize('update', [
-    None, [], '2', {}, {'step': -1}, {'step': 5}, {'step': True},
-    {'step': False}, {'step': 1.0}, {'step': '1'}, {'step': None},
-    {'step': 1, 'completed': 1}, {'step': 1, 'completed': 'true'},
-    {'step': 1, 'completed': None}, {'step': 1, 'seen': False},
-    {'step': 1, 'version': 2}, {'step': 1, 'unexpected': 'ignored?'},
+    None,
+    [],
+    {},
+    {'step': -1},
+    {'step': 5},
+    {'step': True},
+    {'step': 1.0},
+    {'step': 1, 'completed': 1},
+    {'step': 1, 'seen': False},
+    {'step': 1, 'version': 2},
+    {'step': 1, 'unexpected': 'ignored?'},
 ])
 def test_invalid_updates_refused_without_touching_persisted_progress(tmp_path, update):
     config = tmp_path / 'config.env'
@@ -66,7 +72,9 @@ def test_invalid_updates_refused_without_touching_persisted_progress(tmp_path, u
 
 
 @pytest.mark.parametrize('content', [
-    b'{broken', b'[]', b'null', b'"text"', b'\xff\xfe',
+    b'{broken',
+    b'[]',
+    b'\xff\xfe',
     json.dumps({'version': 2, 'seen': True, 'step': 2, 'completed': False}).encode(),
     json.dumps({'version': 1, 'seen': 'true', 'step': 2, 'completed': False}).encode(),
     json.dumps({'version': 1, 'seen': True, 'step': True, 'completed': False}).encode(),

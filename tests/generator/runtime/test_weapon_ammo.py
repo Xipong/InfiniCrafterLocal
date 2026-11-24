@@ -82,10 +82,11 @@ def test_existing_projectile_and_ammo_items_do_not_become_ammo_consumers(fn):
     assert not any(row.get("fn") == "weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
 
 
-@pytest.mark.parametrize("invalid_input", [[], {}, ["primary_use"]])
-def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invalid_input):
+def test_malformed_binding_input_does_not_authorize_weapon_ammo():
+    invalid_input = ["primary_use"]
     final = compile_runtime_program(_weapon())
     final.pop("runtimeContract")
+    assert validate_runtime_wire(final)["ok"]
     final["runtimeProgram"]["bindings"][0]["input"] = invalid_input
     report = validate_runtime_wire(final)
     assert not report["ok"]

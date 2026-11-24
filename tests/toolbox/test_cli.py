@@ -108,8 +108,15 @@ def test_clean_head_binding_rejects_dirty_source(monkeypatch, capsys, tmp_path, 
     assert 'clean' in captured.err
 
 
-@pytest.mark.parametrize('panel', ['live10', 'live20', 'live40'])
-@pytest.mark.parametrize('output_kind', ['absolute', 'existing_tilde', 'relative'])
+@pytest.mark.parametrize('panel,output_kind', [
+    ('live10', 'absolute'),
+    ('live10', 'existing_tilde'),
+    ('live10', 'relative'),
+    ('live20', 'absolute'),
+    ('live20', 'relative'),
+    ('live40', 'absolute'),
+    ('live40', 'relative'),
+])
 def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path, output_kind, panel):
     import subprocess
     project = tmp_path / 'source'

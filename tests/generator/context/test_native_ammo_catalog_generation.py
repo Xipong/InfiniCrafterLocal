@@ -1,7 +1,9 @@
 """Keep certificate regeneration intact without storing duplicate gameplay facts."""
 from __future__ import annotations
 
+from collections import Counter
 import json
+import re
 import sys
 
 import pytest
@@ -22,10 +24,8 @@ def test_ammo_generator_keeps_full_report_optional(tmp_path, monkeypatch):
         "records": [{"itemId": 7, "rules": [], "unrecognizedProjectileWriteOffsets": [3]}],
     }]
     assembly = tmp_path / "native.dll"
-    reads = []
-
     def extract(path):
-        reads.append(path)
+        assert path == assembly
         return sources
 
     monkeypatch.setattr(generator, "extract", extract)
@@ -39,9 +39,18 @@ def test_ammo_generator_keeps_full_report_optional(tmp_path, monkeypatch):
         generator.main()
 
     run()
-    expected_catalog = generator.render(sources).encode()
-    assert catalog.read_bytes() == expected_catalog
-    assert json.loads(certificate_path.read_text()) == generator.certificate_report(sources)
+    expected_catalog = catalog.read_bytes()
+    runtime_rows = [json.loads(row) for row in re.findall(r'"""(.*?)"""', expected_catalog.decode())]
+    assert [row for row in runtime_rows if "itemId" in row] == [
+        {"itemId": 7, "rules": [], "unrecognizedProjectileWriteOffsets": [3]}
+    ]
+    assert [row["itemTypeMentions"] for row in runtime_rows if "itemTypeMentions" in row] == [[7]]
+    assert json.loads(certificate_path.read_text()) == {
+        "schema": "infini.native-ammo-certificates.v1",
+        "certificates": [{"method": "Player.PickAmmo", "sourceMethodSha256": "method-proof",
+                          "sourceModuleVersionId": "module-proof", "assemblyVersion": "1.0.0.0",
+                          "assemblySha256": "assembly-proof", "scope": "Source evidence, not execution"}],
+    }
     expected_certificates = certificate_path.read_bytes()
     run("--check")
 
@@ -72,7 +81,6 @@ def test_ammo_generator_keeps_full_report_optional(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="stale ammo source facts"):
         run("--check")
     assert catalog.read_text() == "stale runtime catalog\n"
-    assert reads == [assembly] * 10
 
 
 def test_ammo_certificate_report_preserves_nested_proof_and_distinct_identities():
@@ -88,8 +96,9 @@ def test_ammo_certificate_report_preserves_nested_proof_and_distinct_identities(
     ]}
     before = json.dumps(parent)
     report = generator.certificate_report([parent])
-    assert report == {"schema": "infini.native-ammo-certificates.v1", "certificates": [
-        {"method": "Player.PickAmmo", "sourceMethodSha256": "parent"},
-        first, second, third, lookup, interpreted, assembly,
-    ]}
+    assert report["schema"] == "infini.native-ammo-certificates.v1"
+    expected = [{"method": "Player.PickAmmo", "sourceMethodSha256": "parent"},
+                first, second, third, lookup, interpreted, assembly]
+    assert Counter(json.dumps(row, sort_keys=True) for row in report["certificates"]) == Counter(
+        json.dumps(row, sort_keys=True) for row in expected)
     assert json.dumps(parent) == before

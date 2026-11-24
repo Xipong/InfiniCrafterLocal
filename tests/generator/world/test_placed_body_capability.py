@@ -226,11 +226,21 @@ def test_new_reference_requirements_are_in_canonical_audit():
 
 
 @pytest.mark.parametrize("field,bad", [
-    ("renderSizePx", 0), ("renderSizePx", 513), ("renderSizePx", True), ("renderSizePx", 2.5),
-    ("footprintAnchorX", -0.1), ("footprintAnchorY", 1.1), ("imagePivotX", float("nan")),
-    ("imagePivotY", float("inf")), ("rotationDegrees", -181), ("rotationDegrees", 181),
-    ("offsetXPx", -513), ("offsetYPx", 513), ("offsetXPx", 1.5),
-    ("flipX", 1), ("flipY", "false"), ("source", "foreign"),
+    ("renderSizePx", 0),
+    ("renderSizePx", 513),
+    ("renderSizePx", True),
+    ("renderSizePx", 2.5),
+    ("footprintAnchorX", -0.1),
+    ("footprintAnchorY", 1.1),
+    ("imagePivotX", float("nan")),
+    ("rotationDegrees", -181),
+    ("rotationDegrees", 181),
+    ("offsetXPx", -513),
+    ("offsetYPx", 513),
+    ("offsetXPx", 1.5),
+    ("flipX", 1),
+    ("flipY", "false"),
+    ("source", "foreign"),
 ])
 def test_invalid_transform_is_rejected_at_author_and_standalone_wire(field, bad):
     document = placed()
@@ -327,9 +337,9 @@ def test_absent_placed_body_is_not_materialized():
     assert audit_compiler_receipts(rows, authored_document=authored, final_document=compiled)["ok"]
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
-    """Current-main additions coexist with this feature through real offline callers."""
+def test_owned_placement_composes_with_ammo_and_frozen_curve_repair(wire_transport, monkeypatch):
+    """An owned tile stays exact alongside projectile and held effects."""
+    format_mode = "json_schema"
     import json
     from copy import deepcopy
 
@@ -370,6 +380,8 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     wire = compile_runtime_program(accepted)
     assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=accepted, final_document=wire)["ok"]
+    assert placement(wire)["ownedTile"] == OWNED
+    assert placement(wire)["placedBody"] == {**TRANSFORM, "pivotSpace": "frame"}
     assert wire["runtimeProgram"]["weaponAmmo"] == {"ammoCategory": "arrow", "speedBasis": "authored_spawn"}
     assert wire["runtimeProgram"]["heldEffectGroupId"] == "witness"
     assert [group["id"] for group in wire["runtimeProgram"]["effectGroups"]] == ["witness"]

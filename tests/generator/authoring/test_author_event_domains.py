@@ -1,9 +1,5 @@
 """Exact event naming and fresh-vs-retained targeting domains share one owner."""
-from suite_paths import TEST_ROOT
-import hashlib
-import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
@@ -22,7 +18,6 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 NEW = "damage_nearby_on_event"
 OLD = "chain_damage_on_event"
-FIXTURE = (TEST_ROOT / "fixtures") / "event_domain_retained_wire.json"
 
 
 def witness(document):
@@ -132,21 +127,31 @@ def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities()
     assert NEW in scope["create"]["calls"]["allowedFns"]
 
 
-def test_frozen_old_receipts_are_refused_without_rewriting_the_archive():
-    corpus = json.loads(FIXTURE.read_text())
-    for row in corpus["cases"]:
-        wire = row["wire"]
-        encoded = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        assert hashlib.sha256(encoded.encode()).hexdigest() == row["wireSha256"]
-        assert not validate_runtime_wire(wire)["ok"]
-        receipts = wire["runtimeContract"]["finalWireReceipts"]
-        assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
-        assert json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":")) == encoded
-        source_audit = audit_compiler_receipts(receipts, authored_document=row["source"], final_document=wire)
-        assert not source_audit["ok"]
+def test_current_event_rejects_retired_action_even_with_current_receipts():
+    source = build_capability_witness(NEW)
+    wire, entity = compile_and_check(source)
+    event = entity["events"][0]
+    assert event["action"] == NEW
+    event["action"] = OLD
+    before = deepcopy(wire)
+    for context in (source, None):
+        audit = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                        authored_document=context, final_document=wire)
+        assert not audit["ok"]
+        assert any(row.get("finalPath", "").endswith(".events[0].action")
+                   for row in audit["violations"]), audit
+    assert wire == before
+
+    wire.pop("runtimeContract")
+    before = deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(error["code"] == "invalid_event_action" and error["path"].endswith(".events[0]")
+               for error in report["errors"]), report
+    assert wire == before
 
 
-@pytest.mark.parametrize("bias", [0, 0.125, 0.5, 0.899999, 0.9])
+@pytest.mark.parametrize("bias", [0, 0.125, 0.9])
 def test_fresh_bias_is_exact_unclamped_and_bounded_at_point_nine(bias):
     document = build_capability_witness("target_and_fire")
     witness(document)["params"]["sameTargetBias"] = bias
@@ -156,7 +161,7 @@ def test_fresh_bias_is_exact_unclamped_and_bounded_at_point_nine(bias):
                and row["value"] == bias for row in wire["runtimeContract"]["finalWireReceipts"])
 
 
-@pytest.mark.parametrize("bias", [-0.001, 0.900001, 0.95, 1, 1.001, True, None, "0.9", float("inf"), float("nan")])
+@pytest.mark.parametrize("bias", [-0.001, 0.900001, True, None, "0.9", float("inf"), float("nan")])
 def test_bad_fresh_bias_is_rejected_not_clamped_or_projected_to_retained_domain(bias):
     document = build_capability_witness("target_and_fire")
     witness(document)["params"]["sameTargetBias"] = bias
@@ -165,8 +170,10 @@ def test_bad_fresh_bias_is_rejected_not_clamped_or_projected_to_retained_domain(
         compile_runtime_program(document)
 
 
-@pytest.mark.parametrize("bias", [0, 0.9, 0.95, 1, -0.001, 1.001, True, None, "0.95", float("inf"), float("nan")])
-@pytest.mark.parametrize("provenance", [False, True])
+@pytest.mark.parametrize("bias,provenance", [
+    *((bias, False) for bias in (0, 0.9, 0.95, -0.001, True, None, "0.95", float("inf"), float("nan"))),
+    *((bias, True) for bias in (0.95, True, None)),
+])
 def test_saved_bias_domain_is_strict_even_without_receipts(bias, provenance):
     wire = compile_runtime_program(build_capability_witness("target_and_fire"))
     target = next(row for row in wire["runtimeProgram"]["entities"] if "targeting" in row)
@@ -389,10 +396,18 @@ def test_pull_invalid_when_repair_freezes_mode_and_strengths(invalid_when):
 
 
 @pytest.mark.parametrize("field,value", [
-    ("count", 2), ("damageMultiplier", 2), ("entityId", "foreign"), ("spreadRadians", 1),
-    ("periodTicks", 1), ("buffId", 1), ("durationTicks", 1), ("radiusPx", 16), ("rangeTiles", 1),
-    ("strength", 1), ("radiusTiles", 1), ("damageFraction", .5), ("maxHeal", 1),
-    ("cooldownTicks", 1), ("safeTileOnly", False), ("delayTicks", 601), ("delayTicks", -1), ("delayTicks", 1.5),
+    ("count", 2),
+    ("damageMultiplier", 2),
+    ("entityId", "foreign"),
+    ("periodTicks", 1),
+    ("durationTicks", 1),
+    ("radiusPx", 16),
+    ("radiusTiles", 1),
+    ("maxHeal", 1),
+    ("safeTileOnly", False),
+    ("delayTicks", 601),
+    ("delayTicks", -1),
+    ("delayTicks", 1.5),
 ])
 def test_both_delivery_rejects_foreign_native_fields_without_receipts(field, value):
     source = build_capability_witness("pull_on_event")

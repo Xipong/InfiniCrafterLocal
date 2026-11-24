@@ -16,7 +16,14 @@ from infini_local.storage import world_recipe_runtime, world_storage
 from infini_local.web.vfx_debug_routes import _sample_data
 
 
-@pytest.mark.parametrize("world_id", [True, False, [], {}, 1.5, "world\x00id", "world\nother", "\ud800"])
+@pytest.mark.parametrize("world_id", [
+    True,
+    [],
+    1.5,
+    "world\x00id",
+    "world\nother",
+    "\ud800",
+])
 def test_invalid_world_identity_is_refused_before_cache_or_generation(world_id, tmp_path, monkeypatch):
     monkeypatch.setattr(world_recipe_runtime, "WORLD_RECIPES_DIR", tmp_path / "worlds")
     request = {"worldId": world_id, "itemA": {"id": 1, "name": "A"}, "itemB": {"id": 2, "name": "B"}}

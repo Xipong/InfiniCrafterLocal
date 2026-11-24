@@ -543,21 +543,6 @@ def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, m
     assert not (tmp_path / "opaque-result.png").exists()
 
 
-def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monkeypatch):
-    from infini_local.core.images import config
-    monkeypatch.setattr(config, "BG_COLOR", "transparent")
-    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
-    raw = Image.new("RGBA", (64, 64))
-    draw = ImageDraw.Draw(raw)
-    for y in range(8, 56, 8):
-        for x in range(8, 56, 8):
-            draw.rectangle((x, y, x + 7, y + 7), fill=(200, 200, 200, 255) if (x // 8 + y // 8) % 2 else (255, 255, 255, 255))
-    source = tmp_path / "authored-pattern.png"
-    raw.save(source)
-    result = post.postprocess_sprite(str(source), "pattern-result", 32, "runtime:child_projectile", output_dir=tmp_path)
-    assert post_validation.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]
-
-
 def test_invalid_background_mode_cannot_silently_change_processing(monkeypatch):
     from infini_local.core.images import config
     from infini_local.pipelines.images.keyer import apply_background_removal

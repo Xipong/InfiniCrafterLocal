@@ -77,12 +77,17 @@ def authored(data):
 def test_contour_real_compile_preserves_dag_material_and_has_no_png_job():
     data = _data()
     raw = authored(data)
+    from infini_local.core.schema_validation import strict_schema_errors
+    from tests.generator.vfx_material_fixtures import _sent
+
     before = copy.deepcopy(raw)
+    assert not strict_schema_errors(raw, _sent(data, False)["outputSchema"])
     report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
     data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "contour")
-    assert data["vfxManifest"]["slots"][0]["geometry"] == before["slots"][0]["geometry"]
+    assert [{k: v for k, v in row.items() if k != "slotSeed"}
+            for row in data["vfxManifest"]["slots"]] == before["slots"]
     assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
     assert not vfx_validation.vfx_png_dependencies(data, raw)["dependencies"]
     assert raw == before

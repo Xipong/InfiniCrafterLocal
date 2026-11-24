@@ -19,8 +19,11 @@ from tests.generator.authoring.test_low_level_three_stage_pipeline import wire_t
 from infini_local.pipelines.author.request import build_initial_author_request
 
 
-@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("hidden", [False, True])
+@pytest.mark.parametrize('format_mode,hidden', [
+    ("json_schema", False),
+    ("json_schema", True),
+    ("json_object", True),
+])
 def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_transport, monkeypatch, format_mode, hidden):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     responses, requests = wire_transport

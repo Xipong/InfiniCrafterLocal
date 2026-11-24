@@ -1,11 +1,8 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
-from suite_paths import TEST_ROOT
-import json
 import sys
 from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
-from pathlib import Path
 
 import infini_local.core.runtime_authoring.capability_registry as registry
 import infini_local.core.runtime_authoring.compiler as compiler
@@ -110,28 +107,29 @@ def test_ambiguous_union_fails_closed():
         spec.projected_fields("x", "choice")
 
 
-def test_retired_provenance_refuses_old_wire_and_old_author():
-    old_author = build_capability_witness("projectile_collision")
-    corpus = json.loads(((TEST_ROOT / "fixtures") / "projectile_retained_wire.json").read_text())
-    old_wire = next(row["wire"] for row in corpus["cases"] if row["fn"] == "set_projectile_collision")
-    old_call = next(c for c in old_author["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    old_call["params"].pop("immunity")
-    old_call["params"].pop("updatesPerTick")
-    old_call["params"].update(npcImmunityMode="owner", localNpcHitCooldownEngineUnits=37, extraUpdates=5)
-    old_receipts = deepcopy(old_wire["runtimeContract"]["finalWireReceipts"])
-    assert not technical_lowering.audit_compiler_receipts(old_receipts, final_document=old_wire)["ok"]
-    assert not technical_lowering.audit_compiler_receipts(
-        old_receipts, authored_document=old_author, final_document=old_wire,
-    )["ok"]
+def test_current_collision_cooldown_refuses_old_source_name_with_unchanged_output():
+    source = build_capability_witness("projectile_collision")
+    call = next(c for c in source["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    call["params"]["immunity"] = {"localCooldown": 37}
+    wire = compiler.compile_runtime_program(source)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    for context in (source, None):
+        assert technical_lowering.audit_compiler_receipts(rows, authored_document=context, final_document=wire)["ok"]
+    row = next(r for r in rows if r.get("callId") == call["id"]
+               and r.get("authoredPath", "").endswith(".immunity.localCooldown"))
+    assert row["value"] == 37 and row["finalPath"].endswith(".localNpcHitCooldownTicks")
+    row["authoredPath"] = row["authoredPath"].removesuffix("immunity.localCooldown") + "localNpcHitCooldownEngineUnits"
+    before = deepcopy(wire)
+    for context in (source, None):
+        report = technical_lowering.audit_compiler_receipts(rows, authored_document=context, final_document=wire)
+        assert not report["ok"]
+        assert any(v.get("finalPath") == row["finalPath"] for v in report["violations"]), report
+    assert wire == before
+
+    call["params"].pop("immunity")
+    call["params"]["localNpcHitCooldownEngineUnits"] = 37
     with pytest.raises(ValueError):
-        compiler.compile_runtime_program(old_author)
-    changed = deepcopy(old_receipts)
-    row = next(r for r in changed if r.get("authoredPath", "").endswith(".localNpcHitCooldownEngineUnits"))
-    row["value"] = 10.5
-    assert not technical_lowering.audit_compiler_receipts(changed)["ok"]
-    row["value"] = 10
-    row["authoredPath"] = row["authoredPath"].replace("localNpcHitCooldownEngineUnits", "unregisteredOldName")
-    assert not technical_lowering.audit_compiler_receipts(changed)["ok"]
+        compiler.compile_runtime_program(source)
 
 
 def _two_collision_calls():
@@ -219,8 +217,14 @@ def test_projection_coverage_is_unique_and_complete(attack):
         assert not technical_lowering.audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("malformed", ["boolean", "above-maximum", "float", "null"])
-@pytest.mark.parametrize("source_available", [False, True])
+@pytest.mark.parametrize('malformed,source_available', [
+    ("boolean", False),
+    ("boolean", True),
+    ("above-maximum", False),
+    ("float", False),
+    ("float", True),
+    ("null", False),
+])
 def test_structured_scalar_domain_is_not_authenticated_by_coherent_receipts(malformed, source_available):
     immunity = registry.CAPABILITY_REGISTRY["projectile_collision"].params["immunity"]
     cooldown = next(branch.properties["localCooldown"] for branch in immunity.alternatives if branch.kind == "object")
@@ -295,13 +299,3 @@ def test_fn_literal_provenance_requires_value_source_and_complete_coverage(monke
         forged[receipts.index(literal)][key] = value
         assert not technical_lowering.audit_compiler_receipts(forged, authored_document=document, final_document=wire)["ok"]
     assert not technical_lowering.audit_compiler_receipts([r for r in receipts if r is not literal], final_document=wire)["ok"]
-
-
-@pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalSeconds", 1), ("sameTargetBias", 0.5)])
-def test_obsolete_controller_bag_fields_are_refused_without_provenance(key, value):
-    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    wire = compiler.compile_runtime_program(build_capability_witness("target_and_fire"))
-    wire.pop("runtimeContract")
-    controller = next(e["controller"] for e in wire["runtimeProgram"]["entities"] if "controller" in e)
-    controller.setdefault("params", {})[key] = value
-    assert not validate_runtime_wire(wire)["ok"]

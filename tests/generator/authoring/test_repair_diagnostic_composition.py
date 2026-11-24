@@ -12,9 +12,12 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-@pytest.mark.parametrize("reverse_permissions", [False, True], ids=["scope-order", "reversed-scope-order"])
-@pytest.mark.parametrize("reverse_errors", [False, True], ids=["validator-order", "reversed-order"])
-@pytest.mark.parametrize("contact_suppressed", [False, True], ids=["repair-contact", "frozen-hitbox"])
+@pytest.mark.parametrize('reverse_permissions,reverse_errors,contact_suppressed', [
+    (False, False, False),
+    (False, True, True),
+    (True, False, True),
+    (True, True, False),
+])
 def test_component_and_event_repairs_keep_independent_frozen_values(contact_suppressed, reverse_errors, reverse_permissions):
     authored = build_capability_witness("restore_resources_on_use")
     calls = authored["runtimeProgram"]["calls"]

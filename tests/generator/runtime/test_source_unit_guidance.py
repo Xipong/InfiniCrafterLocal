@@ -512,8 +512,11 @@ def test_repair_unit_filter_keeps_zero_null_and_exact_array_namespaces(monkeypat
     assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "blocks/s"
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("generated", [False, True], ids=["native-stat-view", "accepted-generated-wire"])
+@pytest.mark.parametrize('mode,generated', [
+    ("json_object", False),
+    ("json_object", True),
+    ("json_schema", True),
+])
 def test_source_unit_guides_match_stage_visible_stat_types(monkeypatch, mode, generated):
     source = {"name": "stat context", "lifeRegen": 4}
     if generated:

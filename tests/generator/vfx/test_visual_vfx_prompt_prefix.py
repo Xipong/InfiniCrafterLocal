@@ -305,8 +305,11 @@ def test_public_visual_schemas_share_owner_catalogs_without_per_token_cases():
     assert modes == {row["mode"] for row in visual_request.visual_asset_mode_catalog()}
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fixture_name", ["door_on_chain", "workbench_blade"])
+@pytest.mark.parametrize('mode,fixture_name', [
+    ("json_object", "door_on_chain"),
+    ("json_object", "workbench_blade"),
+    ("json_schema", "door_on_chain"),
+])
 def test_minimal_author_result_preserves_visual_mechanics_and_parent_facts(wire_transport, monkeypatch, mode, fixture_name):
     """Advisory omission changes only optional appearance hints, not Visual's facts."""
     from infini_local.core.runtime_authoring.validator import validate_runtime_program

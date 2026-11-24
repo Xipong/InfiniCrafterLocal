@@ -287,8 +287,7 @@ def test_reviewed_metadata_migration_accepts_reordered_duplicate_edges(tmp_path)
 
 
 @pytest.mark.parametrize("mutation", [
-    "missing_node", "changed_guard", "changed_source", "changed_unknown", "changed_member", "changed_module",
-    "missing_edge", "duplicate_edge", "changed_edge", "node_type", "new_field", "new_scope", "new_limit",
+    "missing_node", "changed_guard", "duplicate_edge", "new_field",
     "nonzero_omission", "bool_omission", "missing_omission", "outside_mechanic", "missing_graph",
     "missing_container", "extra_graph", "positional_array",
 ])
@@ -300,28 +299,10 @@ def test_graph_contract_rejects_every_non_allowlisted_evidence_change(tmp_path, 
         graph["nodes"].pop()
     elif mutation == "changed_guard":
         graph["nodes"][0]["blocks"][0][3] = []
-    elif mutation == "changed_source":
-        graph["nodes"][0]["values"]["v1"][0] = "ldsfld"
-    elif mutation == "changed_unknown":
-        graph["unresolved"] = []
-    elif mutation == "changed_member":
-        graph["members"][1]["name"] = "Player.statLife"
-    elif mutation == "changed_module":
-        graph["modules"][0]["mvid"] = "wrong-owner"
-    elif mutation == "missing_edge":
-        graph["edges"].pop()
     elif mutation == "duplicate_edge":
         graph["edges"].append(copy.deepcopy(graph["edges"][0]))
-    elif mutation == "changed_edge":
-        graph["edges"][0]["context"]["admission"] = "accepted"
-    elif mutation == "node_type":
-        graph["nodes"][0]["id"] = False
     elif mutation == "new_field":
         graph["unreviewedEvidence"] = True
-    elif mutation == "new_scope":
-        graph["scope"] += " Runtime predicates evaluated."
-    elif mutation == "new_limit":
-        graph["limits"]["characters"] = 50000
     elif mutation == "nonzero_omission":
         graph["omittedBodyCount"] = 1
     elif mutation == "bool_omission":

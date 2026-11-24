@@ -92,13 +92,18 @@ def history_case(draw="stroke"):
 @pytest.mark.parametrize("draw", ["stroke", "sprites"])
 def test_actual_director_compile_wire_preserves_complete_history_design(draw):
     data, raw = history_case(draw)
+    from infini_local.core.schema_validation import strict_schema_errors
+    from tests.generator.vfx_material_fixtures import _sent
+
     before = copy.deepcopy(raw)
+    assert not strict_schema_errors(raw, _sent(data, False)["outputSchema"])
     report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == raw
     data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "history-contract-test")
     assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
-    assert data["vfxManifest"]["slots"][0]["trail"] == raw["slots"][0]["trail"]
+    assert [{k: v for k, v in row.items() if k != "slotSeed"}
+            for row in data["vfxManifest"]["slots"]] == before["slots"]
     assert raw == before
 
 

@@ -382,8 +382,12 @@ def test_main_ammo_observations_keep_readable_source_and_profile_links(section, 
     assert parent == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("route", ["direct", "child", "ammo"])
+@pytest.mark.parametrize('mode,route', [
+    ("json_object", "direct"),
+    ("json_object", "child"),
+    ("json_object", "ammo"),
+    ("json_schema", "child"),
+])
 def test_actual_author_keeps_fuller_source_before_size_with_opaque_runtime_unknowns(monkeypatch, mode, route):
     from infini_local.core import llm_config
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)

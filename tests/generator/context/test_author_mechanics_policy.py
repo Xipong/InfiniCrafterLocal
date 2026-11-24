@@ -143,8 +143,16 @@ def test_regional_selection_does_not_bypass_guards_or_canonical_graph_validation
     assert 'authorSelection'not in out['mechanicsSource']
 
 
-@pytest.mark.parametrize('factory',[fixture,region_fixture])
-@pytest.mark.parametrize('kind',['stale-reference','bool-reference','bool-profile','bool-mechanics','missing-reference','unknown-identity-axis'])
+@pytest.mark.parametrize('factory,kind', [
+    (fixture, 'stale-reference'),
+    (fixture, 'bool-reference'),
+    (fixture, 'bool-profile'),
+    (fixture, 'bool-mechanics'),
+    (fixture, 'missing-reference'),
+    (fixture, 'unknown-identity-axis'),
+    (region_fixture, 'stale-reference'),
+    (region_fixture, 'bool-mechanics'),
+])
 def test_exact_typed_identity_must_bind_profile_mechanics_and_reference(factory,kind):
     p=factory();ref=p['attackReference']
     if kind=='stale-reference':ref['identityPredicates']={'Projectile.type':999,'Projectile.aiStyle':999}

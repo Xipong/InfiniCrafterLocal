@@ -59,6 +59,7 @@ def test_unrestricted_compilation_is_explicit_always_wire_with_one_omitted_phase
     wire = compile_runtime_program(source)
     assert source == before
     assert wire["runtimeProgram"] == delivered["runtimeProgram"]
+    assert wire["gameplay"] == delivered["gameplay"]
     rows = wire["runtimeContract"]["finalWireReceipts"]
     phase = [r for r in rows if r.get("callId") == call["id"] and r["authoredPath"].endswith(".window.phase")]
     assert len(phase) == 1

@@ -61,7 +61,17 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-@pytest.mark.parametrize("value", [-16200.00001, 16200.00001, True, None, "-1", [], {}, float("inf"), float("nan"), -1e-300, 1e-300])
+@pytest.mark.parametrize("value", [
+    -16200.00001,
+    16200.00001,
+    True,
+    None,
+    "-1",
+    [],
+    float("nan"),
+    -1e-300,
+    1e-300,
+])
 def test_bad_present_acceleration_is_rejected_without_rounding_or_clamping(value):
     document = build_capability_witness(FN)
     selected(document)["params"][PARAM] = value

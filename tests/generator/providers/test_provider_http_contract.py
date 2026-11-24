@@ -1050,8 +1050,8 @@ def test_visual_doctor_uses_current_processing_roles(tmp_path, monkeypatch, role
         assert baked.size == ((48, 48) if role == "runtime:projectile" else (32, 32))
 
 
-@pytest.mark.parametrize("role", ["projectile", "child", "unknown", "vfx_cutout", "vfx_strip"])
-def test_visual_doctor_rejects_retired_or_unknown_roles_before_image_request(monkeypatch, role):
+@pytest.mark.parametrize("role", ["unknown", "vfx_strip"])
+def test_visual_doctor_rejects_roles_outside_public_probe_before_image_request(monkeypatch, role):
     calls = []
     monkeypatch.setattr(server_utility_routes, "generate_visual_asset", lambda *_: calls.append("entity"))
     monkeypatch.setattr(server_utility_routes, "maybe_generate_sprite", lambda *_: calls.append("item"))

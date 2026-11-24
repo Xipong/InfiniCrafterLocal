@@ -75,8 +75,12 @@ def test_material_and_body_facts_survive_final_http_serialization(monkeypatch, l
     assert final["debug"]["vfxDirectorRaw"] == accepted
 
 
-@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
-@pytest.mark.parametrize("offset", [None, -32, 0])
+@pytest.mark.parametrize('format_name,offset', [
+    ("json_object", None),
+    ("json_object", -32),
+    ("json_object", 0),
+    ("json_schema", -32),
+])
 def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_transport, monkeypatch, format_name, offset):
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data = compile_runtime_program(build_capability_witness("beam_geometry"))

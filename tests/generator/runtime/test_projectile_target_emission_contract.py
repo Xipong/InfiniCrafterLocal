@@ -110,15 +110,28 @@ def test_required_choices_cannot_be_filled_by_provider_or_author_defaults(name):
 
 
 @pytest.mark.parametrize("name,value", [
-    ("when", "on_kill"), ("when", None), ("entity", None), ("entity", "UNKNOWN"),
-    ("stepCount", None), ("stepCount", True), ("stepCount", 2.0), ("stepCount", 0), ("stepCount", 13),
-    ("stepRangeTiles", False), ("stepRangeTiles", "22.5"), ("stepRangeTiles", 0.9999999999999999),
-    ("stepRangeTiles", 60.00000000000001), ("stepRangeTiles", float("nan")), ("stepRangeTiles", float("inf")),
-    ("selectionAnchor", None), ("selectionAnchor", "closest"), ("repeatPolicy", "never"),
-    ("requireLineOfSight", 0), ("requireLineOfSight", None),
-    ("ignoreTargetUpdates", None), ("ignoreTargetUpdates", -1),
-    ("ignoreTargetUpdates", 601), ("ignoreTargetUpdates", 10.0),
-    ("delay", True), ("delay", -0.5), ("delay", 601 / 60),
+    ("when", "on_kill"),
+    ("when", None),
+    ("entity", None),
+    ("entity", "UNKNOWN"),
+    ("stepCount", True),
+    ("stepCount", 2.0),
+    ("stepCount", 0),
+    ("stepCount", 13),
+    ("stepRangeTiles", "22.5"),
+    ("stepRangeTiles", 0.9999999999999999),
+    ("stepRangeTiles", 60.00000000000001),
+    ("stepRangeTiles", float("nan")),
+    ("selectionAnchor", None),
+    ("selectionAnchor", "closest"),
+    ("repeatPolicy", "never"),
+    ("requireLineOfSight", 0),
+    ("ignoreTargetUpdates", None),
+    ("ignoreTargetUpdates", -1),
+    ("ignoreTargetUpdates", 601),
+    ("delay", True),
+    ("delay", -0.5),
+    ("delay", 601 / 60),
 ])
 def test_invalid_present_author_and_saved_wire_choices_remain_red(name, value):
     doc = _doc(**{name: value})

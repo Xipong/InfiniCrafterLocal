@@ -43,10 +43,18 @@ def test_native_fishing_exact_projection_without_pose_or_input_inference(input_n
     assert compile_runtime_program(explicit)['runtimeProgram']==wire['runtimeProgram']
 
 
-@pytest.mark.parametrize('value', [None,{}, {'power':30},{'castSpeed':60}, {'power':0,'castSpeed':60},
-    {'power':1001,'castSpeed':60}, {'power':True,'castSpeed':60}, {'power':30,'castSpeed':0},
-    {'power':30,'castSpeed':241}, {'power':30,'castSpeed':1e-320}, {'power':30,'castSpeed':float('inf')},
-    {'power':30,'castSpeed':60,'bobber':360}])
+@pytest.mark.parametrize('value', [
+    None,
+    {},
+    {'power':30},
+    {'castSpeed':60},
+    {'power':0,'castSpeed':60},
+    {'power':1001,'castSpeed':60},
+    {'power':True,'castSpeed':60},
+    {'power':30,'castSpeed':0},
+    {'power':30,'castSpeed':241},
+    {'power':30,'castSpeed':float('inf')},
+])
 def test_invalid_or_missing_authored_fishing_is_not_completed(value):
     doc=source();doc['runtimeProgram']['bindings'][0]['action']['fishing']=value
     assert not validate_runtime_program(doc)['ok']

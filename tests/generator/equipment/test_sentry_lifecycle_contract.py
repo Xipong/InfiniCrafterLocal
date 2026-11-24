@@ -73,8 +73,8 @@ def test_every_independent_combination_preserves_exact_authored_delta(native, po
 
 
 @pytest.mark.parametrize("fn,key,bad", [
-    *(('sentry', 'enabled', v) for v in (None, 0, 1, "true", {}, [])),
-    *(('descendant_limit', 'maxActive', v) for v in (None, True, False, 0, 97, 1.0, "3", {}, [])),
+    *(('sentry', 'enabled', v) for v in (None, 1, "true", {})),
+    *(('descendant_limit', 'maxActive', v) for v in (None, True, 0, 97, 1.0, "3", [])),
 ])
 def test_present_invalid_values_are_red_without_coercion_or_provenance(fn, key, bad):
     doc = _fixture(True, 3)

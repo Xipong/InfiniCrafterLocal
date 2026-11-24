@@ -46,15 +46,12 @@ def test_schema_factory_is_evaluated_only_for_schema_mode(monkeypatch):
     assert json.loads(json.dumps(result)) == result
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize(
-    "source_a, source_b",
-    [
-        pytest.param({"damage": 0, "healLife": 50}, {"damage": 0, "value": 5}, id="healing-and-material"),
-        pytest.param({"damage": 0, "rare": 65535}, {"damage": 0, "value": 100000000}, id="rarity-and-price"),
-        pytest.param({"damage": 7, "useTime": 20}, {"damage": 4, "useTime": 30}, id="combat-parents"),
-    ],
-)
+@pytest.mark.parametrize('mode,source_a,source_b', [
+    ("json_object", {"damage": 0, "healLife": 50}, {"damage": 0, "value": 5}),
+    ("json_object", {"damage": 0, "rare": 65535}, {"damage": 0, "value": 100000000}),
+    ("json_object", {"damage": 7, "useTime": 20}, {"damage": 4, "useTime": 30}),
+    ("json_schema", {"damage": 0, "rare": 65535}, {"damage": 0, "value": 100000000}),
+])
 def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, source_b):
     from copy import deepcopy
 

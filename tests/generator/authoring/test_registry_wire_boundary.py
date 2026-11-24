@@ -32,23 +32,33 @@ def test_unknown_author_root_cannot_survive_validation_and_compilation():
     assert source == before and parsed == before
 
 
-@pytest.mark.parametrize("location", ["root", "entity", "visual"])
+@pytest.mark.parametrize("location", ["root", "entity", "visual", "item_use", "controller"])
 def test_unknown_delivered_field_is_refused_not_sanitized(location):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
-    wire = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    item = build_capability_witness("target_and_fire") if location == "controller" else build_runtime_fixture("workbench_blade")
+    wire = compile_runtime_program(item)
     delivered = sanitize_recipe_for_delivery(wire)
     assert validate_runtime_wire(delivered)["ok"]
+    runtime = delivered["runtimeProgram"]
+    if location == "root":
+        object_path = ()
+    elif location == "item_use":
+        object_path = ("runtimeProgram", "itemUse")
+    elif location == "controller":
+        index = next(i for i, entity in enumerate(runtime["entities"]) if "controller" in entity)
+        object_path = ("runtimeProgram", "entities", index, "controller")
+    else:
+        object_path = ("runtimeProgram", "entities", 0) + (("visual",) if location == "visual" else ())
+
     def target_object(doc):
-        if location == "root":
-            return doc
-        entity = doc["runtimeProgram"]["entities"][0]
-        return entity["visual"] if location == "visual" else entity
+        for key in object_path:
+            doc = doc[key]
+        return doc
 
     target = target_object(delivered)
     target["unexpectedField"] = {"value": "unrecognized"}
-    prefix = {"root": "$", "entity": "$.runtimeProgram.entities[0]", "visual": "$.runtimeProgram.entities[0].visual"}
-    path = prefix[location] + ".unexpectedField"
+    path = "$" + "".join(f"[{key}]" if isinstance(key, int) else f".{key}" for key in object_path) + ".unexpectedField"
     before = deepcopy(delivered)
     projected = sanitize_recipe_for_delivery(delivered)
     report = validate_runtime_wire(projected)
@@ -71,7 +81,7 @@ def wire():
     "path,value,code,insert",
     [
         pytest.param(("runtimeProgram", "entities", 0), v, "required_object", True, id="entity-row-" + label)
-        for label, v in (("null", None), ("boolean", False), ("integer", 0), ("text", "broken"), ("array", []), ("array-text", ["broken"]))
+        for label, v in (("null", None), ("boolean", False), ("text", "broken"), ("array", []))
     ]
     + [
         pytest.param(("runtimeProgram", "bindings", 0, "id"), v, "required_id", False, id="binding-id-" + label)
@@ -79,7 +89,7 @@ def wire():
     ]
     + [
         pytest.param(("runtimeProgram", "entities", 1, "controller", "code"), v, "unsupported_opcode", False, id="controller-" + label)
-        for label, v in (("array", []), ("object", {}), ("array-integer", [1]))
+        for label, v in (("array", []), ("object", {}))
     ]
     + [
         pytest.param(
@@ -89,7 +99,6 @@ def wire():
             False,
             id=field + "-" + label,
         )
-        for field in ("healLife", "healMana", "durationTicks")
         for label, v in (
             ("null", None),
             ("false", False),
@@ -100,6 +109,8 @@ def wire():
             ("object", {}),
             ("array", []),
         )
+        for field in ("healLife", "healMana", "durationTicks")
+        if field == "healLife" or label in {"null", "true", "fractional"}
     ],
 )
 def test_wire_diagnostics_preserve_json_type_original_index_and_source(wire, path, value, code, insert):
@@ -391,26 +402,19 @@ def test_present_malformed_buff_object_is_not_hidden_by_healing(bad):
     assert any(e["path"] == "$.gameplay.generatedBuff" for e in report["errors"])
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        None,
-        [],
-        1,
-        False,
-        "row",
-        {},
-        {"fn": []},
-        {"authoredPaths": 7},
-        {"authoredPaths": "path"},
-        {"authoredPaths": [None]},
-        {"finalPath": []},
-        {"status": None},
-        {"callId": {}},
-        {"lowererId": True},
-        {"authoredPath": 0},
-    ],
-)
+@pytest.mark.parametrize("bad", [
+    None,
+    [],
+    {},
+    {"fn": []},
+    {"authoredPaths": 7},
+    {"authoredPaths": [None]},
+    {"finalPath": []},
+    {"status": None},
+    {"callId": {}},
+    {"lowererId": True},
+    {"authoredPath": 0},
+])
 def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
     source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)

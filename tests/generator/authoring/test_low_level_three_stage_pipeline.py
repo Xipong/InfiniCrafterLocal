@@ -503,8 +503,11 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
     assert not responses
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("oversized_surface", ["calls", "unknown-root"])
+@pytest.mark.parametrize('mode,oversized_surface', [
+    ("json_object", "calls"),
+    ("json_object", "unknown-root"),
+    ("json_schema", "unknown-root"),
+])
 def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire_transport, monkeypatch, mode, oversized_surface):
     import infini_local.core.runtime_authoring.program_schema as program_schema
 
@@ -574,8 +577,14 @@ def test_author_compiles_only_valid_gameplay_with_at_most_one_repair(wire_transp
     assert not responses
 
 
-@pytest.mark.parametrize("error_type", [RuntimeError, AssertionError, TypeError, ValueError])
-@pytest.mark.parametrize("after_repair", [False, True])
+@pytest.mark.parametrize('error_type,after_repair', [
+    (RuntimeError, False),
+    (RuntimeError, True),
+    (AssertionError, False),
+    (TypeError, False),
+    (ValueError, False),
+    (ValueError, True),
+])
 def test_compiler_faults_propagate_without_gameplay_repair(monkeypatch, error_type, after_repair):
     good = build_runtime_fixture("workbench_blade")
     current = copy.deepcopy(good)

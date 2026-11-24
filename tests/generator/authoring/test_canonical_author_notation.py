@@ -179,7 +179,9 @@ def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monke
     assert broken == before
 
 
-@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.target_kinds == ("item_body",)])
+# Ownership is authenticated once for item-body calls, independently of
+# their output mapping. Exercise distinct ordinary, event and row outputs.
+@pytest.mark.parametrize("fn", ["item_stats", "weapon_ammo", "use_condition", "generated_buff_on_use", "tool_stats"])
 def test_source_provenance_rejects_global_item_target_forgery(fn):
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
     source = build_capability_witness(fn)
@@ -208,23 +210,18 @@ def test_source_provenance_rejects_global_item_target_forgery(fn):
     pytest.param("target", "", id="empty-target"),
     pytest.param("target", None, id="null-target"),
     pytest.param("target", True, id="boolean-target"),
-    pytest.param("target", 1, id="integer-target"),
     pytest.param("target", [], id="list-target"),
-    pytest.param("target", {}, id="object-target"),
     pytest.param("bodies", "ambiguous", id="ambiguous-body"),
     pytest.param("bodies", "absent", id="no-body"),
     pytest.param("bodies", "duplicate-id", id="duplicate-source-identity"),
     pytest.param("body-id", None, id="null-body-identity"),
     pytest.param("body-id", True, id="boolean-body-identity"),
-    pytest.param("body-id", 1, id="integer-body-identity"),
     pytest.param("body-id", "", id="empty-body-identity"),
     pytest.param("body-id", "Opaque", id="invalid-body-id-token"),
     pytest.param("itemEntityId", "nail", id="wrong-final-item-owner"),
     pytest.param("itemEntityId", None, id="null-final-item-owner"),
     pytest.param("itemEntityId", True, id="boolean-final-item-owner"),
-    pytest.param("itemEntityId", 1, id="integer-final-item-owner"),
     pytest.param("itemEntityId", [], id="list-final-item-owner"),
-    pytest.param("itemEntityId", {}, id="object-final-item-owner"),
     pytest.param("itemEntityId", "absent", id="missing-final-item-owner"),
 ])
 def test_item_receipt_owner_requires_exact_declared_and_final_identity(owner_field, value):

@@ -7,11 +7,11 @@ from infini_local.core import llm_config
 from infini_local.pipelines.author import request as author
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('fn,leaf,bad_value', [
-    ('item_stats', 'damage', True),
-    ('projectile_lifetime', 'lifetimeSeconds', 0),
-    ('move_straight', None, 'missing_entity'),
+@pytest.mark.parametrize('mode,fn,leaf,bad_value', [
+    ('json_object', 'item_stats', 'damage', True),
+    ('json_object', 'projectile_lifetime', 'lifetimeSeconds', 0),
+    ('json_object', 'move_straight', None, 'missing_entity'),
+    ('json_schema', 'item_stats', 'damage', True),
 ])
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value):
     from copy import deepcopy

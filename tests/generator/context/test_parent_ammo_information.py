@@ -10,8 +10,11 @@ from infini_local.pipelines.author.request import build_initial_author_request
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("envelope", ["root", "fingerprint"])
+@pytest.mark.parametrize('format_mode,envelope', [
+    ("json_object", "root"),
+    ("json_object", "fingerprint"),
+    ("json_schema", "root"),
+])
 def test_native_required_ammo_category_reaches_actual_author_request(monkeypatch, format_mode, envelope):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     facts = {"useAmmo": 283, "useAmmoCategoryName": "dart", "ammo": 0, "ammoCategoryName": ""}

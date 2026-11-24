@@ -56,15 +56,19 @@ def test_air_jump_keeps_authored_movement_and_exact_neutral_receipts(fn):
     del target['playerEffect']['airJump']['count']
     assert not validate_runtime_wire(wire)['ok']
 
-@pytest.mark.parametrize('field', ['autoPaint','rulerGrid','buildRangeTiles','tileSpeedBonusPercent','wallSpeedBonusPercent','jumpCloud','jumpBlizzard','jumpSandstorm','jumpFart','jumpTsunami','frogJump','divingHelm'])
-def test_building_and_named_jump_presets_are_absent(field):
-    doc,call=source('accessory',{'autoJump':True})
-    call['params'][field]=True
-    assert not validate_runtime_program(doc)['ok']
-    del call['params'][field]
-    wire=compile_runtime_program(doc)
-    wire['accessory'][field]=True
-    assert not validate_runtime_wire(wire)['ok']
+def test_unknown_traversal_field_is_refused_at_author_and_standalone_wire():
+    doc, call = source('accessory', {'autoJump': True})
+    wire = compile_runtime_program(doc)
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+    call["params"]["futureTraversalOption"] = True
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert any(row["path"].endswith(".params.futureTraversalOption") for row in report["errors"])
+    wire["accessory"]["futureTraversalOption"] = True
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(row["path"] == "$.accessory.futureTraversalOption" for row in report["errors"])
 
 @pytest.mark.parametrize('effect', [{'gravityMultiplier':1}, {'condition':'stationary','gravityMultiplier':1,'autoJump':False}])
 def test_neutral_traversal_component_does_not_create_an_effect(effect):

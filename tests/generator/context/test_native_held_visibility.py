@@ -27,28 +27,30 @@ def test_native_visibility_preserves_style_and_gesture(hidden, style):
     assert use["hideUseGraphic"] is hidden
     assert use["useStyle"] == style
     assert use.get("handPose") == params.get("handPose")
-    assert "heldAlignment" not in use and "releaseTiming" not in use
     assert validate_runtime_wire(wire)["ok"], validate_runtime_wire(wire)
     assert any(r.get("finalPath") == "runtimeProgram.itemUse.hideUseGraphic" and r.get("value") is hidden for r in wire["runtimeContract"]["finalWireReceipts"])
 
 
-@pytest.mark.parametrize("field,value", [("heldAlignment", "grip"), ("heldAlignment", "native_frame"), ("heldAlignment", None), ("customHeldSprite", "visible"), ("customHeldSprite", "hidden"), ("customHeldSprite", "inherit")])
-def test_removed_author_choices_reject_without_migration(field, value):
+def test_item_use_refuses_unknown_author_input_without_discarding_it():
     document, params = authored()
-    params[field] = value
+    params["unexpectedField"] = 42
     frozen = deepcopy(document)
-    assert not validate_runtime_program(document)["ok"]
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert any(error["code"] == "shape_additional_property"
+               and error["path"].endswith(".params.unexpectedField") for error in report["errors"])
+    with pytest.raises(ValueError, match="unexpectedField"):
+        compile_runtime_program(document)
     assert document == frozen
 
 
-@pytest.mark.parametrize("field,value", [("heldAlignment", "grip"), ("heldAlignment", "native_frame"), ("releaseTiming", ""), ("releaseTiming", "immediate"), ("releaseTiming", "on_release")])
-def test_removed_wire_choices_reject_without_migration(field, value):
-    document, _ = authored()
-    wire = compile_runtime_program(document)
-    wire["runtimeProgram"]["itemUse"][field] = value
-    frozen = deepcopy(wire)
-    assert not validate_runtime_wire(wire)["ok"]
-    assert wire == frozen
+def test_native_visibility_requires_an_explicit_choice():
+    document, params = authored()
+    del params["hideUseGraphic"]
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert any(error["code"] == "shape_required"
+               and error["path"].endswith(".params.hideUseGraphic") for error in report["errors"])
 
 
 @pytest.mark.parametrize("value", [None, "true", 1, {}, []])

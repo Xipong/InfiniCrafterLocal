@@ -7,7 +7,8 @@ import infini_local.core.vfx.contract as vfx_contract
 import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.repair as vfx_repair
 import infini_local.core.vfx.validation as vfx_validation
-from tests.generator.vfx_material_fixtures import _data
+from infini_local.core.schema_validation import strict_schema_errors
+from tests.generator.vfx_material_fixtures import _data, _sent
 from tests.generator.vfx.test_vfx_native_cue_contract import dust
 
 
@@ -25,6 +26,7 @@ def test_native_cue_identity_and_no_png_or_accompanying_renderer(renderer):
     data = _data()
     raw = cue(data, renderer)
     before = copy.deepcopy(raw)
+    assert not strict_schema_errors(raw, _sent(data, False)["outputSchema"])
     report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == raw

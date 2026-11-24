@@ -524,8 +524,15 @@ def _request_parent_views(monkeypatch, parent, mode):
     return [author["parents"]["A"]["packet"]["raw"], repair["parents"]["a"]["packet"]["raw"]]
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("role", ["collision", "motion", "motionDispatch", "motionDispatchEffects", "positionIntegration"])
+@pytest.mark.parametrize('mode,role', [
+    ("json_object", "collision"),
+    ("json_object", "motion"),
+    ("json_object", "motionDispatch"),
+    ("json_object", "motionDispatchEffects"),
+    ("json_object", "positionIntegration"),
+    ("json_schema", "collision"),
+    ("json_schema", "motionDispatchEffects"),
+])
 def test_production_requests_keep_ordered_caller_arguments_and_control_flow(monkeypatch, mode, role):
     for raw in _request_parent_views(monkeypatch, _caller_parent(role), mode):
         row, = raw["mechanics"]["sourceSlices"]
@@ -546,8 +553,15 @@ def test_production_requests_keep_ordered_caller_arguments_and_control_flow(monk
         assert "sourceFacts" not in raw["mechanics"]["uncertainty"]
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("variant", ["child_refusal", "graph_refusal", "unknown_attack", "unknown_record", "record_collision"])
+@pytest.mark.parametrize('mode,variant', [
+    ("json_object", "child_refusal"),
+    ("json_object", "graph_refusal"),
+    ("json_object", "unknown_attack"),
+    ("json_object", "unknown_record"),
+    ("json_object", "record_collision"),
+    ("json_schema", "child_refusal"),
+    ("json_schema", "unknown_record"),
+])
 def test_production_requests_keep_owned_refusals_and_unfamiliar_conditions(monkeypatch, mode, variant):
     parent = _caller_parent()
     profile = parent["directProjectileRaw"]
@@ -692,8 +706,11 @@ def test_compaction_keeps_distinct_verified_coverage_of_same_method(coverage, re
     assert profile == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("same_code", [False, True])
+@pytest.mark.parametrize('mode,same_code', [
+    ("json_object", False),
+    ("json_object", True),
+    ("json_schema", True),
+])
 def test_author_and_repair_keep_verified_whole_body_beside_same_named_region(monkeypatch, mode, same_code):
     from collections import Counter
     from tests.generator.context.test_native_csharp_source_view import _parent

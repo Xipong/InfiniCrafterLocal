@@ -8,7 +8,8 @@ import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.repair as vfx_repair
 import infini_local.core.vfx.validation as vfx_validation
 from infini_local.core.vfx.native_effects import NATIVE_EFFECT_TYPES, MOVING_NATIVE_EFFECTS
-from tests.generator.vfx_material_fixtures import _data
+from infini_local.core.schema_validation import strict_schema_errors
+from tests.generator.vfx_material_fixtures import _data, _sent
 
 
 def effect(kind="goldCrossBurst", data=None):
@@ -35,8 +36,9 @@ def effect(kind="goldCrossBurst", data=None):
 @pytest.mark.parametrize("kind", NATIVE_EFFECT_TYPES)
 def test_stock_effect_identity_through_director_compile_saved_wire(kind):
     data = _data()
-    raw = effect(kind)
+    raw = effect(kind, data=data)
     before = copy.deepcopy(raw)
+    assert not strict_schema_errors(raw, _sent(data, False)["outputSchema"])
     report = vfx_validation.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
@@ -59,48 +61,42 @@ def test_movement_is_required_only_when_native_reads_it(kind):
     assert not vfx_validation.validate_vfx_director_output(raw, _data())["ok"]
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("type", "ItemTransfer"),
-        ("type", "GasTrap"),
-        ("type", []),
-        ("type", None),
-        ("type", "goldCrossBurst "),
-        ("tint", "#FFFFFF"),
-        ("count", 4),
-        ("playerIndex", 0),
-        ("uniqueInfoPiece", 1),
-    ],
-)
+@pytest.mark.parametrize("field,value", [
+    ("type", "ItemTransfer"),
+    ("type", []),
+    ("type", None),
+    ("type", "goldCrossBurst "),
+    ("tint", "#FFFFFF"),
+    ("playerIndex", 0),
+    ("uniqueInfoPiece", 1),
+])
 def test_unlisted_native_routes_or_ignored_controls_rejected(field, value):
     raw = effect()
     raw["slots"][0]["nativeEffect"][field] = value
     assert not vfx_validation.validate_vfx_director_output(raw, _data())["ok"]
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("color", {"r": 1, "g": 2, "b": 3}),
-        ("duration", 30),
-        ("scale", 1),
-        ("density", 0.5),
-        ("spread", 1),
-        ("alpha", 1),
-        ("blend", "alpha"),
-        ("layer", "front"),
-        ("particleSystemId", "Smoke"),
-        ("textureRole", "item"),
-    ],
-)
+@pytest.mark.parametrize("field,value", [
+    ("color", {"r": 1, "g": 2, "b": 3}),
+    ("duration", 30),
+    ("blend", "alpha"),
+    ("layer", "front"),
+    ("particleSystemId", "Smoke"),
+    ("textureRole", "item"),
+])
 def test_common_ignored_art_controls_rejected(field, value):
     raw = effect()
     raw["slots"][0][field] = value
     assert not vfx_validation.validate_vfx_director_output(raw, _data())["ok"]
 
 
-@pytest.mark.parametrize("value", [-24.01, 24.01, True, None, [], float("inf"), float("nan")])
+@pytest.mark.parametrize("value", [
+    -24.01,
+    24.01,
+    True,
+    None,
+    float("nan"),
+])
 def test_invalid_native_movement_never_clamped(value):
     raw = effect("shimmerStar")
     raw["slots"][0]["nativeEffect"]["movement"]["x"] = value

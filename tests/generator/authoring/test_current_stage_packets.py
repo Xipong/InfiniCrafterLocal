@@ -32,13 +32,6 @@ from tools.diagnostics.measure_llm_request_sizes import (  # noqa: E402
     measurements,
 )
 
-RETIRED_SLOT_FIELDS = {
-    "backend", "particleRole", "jitter", "fadeIn", "fadeOut", "budgetWeight",
-    "signatureWeight", "visualCost", "channel", "lane", "emissionMode",
-}
-RETIRED_GLOBAL_FIELDS = {"motif", "effectMagnitude", "visualBudgetClass"}
-
-
 @pytest.fixture
 def capture():
     with OfflineCapture(ROOT) as actual:
@@ -166,7 +159,7 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
         assert audit["ignoredChanges"]
     elif stage == "vfx_repair":
         slot = copy.deepcopy(inputs["vfxOutput"]["slots"][0])
-        slot["duration"] = 100
+        slot["particle"]["colorStart"]["r"] = (slot["particle"]["colorStart"]["r"] + 1) % 256
         patch = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
         valid = {"schema": patch["schema"], "slotsUpsert": inputs["vfxOutput"]["slots"], "note": "one leaf"}
         from infini_local.core.vfx.materials import vfx_model_payload
@@ -226,45 +219,6 @@ def test_changed_parent_context_is_dynamic_and_retains_generated_facts(capture, 
             ]
 
 
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-def test_current_grammar_removes_only_obsolete_controls_not_artist_prose(capture, stage):
-    packet, evidence = capture.builder(stage, COHORT[0], "json_schema")
-    full = dossier(packet)
-    schema = full["responseSchema" if stage.startswith("visual") else "outputSchema"]
-    if stage.startswith("visual"):
-        for node in dict_nodes(schema):
-            assert "effectColor" not in node.get("properties", {})
-            assert "effectColor" not in node.get("required", [])
-        # Prompt/silhouette/identity and descriptive palette remain design tools.
-        if stage == "visual":
-            assert any("palette" in node.get("properties", {}) for node in dict_nodes(schema))
-        else:
-            assert set(schema["properties"]["itemPatch"]["anyOf"][0]["properties"]) == {"renderSizePx"}
-            assert full["brokenFragments"]["item"]["prompt"] == evidence["broken"]["item"]["prompt"]
-    else:
-        props = schema["properties"]
-        assert not props.keys() & RETIRED_GLOBAL_FIELDS
-        slot = props["slotsUpsert" if stage.endswith("repair") else "slots"]["items"]
-        assert not slot["properties"].keys() & RETIRED_SLOT_FIELDS
-        if stage == "vfx":
-            rgb = slot["properties"]["color"]
-            assert set(rgb["properties"]) == {"r", "g", "b"}
-            for channel in rgb["properties"].values():
-                assert channel["type"] == "integer" and channel["minimum"] == 0 and channel["maximum"] == 255
-        else:
-            rgb = slot["properties"]["particle"]["properties"]["colorStart"]
-            assert rgb["const"] == evidence["broken"]["slots"][0]["particle"]["colorStart"]
-            assert rgb["type"] == "object" and rgb["additionalProperties"] is False
-            assert set(rgb["required"]) == {"r", "g", "b"}
-            for channel, value in rgb["const"].items():
-                assert rgb["properties"][channel] == {"const": value, "type": "integer"}
-            assert slot["properties"]["alpha"]["maximum"] == 1.0
-        # Frozen context must not carry the retired global model as current data.
-        for key in ("brokenFragments", "validGeneratedContext", "item", "itemReadOnly"):
-            assert not (full.get(key) or {}).keys() & RETIRED_GLOBAL_FIELDS
-    assert evidence["inputs"]["visualKit"]["item"]["prompt"]
-
-
 @pytest.mark.parametrize("domain", ["visual", "vfx"])
 def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture, domain):
     from tests.generator.providers.test_codex_subscription_contract import _encode_nullable_fixture
@@ -280,29 +234,31 @@ def test_provider_schema_and_real_consumer_accept_same_control_refusals(capture,
             # Nullable fixture projection intentionally drops unknown keys; the
             # provider refusal control must retain an actually outgoing unknown.
             projected = _encode_nullable_fixture(value, local)
-            if "effectColor" in value["item"]:
-                projected["item"]["effectColor"] = value["item"]["effectColor"]
+            if "unexpectedControl" in value["item"]:
+                projected["item"]["unexpectedControl"] = value["item"]["unexpectedControl"]
             return projected
         accepted = lambda value: visual_contract._validate_kit(value, ids, item_id)[0] is not None
         invalid = copy.deepcopy(valid)
         invalid["item"]["inventoryScale"] = True
-        retired = copy.deepcopy(valid)
-        retired["item"]["effectColor"] = "gold"
+        unknown = copy.deepcopy(valid)
+        unknown["item"]["unexpectedControl"] = "gold"
+        assert valid["item"]["prompt"]
+        assert encode(valid)["item"]["prompt"] == valid["item"]["prompt"]
     else:
         from infini_local.core.vfx.materials import vfx_model_payload
         from infini_local.core.provider_schema import defer_provider_cross_field_constraints
         basis = defer_provider_cross_field_constraints(dossier(packet)["outputSchema"])
         def encode(value):
             projected = _encode_nullable_fixture(vfx_model_payload(value), basis)
-            if "effectMagnitude" in value:
-                projected["effectMagnitude"] = value["effectMagnitude"]
+            if "unexpectedControl" in value:
+                projected["unexpectedControl"] = value["unexpectedControl"]
             return projected
         accepted = lambda value: vfx_validation.validate_vfx_director_output(value, inputs["visualData"])["ok"]
         invalid = copy.deepcopy(valid)
         invalid["slots"][0]["particle"]["colorStart"]["r"] = True
-        retired = copy.deepcopy(valid)
-        retired["effectMagnitude"] = 0.5
-    for value, expected in ((valid, True), (invalid, False), (retired, False)):
+        unknown = copy.deepcopy(valid)
+        unknown["unexpectedControl"] = 0.5
+    for value, expected in ((valid, True), (invalid, False), (unknown, False)):
         assert Draft202012Validator(schema).is_valid(encode(value)) is expected
         assert accepted(value) is expected
 

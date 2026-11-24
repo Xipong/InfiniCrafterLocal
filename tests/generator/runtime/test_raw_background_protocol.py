@@ -95,8 +95,15 @@ def test_wrong_matte_with_enclosed_hole_cannot_escape_through_rescue(tmp_path,mo
     assert not (tmp_path/'out/bad-rescue.png').exists()
 
 
-@pytest.mark.parametrize('background_alpha', [0, 1, 2])
-@pytest.mark.parametrize('role', ['runtime:field', 'impact', 'vfx_cutout'])
+@pytest.mark.parametrize('background_alpha,role', [
+    (0, 'runtime:field'),
+    (0, 'impact'),
+    (0, 'vfx_cutout'),
+    (1, 'runtime:field'),
+    (1, 'impact'),
+    (2, 'runtime:field'),
+    (2, 'impact'),
+])
 def test_near_clear_exterior_is_evidence_without_erasing_soft_alpha(tmp_path, monkeypatch, background_alpha, role):
     monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
     monkeypatch.setattr(config, 'REMOVE_BG', False)
