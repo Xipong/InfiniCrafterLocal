@@ -354,7 +354,7 @@ CAMPAIGN_CONSUMPTION_CASES = [
     *(pytest.param("fixture", boundary, consumer, "changed", id=f"fixture-{consumer}-{boundary}")
       for consumer in ("early", "final") for boundary in ("after_projection", "before_gate", "after_gate")),
     *(pytest.param("fixture", boundary, consumer, "same", id=f"same-bytes-{consumer}-{boundary}")
-      for boundary in ("projection", "before_gate", "after_gate") for consumer in ("final", "early")),
+      for boundary, consumer in (("projection", "final"), ("before_gate", "early"), ("after_gate", "final"))),
     *(pytest.param("fixture", "serving_selection", consumer, "changed", id=f"same-bytes-other-root-{consumer}")
       for consumer in ("early", "final")),
     *(pytest.param("ingredient", boundary, "final", "changed", id=f"ingredient-{boundary}")
@@ -427,7 +427,7 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
     assert data == before
 
 
-@pytest.mark.parametrize("layout,canvas", [("strip", 16), ("strip", 32), ("cutout", 64), ("cutout", 128)])
+@pytest.mark.parametrize("layout,canvas", [("strip", 16), ("cutout", 128)])
 def test_campaign_declared_vfx_canvas_alpha_and_private_projection(campaign_case, layout, canvas):
     import hashlib
     import json

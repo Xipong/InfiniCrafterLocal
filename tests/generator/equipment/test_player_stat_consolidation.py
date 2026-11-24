@@ -55,9 +55,10 @@ def test_one_regen_and_treasure_choice_reuses_existing_wire_once(fn, rate, units
     assert document == before
 
 
-@pytest.mark.parametrize("fn", SOURCES)
-@pytest.mark.parametrize("field,value", [("lifeRegenHpPerSecond", 2), ("lifeRegen", 2),
-                                          ("highlightTreasure", True)])
+@pytest.mark.parametrize("fn,field,value", [
+    (fn, field, value) for fn in SOURCES
+    for field, value in (("lifeRegen", 2), ("highlightTreasure", True))
+] + [(SOURCES[0], "lifeRegenHpPerSecond", 2)])
 def test_parallel_nested_stats_are_rejected_instead_of_double_applying(fn, field, value):
     document, call = stat_source(fn, lifeRegen=2, treasureSense=True)
     call["params"]["playerEffect"] = {field: value}

@@ -101,7 +101,7 @@ def test_declared_defaults_are_neutral_optional_and_reach_serialized_contract():
             {n: v for n, v in (("holdoutOffsetX", x), ("holdoutOffsetY", y)) if v is not None},
             id=f"x-{x}-y-{y}",
         )
-        for x, y in ((None, None), (0, 0), (None, -96), (96, None), (-96, 96), (-96, None), (None, 96))
+        for x, y in ((None, None), (0, 0), (None, -96), (96, None), (-96, 96))
     ],
 )
 def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omitted, values):

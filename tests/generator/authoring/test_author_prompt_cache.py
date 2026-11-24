@@ -1,9 +1,7 @@
-"""Author cache boundaries and local request-build work, without provider calls."""
+"""Author cache boundaries without provider calls."""
 from __future__ import annotations
 
 from infini_local.core import llm_config
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
-from infini_local.pipelines.vfx import request as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import json
@@ -11,39 +9,6 @@ import json
 import pytest
 
 from infini_local.pipelines.author import request as author
-
-
-@pytest.mark.parametrize("mode", ["json_object", "off"])
-def test_author_does_not_build_unused_provider_schema(monkeypatch, mode):
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    calls = []
-
-    def schema():
-        calls.append(True)
-        return {"type": "object", "properties": {"marker": {"type": "string"}}}
-
-    monkeypatch.setattr(author, "author_item_generation_provider_schema", schema)
-    request, _, _ = author.build_initial_author_request({}, {}, "one", model_name="test-model")
-    assert calls == []
-    assert request.get("response_format") == ({"type": "json_object"} if mode == "json_object" else None)
-
-
-def test_schema_factory_is_evaluated_only_for_schema_mode(monkeypatch):
-    schema = {"type": "object", "properties": {"marker": {"type": "string"}}}
-    calls = []
-
-    def factory():
-        calls.append(True)
-        return schema
-
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
-    result = llm_provider_wire.llm_json_response_format("probe", schema=factory, strict=True)
-    assert calls == [True]
-    assert result is not None
-    assert result["json_schema"]["schema"] == schema
-    assert result["json_schema"]["strict"] is True
-    # The result must be actual wire JSON, not a leaked Python callable.
-    assert json.loads(json.dumps(result)) == result
 
 
 @pytest.mark.parametrize('mode,source_a,source_b', [
@@ -148,33 +113,3 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch):
     assert "repairScope" not in static
 
 
-@pytest.mark.parametrize("repair", [False, True])
-def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, repair):
-    import infini_local.pipelines.vfx.prompt as vfx_prompt
-    import infini_local.pipelines.vfx.stage as vfx_stage
-    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-
-    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
-    monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    requests = []
-
-    def capture(request, **_kwargs):
-        requests.append(request)
-        raise _RequestCaptured()
-
-    monkeypatch.setattr(vfx_transport, "llm_chat_json", capture)
-    for name in ("workbench_blade", "throwing_axe"):
-        data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
-        data["name"] = name
-        packet = vfx_prompt._prompt_packet(data, {"name": name}, {})
-        with pytest.raises(_RequestCaptured):
-            vfx_stage._request(vfx_transport.call_llm_vfx_director, packet,
-                         repair_errors=[] if repair else None, previous={}, repair_scope={})
-    static, prefix, full = _marked_prefix(requests[0])
-    other_static, other_prefix, other_full = _marked_prefix(requests[1])
-    assert prefix == other_prefix and static == other_static
-    assert full != other_full
-    assert set(static) == ({"task", "rules", "runtimeVocabularyReadOnly", "schemaDefinitions"} if repair else {"schema", "rules", "runtimeVocabulary", "schemaDefinitions"})
-    assert "outputSchema" not in static

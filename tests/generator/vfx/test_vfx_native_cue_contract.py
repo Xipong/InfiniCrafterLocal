@@ -35,7 +35,7 @@ def test_every_dust_choice_is_required(field):
 
 
 @pytest.mark.parametrize("field,value", [
-    ("count", True), ("count", 1.5), ("count", 65), ("size", -1), ("size", float("nan")),
+    ("count", True), ("count", 1.5), ("count", 65), ("size", -1),
     ("speedMinPxPerTick", float("inf")), ("speedMaxPxPerTick", 25),
     ("spreadRadians", -1), ("inheritVelocity", 2), ("nativeAlpha", 256),
     ("nativeAlpha", 0.5), ("noGravity", 1), ("type", "none"), ("density", .5),

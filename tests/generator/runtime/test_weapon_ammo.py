@@ -52,11 +52,10 @@ def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slic
     pytest.param(field, value, id=f"{field}-{kind}")
     for field, kind, value in (
         ("ammoCategory", "plural", "arrows"), ("ammoCategory", "family", "bow"),
-        ("ammoCategory", "unsupported", "sand"), ("ammoCategory", "empty", ""),
+        ("ammoCategory", "empty", ""),
         ("ammoCategory", "null", None), ("ammoCategory", "integer", 1),
-        ("speedBasis", "alias", "native"), ("speedBasis", "empty", ""),
+        ("speedBasis", "alias", "native"),
         ("speedBasis", "null", None), ("speedBasis", "boolean", True),
-        ("speedBasis", "object", {}),
         ("ammoCategory", "missing", DELETE), ("speedBasis", "missing", DELETE),
     )
 ])

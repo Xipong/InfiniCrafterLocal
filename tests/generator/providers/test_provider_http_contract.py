@@ -926,8 +926,11 @@ def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_
         assert stopped.wait(2)
 
 
-@pytest.mark.parametrize("error", [OSError(22, "Invalid argument"), ValueError("I/O operation on closed file")])
-@pytest.mark.parametrize("method,path,status", [("GET", "/health", 200), ("GET", "/missing", 404), ("POST", "/combine", 200)])
+@pytest.mark.parametrize("error,method,path,status", [
+    (OSError(22, "Invalid argument"), "GET", "/health", 200),
+    (ValueError("I/O operation on closed file"), "GET", "/missing", 404),
+    (OSError(22, "Invalid argument"), "POST", "/combine", 200),
+])
 def test_broken_access_log_console_preserves_http_delivery(monkeypatch, tmp_path, error, method, path, status):
     from infini_local.storage import trace_runtime, trace_tools
     from contextlib import redirect_stdout

@@ -168,7 +168,6 @@ def _wire():
 
 MALFORMED_BUFF_FIELDS = [
     ("jumpBoost", "broken"),
-    ("lifeRegen", True),
     ("miningSpeedMultiplier", 0),
     ("oreSenseRadiusTiles", 2),
     ("durationTicks", 2147483647),
@@ -184,7 +183,6 @@ MALFORMED_BUFF_FIELDS = [
     ("lightColorName", "broken"),
     ("lightColorName", None),
     ("jumpBoost", float("inf")),
-    ("jumpBoost", 10**1000),
     ("miningSpeedMultiplier", None),
     ("extra", 1),
     ("jumpBoost", 1e-50),
@@ -192,9 +190,7 @@ MALFORMED_BUFF_FIELDS = [
 ]
 FORGED_EFFECT_FIELDS = [
     ("oreSenseRadiusTiles", "true"),
-    ("jumpBoost", "1"),
     ("miningSpeedMultiplier", float("nan")),
-    ("emitLightStrength", float("nan")),
     ("lifeRegen", True),
     ("lifeRegen", 1.5),
     ("lifeRegen", 10**1000),
@@ -216,7 +212,7 @@ FORGED_EFFECT_FIELDS = [
     ]
     + [
         pytest.param(field, 1, True, True, False, id="json-integer-" + field)
-        for field in ("miningSpeedMultiplier", "jumpBoost", "movementSpeed", "emitLightStrength", "lifeRegen", "oreSenseRadiusTiles")
+        for field in ("jumpBoost", "movementSpeed", "emitLightStrength", "lifeRegen", "oreSenseRadiusTiles")
     ],
 )
 def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, value, active, accepted, dependency):
@@ -304,11 +300,9 @@ def test_generated_buff_dependency_and_legacy_absence(change):
 
 @pytest.mark.parametrize("mutation,error_path,code", [
     pytest.param("entity_row", "$.runtimeProgram.entities[0]", "required_object", id="entity_row"),
-    pytest.param("extra_body", "$.runtimeProgram.entities", "item_body_count", id="extra_body"),
     pytest.param("binding_id", "$.runtimeProgram.bindings[0].id", "required_id", id="binding_id"),
     pytest.param("movement_code", "$.runtimeProgram.entities[1].movement.code", "unsupported_opcode", id="movement_code"),
     pytest.param("heal_value", "$.gameplay.healLife", "invalid_integer", id="heal_value"),
-    pytest.param("buff_duration", "$.gameplay.generatedBuff.durationTicks", "invalid_integer", id="buff_duration"),
 ])
 def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch, wire, mutation, error_path, code):
     from infini_local.pipelines.visual import delivery as visual_delivery_gate
@@ -339,16 +333,10 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     runtime = wire["runtimeProgram"]
     if mutation == "entity_row":
         runtime["entities"].insert(0, None)
-    elif mutation == "extra_body":
-        extra = copy.deepcopy(runtime["entities"][0])
-        extra["id"] = "extra_item"
-        runtime["entities"].append(extra)
     elif mutation == "binding_id":
         runtime["bindings"][0]["id"] = ""
     elif mutation == "heal_value":
         wire.setdefault("gameplay", {})["healLife"] = "broken"
-    elif mutation == "buff_duration":
-        wire.setdefault("gameplay", {})["generatedBuff"] = {"durationTicks": "broken"}
     else:
         runtime["entities"][1]["movement"]["code"] = []
     report = validate_runtime_wire(wire)

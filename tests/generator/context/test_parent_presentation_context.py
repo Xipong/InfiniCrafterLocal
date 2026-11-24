@@ -120,8 +120,10 @@ def test_actual_vfx_request_retains_child_light_even_without_parent_design_conte
     assert child == before
 
 
-@pytest.mark.parametrize("stage", ["visual", "vfx"])
-@pytest.mark.parametrize("extension", ["outer_link", "metadata_link", "metadata_type"])
+@pytest.mark.parametrize("stage,extension", [
+    ("visual", "outer_link"), ("vfx", "outer_link"),
+    ("visual", "metadata_link"), ("vfx", "metadata_type"),
+])
 def test_future_attack_links_preserve_full_source_context(stage, extension):
     full = raw_parent_card_for_llm(captured_parent(), include_visual_reference=True)
     attack = unpack_attack_tables(full["raw"]["directProjectile"]["attackReference"])

@@ -267,18 +267,6 @@ def test_stock_and_hybrid_arguments_preserve_paths_and_custom_profile(studio):
     assert app.config_path.read_bytes() == original
 
 
-def test_universal_local_preset_preserves_selected_models(studio):
-    app, controller = studio
-    selected = {key: '/chosen/' + key for key in ('INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_EXE')}
-    selected.update(INFINI_SDCPP_ROCM_COMPAT_ROOT='/chosen/rocm', INFINI_SDCPP_SERVER_EXTRA_ARGS='--custom', INFINI_SDCPP_SERVER_COMMAND_MODE='template')
-    result = apply(controller, 'applyPreset', dict(selected, INFINI_LLM_PROVIDER='openrouter'), {'name': 'Локалка: LM Studio + sd.cpp (универсальный)'})
-    assert result['ok']
-    assert all(result['values'][key] == val for key, val in selected.items())
-    assert result['values']['INFINI_LLM_PROVIDER'] == 'local'
-    assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--custom'
-    assert result['values']['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == '/chosen/rocm'
-
-
 @pytest.mark.parametrize('name,provider,backend', [
     ('Локалка: LM Studio + sd.cpp (универсальный)', 'local', 'sdcpp'),
     ('API (OpenAI-compatible) + локальные изображения sd.cpp', 'openai_compat', 'sdcpp'),
@@ -298,7 +286,10 @@ def test_pipeline_presets_select_only_chain_and_keep_user_assets(studio, name, p
     profiles = app.config_path.with_name('gui_user_presets.json')
     before, config_before = profiles.read_bytes(), app.config_path.read_bytes()
     saved_profile = dict(app.user_presets['123'])
-    result = apply(controller, 'applyPreset', owned, {'name': name})
+    # Start from a different chain, so merely preserving the draft cannot pass.
+    draft = dict(owned, INFINI_LLM_PROVIDER='local' if provider != 'local' else 'openrouter',
+                 INFINI_IMAGE_BACKEND='sdcpp' if backend != 'sdcpp' else 'image_api')
+    result = apply(controller, 'applyPreset', draft, {'name': name})
     assert result['ok']
     assert (result['values']['INFINI_LLM_PROVIDER'], result['values']['INFINI_IMAGE_BACKEND']) == (provider, backend)
     assert all(result['values'][key] == value for key, value in owned.items())

@@ -1,7 +1,6 @@
 """Offline literal grammar and native serialization witnesses for Director caches."""
 
 from infini_local.core.vfx import contract as vfx_contract
-from infini_local.core.vfx import repair as vfx_repair
 from infini_local.core.vfx import schema as vfx_schema
 from infini_local.pipelines.visual import contract as visual_contract
 from infini_local.core import provider_schema
@@ -11,7 +10,7 @@ import json
 
 import pytest
 
-from infini_local.core.vfx.materials import vfx_model_schema, vfx_model_payload
+from infini_local.core.vfx.materials import vfx_model_payload
 
 from infini_local.core.llm_prompt_cache import (
     with_instruction_segments, with_schema_instruction_definitions,
@@ -76,7 +75,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     import vfx_material_fixtures
     from tests.generator.authoring.test_low_level_three_stage_pipeline import _vfx_output
-    data = (vfx_material_fixtures._data("beam_geometry") if fixture == "beam_geometry"
+    data = (vfx_material_fixtures._data(fixture) if fixture in {"beam_geometry", "lash_geometry"}
             else compile_runtime_program(build_runtime_fixture(fixture)))
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
@@ -136,7 +135,7 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
     from prompt_packet_helpers import request_dossier
     from tests.generator.authoring.test_low_level_three_stage_pipeline import _vfx_output
 
-    static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
+    static = json.loads(packet["messages"][1]["content"])
     source = vfx_model_payload(_vfx_output(data))
     dossier = request_dossier(packet)
     schema = dossier["outputSchema"]
@@ -159,8 +158,7 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
         assert not Draft202012Validator(frozen).is_valid({"foreign": "literal"})
         if field == "id":
             assert frozen == {**canonical["properties"]["id"], "const": value}
-    assert static["schemaDefinitions"] == {"$defs": {"slot_alpha": canonical["properties"]["alpha"]}}
-    assert dynamic["outputSchema"]["properties"]["slotsUpsert"]["items"]["properties"]["alpha"] == {"$ref": "#/$defs/slot_alpha"}
+    assert list(static["schemaDefinitions"]["$defs"].values()) == [canonical["properties"]["alpha"]]
     assert dossier["brokenFragments"]["slots"] == [dict(source["slots"][0], alpha=None)]
     valid = {"schema": vfx_contract.VFX_REPAIR_PATCH_SCHEMA, "note": "alpha only", "slotsUpsert": source["slots"]}
     assert Draft202012Validator(schema).is_valid(valid)
@@ -175,44 +173,6 @@ def _assert_vfx_alpha_repair_packet(packet, data, mode):
         )
         assert Draft202012Validator(wire_schema).is_valid(valid)
         assert not Draft202012Validator(wire_schema).is_valid(dict(valid, slotIdsDelete=[]))
-
-
-@pytest.mark.parametrize("stage", ["visual", "visual_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mode):
-    from prompt_packet_helpers import request_dossier
-    packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
-        packet, data = _packet(monkeypatch, stage, fixture, mode)
-        if stage.endswith("repair"):
-            _assert_visual_size_repair_packet(packet, data, mode)
-            packets.append(packet)
-            continue
-        static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
-        key = "entitiesUpsert" if stage.endswith("repair") else "entities"
-        union = "anyOf" if mode == "json_schema" else "oneOf"
-        branches = dynamic["responseSchema"]["properties"][key]["items"][union]
-        for branch in branches:
-            assert branch["properties"]["scale"] == {"$ref": "#/$defs/entityScale"}
-        for field in ("prompt", "silhouette", "visualIdentity"):
-            assert field not in branches[0]["properties"]
-            assert branches[1]["properties"][field] == {"$ref": "#/$defs/entity_" + field}
-        if stage.endswith("repair"):
-            assert "animationPlan" not in dynamic["responseSchema"]["properties"]
-        else:
-            assert dynamic["responseSchema"]["properties"]["animationPlan"] == {"$ref": "#/$defs/animationPlan"}
-        ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
-        canonical = (visual_contract._visual_repair_schema if stage.endswith("repair") else visual_contract._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
-        if mode == "json_schema":
-            canonical = provider_schema._provider_strict_projection(canonical)
-            assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(canonical, omit_annotations=True)
-        assert request_dossier(packet)["responseSchema"] == canonical
-        assert branches[0]["properties"]["entityId"]["enum"] == [data["runtimeProgram"]["itemEntityId"]]
-        assert branches[1]["properties"]["entityId"]["enum"] == ids[1:]
-        assert set(static["schemaDefinitions"]["$defs"]) >= {"entityScale", "entity_prompt", "entity_silhouette", "entity_visualIdentity"}
-        packets.append(packet)
-    assert packets[0]["messages"][:2] == packets[1]["messages"][:2] == packets[2]["messages"][:2]
-    assert len({p["messages"][2]["content"] for p in packets}) == 3
 
 
 @pytest.mark.parametrize('stage,mode,overlay', [
@@ -263,41 +223,6 @@ def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypat
     assert wire["prompt_cache_key"] and wire["instructions"] == packet["messages"][0]["content"]
 
 
-@pytest.mark.parametrize("stage", ["vfx", "vfx_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, stage, mode):
-    from prompt_packet_helpers import request_dossier
-    packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
-        packet, data = _packet(monkeypatch, stage, fixture, mode)
-        if stage.endswith("repair"):
-            _assert_vfx_alpha_repair_packet(packet, data, mode)
-            packets.append(packet)
-            continue
-        static, dynamic = [json.loads(row["content"]) for row in packet["messages"][1:]]
-        repair = stage.endswith("repair")
-        key = "slotsUpsert" if repair else "slots"
-        schema = dynamic["outputSchema"]
-        slot = schema["properties"][key]["items"]
-        assert slot["properties"]["rendererKind"] == {"$ref": "#/$defs/slot_rendererKind"}
-        assert schema["properties"]["assetsUpsert" if repair else "assets"]["items"] == {"$ref": "#/$defs/asset"}
-        for field in ("element", "path", "screenShake", "particle", "sound"):
-            assert slot["properties"][field] == {"$ref": "#/$defs/" + field}
-        canonical = vfx_model_schema((vfx_repair.vfx_repair_schema if repair else vfx_schema._director_schema)(data))
-        assert request_dossier(packet)["outputSchema"] == canonical
-        if mode == "json_schema":
-            assert packet["response_format"]["json_schema"]["schema"] == provider_schema._provider_strict_projection(
-                provider_schema.defer_provider_cross_field_constraints(canonical), omit_annotations=True,
-            )
-        original_slot = canonical["properties"][key]["items"]
-        for field in ("entityId", "event"):
-            assert slot["properties"][field] == original_slot["properties"][field]
-        assert slot["allOf"] == original_slot["allOf"]
-        assert not any(key.startswith("rendererRule_") for key in static["schemaDefinitions"]["$defs"])
-        packets.append(packet)
-    assert packets[0]["messages"][:2] == packets[1]["messages"][:2] == packets[2]["messages"][:2]
-    assert len({p["messages"][2]["content"] for p in packets}) == 3
-
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     import socket
@@ -310,19 +235,29 @@ def no_network(monkeypatch):
     ('visual', 'off'),
     ('visual_repair', 'json_object'),
     ('vfx', 'json_object'),
+    ('vfx', 'json_schema'),
     ('vfx_repair', 'json_object'),
+    ('vfx_repair', 'json_schema'),
     ('visual_repair', 'json_schema'),
 ])
-def test_actual_native_serialization_is_static_across_three_rosters_with_exact_dossier(monkeypatch, stage, mode):
+def test_actual_native_serialization_is_static_across_rosters_with_exact_dossier(monkeypatch, stage, mode):
     from tests.generator.authoring.test_stable_schema_data import capture_wire, wire_text
     from prompt_packet_helpers import request_dossier
     context = {"provider": "openai_codex", "base_url": "https://chatgpt.com/backend-api/codex",
                "api_mode": "responses", "model": "gpt-6.1-sol"}
     wires = []
-    for fixture in ("workbench_blade", "door_on_chain", "beam_geometry"):
+    repair_fixture = {"visual_repair": "returning_potion", "vfx_repair": "lash_geometry"}.get(stage)
+    rosters = ("workbench_blade", "door_on_chain", "beam_geometry")
+    if repair_fixture is not None:
+        rosters += (repair_fixture,)
+    for fixture in rosters:
         captured = []
-        packet, _ = _packet(monkeypatch, stage, fixture, mode, captured=captured)
+        packet, data = _packet(monkeypatch, stage, fixture, mode, captured=captured)
         before = copy.deepcopy(packet)
+        if stage == "visual_repair":
+            _assert_visual_size_repair_packet(packet, data, mode)
+        elif stage == "vfx_repair":
+            _assert_vfx_alpha_repair_packet(packet, data, mode)
         assert len(captured) == 1, "observe the real builder once, including non-extracted Repair"
         assert request_dossier(packet) == request_dossier(captured[0])
         assert json.dumps(request_dossier(packet), ensure_ascii=False, separators=(",", ":")) == json.dumps(
@@ -355,7 +290,7 @@ def test_actual_native_serialization_is_static_across_three_rosters_with_exact_d
         wires.append(wire)
     assert len({wire["instructions"] for wire in wires}) == 1
     assert len({json.dumps([row for row in wire["input"] if row["role"] == "developer"], ensure_ascii=False) for wire in wires}) == 1
-    assert len({json.dumps([row for row in wire["input"] if row["role"] == "user"], ensure_ascii=False) for wire in wires}) == 3
+    assert len({json.dumps([row for row in wire["input"] if row["role"] == "user"], ensure_ascii=False) for wire in wires}) == len(rosters)
     assert len({wire["prompt_cache_key"] for wire in wires}) == 1
     changed = copy.deepcopy(packet)
     static["rules"].append("Canonical grammar revision.")
@@ -383,10 +318,10 @@ def test_vfx_cache_tracks_exact_scope_but_not_source_specific_constants(monkeypa
     assert packets[0]["messages"][:2] == packets[1]["messages"][:2]
     assert static[0]["schemaDefinitions"] == static[1]["schemaDefinitions"]
     canonical = vfx_schema._director_schema(data)["properties"]["slots"]["items"]["properties"]
-    assert static[0]["schemaDefinitions"]["$defs"] == {"slot_alpha": canonical["alpha"]}
-    assert static[2]["schemaDefinitions"]["$defs"] == {
-        "slot_alpha": canonical["alpha"], "slot_duration": canonical["duration"],
-    }
+    assert list(static[0]["schemaDefinitions"]["$defs"].values()) == [canonical["alpha"]]
+    extended_definitions = list(static[2]["schemaDefinitions"]["$defs"].values())
+    assert len(extended_definitions) == 2
+    assert canonical["alpha"] in extended_definitions and canonical["duration"] in extended_definitions
     for packet, value in zip(packets[:2], (20, 30)):
         dossier = request_dossier(packet)
         row = dossier["outputSchema"]["properties"]["slotsUpsert"]["items"]

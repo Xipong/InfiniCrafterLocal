@@ -3,7 +3,6 @@ from suite_paths import TEST_ROOT
 import copy
 import hashlib
 import json
-from pathlib import Path
 
 import infini_local.pipelines.visual.contract as visual_contract
 import infini_local.pipelines.visual.repair as visual_repair
@@ -21,7 +20,6 @@ from tests.generator.vfx.test_visual_presentation_metadata import kit
 
 
 _FIXTURES = (TEST_ROOT / "fixtures")
-_REPLAY = json.loads((_FIXTURES / "live20_repair_boundary_replay.json").read_bytes())
 
 
 def test_current_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
@@ -112,8 +110,10 @@ def test_visual_literal_member_deletion_is_exact(domain):
     assert raw == before
 
 
-def test_archived_author_schema_is_refused_without_adaptation():
-    original = _REPLAY["gameplayApplyCases"]["obsidian_pickaxe"]["initialAuthor"]
+def test_prior_author_schema_is_refused_without_adaptation():
+    original = build_capability_witness("tool_stats")
+    assert validate_runtime_program(original)["ok"]
+    original["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v4"
     before = copy.deepcopy(original)
     report = validate_runtime_program(original)
     assert not report["ok"]
@@ -170,7 +170,8 @@ def test_current_visual_literal_extra_deletion_keeps_the_valid_design():
     assert audit["ok"] and audit["ignoredChanges"]
     assert repaired == expected and original == before
     assert not visual_contract._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)[1]
-    archived = _REPLAY["visualApplyCases"]["woodwork_blade"]
-    raw = copy.deepcopy(archived["visualRaw"])
-    assert visual_contract._validate_kit(raw, archived["entityIds"], archived["itemBodyId"])[1]
-    assert raw == archived["visualRaw"]
+    repaired["schema"] = "infini.visual-kit.runtime-entities.v1"
+    stale = copy.deepcopy(repaired)
+    _, errors = visual_contract._validate_kit(repaired, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert {row["path"] for row in errors} == {"$.schema"}
+    assert repaired == stale

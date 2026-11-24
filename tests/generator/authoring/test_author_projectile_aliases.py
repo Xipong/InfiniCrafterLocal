@@ -122,6 +122,17 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
     assert not validate_runtime_program(document)["ok"]
 
 
+def test_retired_spawn_placement_cannot_replace_authored_position():
+    document = build_capability_witness("spawn")
+    assert validate_runtime_program(document)["ok"]
+    params = selected(document)["params"]
+    del params["position"]
+    params["placement"] = "item_use_origin"
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert {row["path"].rsplit(".", 1)[-1] for row in report["errors"]} >= {"placement", "position"}
+
+
 @pytest.mark.parametrize("fn,name,wire_name,lo,hi", [
     ("damage_nearby_on_event", "radius", "radiusPx", 8, 960),
 ])

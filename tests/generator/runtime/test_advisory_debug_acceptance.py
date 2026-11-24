@@ -169,8 +169,12 @@ def test_string_report_reaches_generated_parent_summary_and_vfx_description():
     assert compiled['concept'] == source['concept']
 
 
-@pytest.mark.parametrize('field', ['concept', 'realization'])
-@pytest.mark.parametrize('transport', ['exact', 'json_object', 'not-required', 'reversed-wrapper', 'altered-string'])
+@pytest.mark.parametrize('field,transport', [
+    ('concept', 'exact'), ('realization', 'exact'),
+    ('concept', 'json_object'), ('realization', 'not-required'),
+    ('concept', 'reversed-wrapper'),
+    ('concept', 'altered-string'), ('realization', 'altered-string'),
+])
 def test_initial_report_null_inversion_requires_exact_sent_transport(monkeypatch, field, transport):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.item_contract import project_provider_author_item_to_local

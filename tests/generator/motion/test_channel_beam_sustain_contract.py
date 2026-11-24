@@ -124,8 +124,10 @@ def test_beam_stripped_wire_refuses_author_spelling_and_unknown_offset_fields(ke
     assert not report["ok"] and any(row["path"].endswith("." + key) for row in report["errors"])
 
 
-@pytest.mark.parametrize("mutation", ["missing", "duplicate", "wrong_source", "wrong_owner", "wrong_value", "neutral_lie"])
-@pytest.mark.parametrize("source_backed", [False, True])
+@pytest.mark.parametrize("mutation,source_backed", [
+    ("missing", False), ("duplicate", False), ("wrong_source", False), ("wrong_source", True),
+    ("wrong_owner", False), ("wrong_owner", True), ("wrong_value", False), ("neutral_lie", True),
+])
 def test_present_beam_offset_requires_exact_scoped_provenance(mutation, source_backed):
     doc, call = _fixture()
     call["params"]["startOffsetBlocks"] = -2
@@ -279,9 +281,12 @@ def test_representative_joint_beam_choices_project_exactly_with_independent_coll
 
 
 @pytest.mark.parametrize("key,value", [
-    *((k, v) for k in ("initialDamageMultiplier", "initialWidthMultiplier")
-      for v in (None, False, "0.35", 0, 0.0099, 1.001, float("inf"), float("nan"))),
-    *(("damageStartProgress", v) for v in (None, True, "0.08", -0.1, 1.001, float("nan"))),
+    # Both initial multipliers share the same numeric domain. Keep the
+    # bounds on both fields, but exercise the common type failures once.
+    *((k, v) for k in ("initialDamageMultiplier", "initialWidthMultiplier") for v in (None, 0.0099, 1.001)),
+    ("initialDamageMultiplier", False), ("initialDamageMultiplier", float("nan")),
+    ("initialWidthMultiplier", "0.35"), ("initialWidthMultiplier", float("inf")),
+    *(("damageStartProgress", v) for v in (None, True, -0.1, 1.001)),
     ("raycastTiles", None), ("raycastTiles", 0), ("raycastTiles", "true"),
 ])
 def test_bad_present_independent_values_stay_red_in_author_and_stripped_wire(key, value):

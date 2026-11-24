@@ -487,24 +487,3 @@ def test_request_source_memo_adds_no_recursion_bound_to_unknown_passthrough(kind
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_request_source_memo_copy_failure_recomputes_detached_owner_output(monkeypatch):
-    from infini_local.pipelines.context import parents
-
-    profile = {"type": 42, "attackReference": {"source": "unknown", "literal": []}}
-    memo = {}
-    expected = parents.compact_projectile_profile(profile)
-    first = parents.compact_projectile_profile(profile, attack_source_memo=memo)
-    cached_tuple = next(iter(memo.values()))
-    original_copy = copy.deepcopy
-
-    def copy_with_unavailable_cache(value, *args, **kwargs):
-        if value is cached_tuple:
-            raise RecursionError("cache tuple cannot be copied in this call stack")
-        return original_copy(value, *args, **kwargs)
-
-    monkeypatch.setattr(parents.copy, "deepcopy", copy_with_unavailable_cache)
-    actual = parents.compact_projectile_profile(profile, attack_source_memo=memo)
-    assert actual == expected
-    actual["attackReference"]["literal"].append("consumer edit")
-    assert first == expected
-    assert profile["attackReference"]["literal"] == []

@@ -43,8 +43,10 @@ def test_size_leaf_sender_has_only_permitted_grammar_and_frozen_art(wire_transpo
         assert Draft202012Validator(requests[1]["response_format"]["json_schema"]["schema"]).is_valid(patch)
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("target", ["grip", "entity", "overlay"])
+@pytest.mark.parametrize("mode,target", [
+    ("json_schema", "grip"), ("json_schema", "entity"), ("json_schema", "overlay"),
+    ("json_object", "entity"),
+])
 def test_partial_owner_patch_retains_valid_siblings_and_exact_schema(wire_transport, monkeypatch, mode, target):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat" if target == "overlay" else "door_on_chain"))

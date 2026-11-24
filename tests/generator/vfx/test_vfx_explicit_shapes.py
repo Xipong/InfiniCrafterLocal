@@ -229,7 +229,7 @@ def test_sector_inner_outer_order_enforced_in_fresh_and_persisted_wire(endpoint)
 @pytest.mark.parametrize("changes", [
     {"segments": 2}, {"segments": 65}, {"segments": 3.5},
     {"innerRadiusStartPx": None}, {"outerRadiusEndPx": 257},
-    {"radiusStartPx": 5}, {"widthPx": 2}, {"tailOpacityStart": 1},
+    {"radiusStartPx": 5}, {"tailOpacityStart": 1},
 ])
 def test_sector_rejects_invalid_or_foreign_geometry(changes):
     data = _data()

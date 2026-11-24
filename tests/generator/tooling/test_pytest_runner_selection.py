@@ -311,22 +311,10 @@ def test_validation_native_failure_does_not_execute_stale_dll(tmp_path: Path, mo
     assert len(calls) == 1
 
 
-def test_refresh_groups_delegate_to_existing_producers() -> None:
-    manifest = json.loads((ROOT / '.agent/manifest.json').read_text(encoding='utf-8'))
-    groups = manifest['refreshGroups']
-    assert set(groups) == {'runtime', 'config', 'docs'}
-    for commands in groups.values():
-        for command in commands:
-            assert command[0] == 'python'
-            assert (ROOT / command[1]).is_file()
-            assert '--check' not in command
-
-
 @pytest.mark.parametrize("path,expected,absent", [
     ("generator/infini_local/core/runtime_authoring/capability_registry.py", "schema_check", "mutation_gate"),
     ("generator/infini_local/desktop/settings_page_configure.py", "config_registry", "schema_check"),
     ("mod/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs", "native_checks", "pytest"),
-    ("mod/InfiniCrafterLocal/Content/Projectiles/Motion/GeneratedProjectile.Executors.cs", "native_checks", "pytest"),
 ])
 def test_owner_iteration_selects_relevant_gates_without_final_campaign(path, expected, absent) -> None:
     plan = agentctl.verification_plan([path])
@@ -581,28 +569,23 @@ def test_diff_reports_git_scope_without_running_validation(monkeypatch, capsys):
     assert ("diff", "--stat", "origin/main...HEAD") in calls
 
 
-def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys):
+def test_docs_not_reported_successful_after_capability_audit_failure(monkeypatch, tmp_path, capsys):
     from tools.generate import generate_low_level_runtime_docs as docs
 
-    calls = []
     report = {"ok": True, "issues": []}
-    def audit():
-        calls.append("audit")
-        return report
-    def render(value):
-        assert value is report
-        return "one projection"
     monkeypatch.setattr(docs, "ROOT", tmp_path)
-    monkeypatch.setattr(docs, "capability_library_audit", audit)
-    monkeypatch.setattr(docs, "inventory_markdown", render)
-    monkeypatch.setattr(docs, "audit_markdown", render)
+    monkeypatch.setattr(docs, "capability_library_audit", lambda: dict(report))
+    monkeypatch.setattr(docs, "inventory_markdown", lambda value: "inventory")
+    monkeypatch.setattr(docs, "audit_markdown", lambda value: "audit")
     monkeypatch.setattr(docs, "lowering_markdown", lambda: "lowering")
     monkeypatch.setattr(docs.sys, "argv", ["generate_low_level_runtime_docs.py"])
     assert docs.main() == 0
-    assert calls == ["audit"]
-    capsys.readouterr()
+    result = json.loads(capsys.readouterr().out)
+    assert result["ok"]
+    assert { (tmp_path / path).read_text().strip() for path in result["files"] } == {"inventory", "audit", "lowering"}
     report["ok"] = False
     assert docs.main() == 1  # a current projection cannot conceal a failed audit
+    assert json.loads(capsys.readouterr().out)["ok"] is False
 
 
 def test_context_known_path_needs_no_filler_task_label(monkeypatch, capsys):

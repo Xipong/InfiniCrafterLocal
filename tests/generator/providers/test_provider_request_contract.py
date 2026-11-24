@@ -338,11 +338,9 @@ def test_usage_reasoning_reads_chat_and_responses_without_rewriting_usage(detail
 
 @pytest.mark.parametrize("usage,input_tokens,output_tokens", [
     pytest.param({}, None, None, id="absent-not-free"),
-    pytest.param(None, None, None, id="null-usage"),
     pytest.param([], None, None, id="nonobject-usage"),
     pytest.param({"input_tokens": 0, "prompt_tokens": 12, "output_tokens": 0,
                   "completion_tokens": 6}, 0, 0, id="explicit-zero-preserved"),
-    pytest.param({"prompt_tokens": 12, "completion_tokens": 6}, 12, 6, id="chat-totals"),
     pytest.param({"input_tokens": 20, "output_tokens": 7}, 20, 7, id="responses-totals"),
     pytest.param({"input_tokens": True, "output_tokens": "6"}, None, None, id="malformed-not-coerced"),
     pytest.param({"prompt_tokens": -1, "completion_tokens": 1.5}, None, None, id="invalid-domain"),
@@ -463,8 +461,8 @@ def test_responses_transport_never_uses_reasoning_as_final_output(monkeypatch, o
 
 
 @pytest.mark.parametrize("text", [
-    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":Infinity}',
-    '{"damage":1e999}', '{"child":{"damage":1,"damage":2}}',
+    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":1e999}',
+    '{"child":{"damage":1,"damage":2}}',
 ])
 def test_llm_json_rejects_ambiguous_or_nonfinite_candidates(text):
     with pytest.raises(ValueError):

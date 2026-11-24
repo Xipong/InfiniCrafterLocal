@@ -97,8 +97,9 @@ def test_exact_forms_roundtrip_receipts_and_preserve_source(fn, member, author_l
         # Each component has its own numeric field and schema registration.
         ("bad_numeric", "intersection"),
         ("unknown", "window"),
-        ("half_delay", "pair"),
-        ("malformed_window", "window"),
+        # Positive admission above checks every owner registration; shared
+        # malformed window and timing-pair semantics need one witness each.
+        *([("half_delay", "pair"), ("malformed_window", "window")] if case[0] == "turn_velocity" else []),
         # The remaining malformed timing shapes exercise the shared timing
         # fields. Positive pair/window/intersection delivery stays covered for
         # every component above. A null replacement makes pair and intersection
@@ -174,8 +175,10 @@ def test_relative_windows_require_exact_latch_in_author_and_wire(fn, member, aut
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["pair", "window", "intersection"])
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value,form", [
+    (*case, form) for case, forms in zip(CASES, (("pair", "window", "intersection"), ("window",), ("intersection",)), strict=True)
+    for form in forms
+])
 def test_non_timing_repair_freezes_timing_presence_values_and_deletions(fn, member, author_leaf, wire_leaf, value, form):
     source, call = document(fn, form)
     call["params"][author_leaf] = -99999
@@ -218,8 +221,10 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
     assert apply_repair_patch(source, filtered) == expected
 
 
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["omitted", "pair", "window", "intersection"])
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value,form", [
+    (*case, form) for case in CASES for form in
+    (("omitted", "pair", "window", "intersection") if case[0] == "turn_velocity" else ("omitted", "intersection"))
+])
 def test_strict_provider_nullable_transport_preserves_selected_timing_shape(fn, member, author_leaf, wire_leaf, value, form):
     import infini_local.core.provider_schema as contract_provider_schema
     from jsonschema import Draft202012Validator

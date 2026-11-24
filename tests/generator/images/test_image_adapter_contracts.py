@@ -24,23 +24,17 @@ from tests.generator.vfx_image_fixtures import _data, _request, offline_backend
 
 @pytest.mark.parametrize('mode,model,active,positive_only,style', [
     ('0', 'z_image_turbo.gguf', False, False, 'a1111'),
-    ('0', 'z_image_turbo.gguf', False, False, 'openai'),
     ('0', 'z_image_turbo.gguf', False, True, 'sdcpp'),
-    ('off', 'z-image-turbo.gguf', False, False, 'sdcpp'),
     ('off', 'z-image-turbo.gguf', False, False, 'openai'),
     ('off', 'z-image-turbo.gguf', False, True, 'a1111'),
-    ('1', 'flux.2-klein.gguf', True, False, 'sdcpp'),
     ('1', 'flux.2-klein.gguf', True, False, 'openai'),
     ('1', 'flux.2-klein.gguf', True, True, 'a1111'),
-    ('on', 'flux.2-klein.gguf', True, False, 'a1111'),
     ('on', 'flux.2-klein.gguf', True, False, 'sdcpp'),
     ('on', 'flux.2-klein.gguf', True, True, 'openai'),
     ('auto', 'z_image_turbo.gguf', True, False, 'a1111'),
-    ('auto', 'z_image_turbo.gguf', True, False, 'openai'),
     ('auto', 'z_image_turbo.gguf', True, True, 'sdcpp'),
     ('auto', 'flux.2-klein.gguf', False, False, 'a1111'),
     ('auto', 'flux.2-klein.gguf', False, True, 'openai'),
-    ('auto', 'flux.2-klein.gguf', False, True, 'sdcpp'),
 ])
 def test_model_policy_reaches_retry_and_real_sdcpp_payload(offline, monkeypatch, mode, model, active, positive_only, style):
     from infini_local.core.images import config

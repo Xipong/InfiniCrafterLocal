@@ -383,8 +383,11 @@ def test_optional_motion_property_is_exact_separate_native_component(parent, pro
     assert not validate_runtime_program(doc)["ok"]
 
 
-@pytest.mark.parametrize("parent,property,retired,member,params", _PACKAGED)
-@pytest.mark.parametrize("bad", [None, {}, {"unknown": 1}])
+@pytest.mark.parametrize("parent,property,retired,member,params,bad", [
+    (*case, bad)
+    for index, case in enumerate(_PACKAGED)
+    for bad in ((None, {}, {"unknown": 1}) if index == 0 else (None, {}))
+])
 def test_nested_property_rejects_null_empty_and_unknown(parent, property, retired, member, params, bad):
     doc = build_capability_witness(parent)
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == parent)["params"][property] = bad

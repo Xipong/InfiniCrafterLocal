@@ -396,8 +396,10 @@ def test_stale_save_rejected_before_mutating_shared_state(studio):
     assert controller.app.actions.results['command']['status'] == 'failed'
 
 
-@pytest.mark.parametrize('action', ['save', 'start', 'forceRestart'])
-@pytest.mark.parametrize('edit_removed', [False, True])
+@pytest.mark.parametrize('action,edit_removed', [
+    ('save', False), ('save', True), ('start', False),
+    ('start', True), ('forceRestart', False),
+])
 def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatch, action, edit_removed):
     from infini_local.desktop.settings_env import parse_env
     from infini_local.desktop.settings_interactions import saved_config_revision

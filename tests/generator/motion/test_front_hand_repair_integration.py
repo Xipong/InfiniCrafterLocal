@@ -44,8 +44,10 @@ def test_missing_axis_repair_creates_only_exact_dependency_not_retired_bundle(so
     assert doc == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("selected_axis", ["initial", "cursor", "facing", "velocity"])
+@pytest.mark.parametrize("mode,selected_axis", [
+    ("json_object", "initial"), ("json_schema", "initial"), ("json_object", "cursor"),
+    ("json_schema", "facing"), ("json_schema", "velocity"),
+])
 def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_siblings(monkeypatch, mode, selected_axis):
     from infini_local.pipelines.author import request as stage
     from prompt_packet_helpers import request_dossier

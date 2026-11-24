@@ -30,7 +30,9 @@ def test_source_selected_movement_cannot_be_retargeted_by_equal_receipt_edits():
 
 
 @pytest.mark.parametrize("fn,component", [("move_straight", "movement"), ("target_and_fire", "controller")])
-@pytest.mark.parametrize("leaves", [("name",), ("code",), ("name", "code")])
+# A single missing receipt must fail independently for each fixed literal.
+# Omitting both repeats the same coverage loop without testing a new leaf.
+@pytest.mark.parametrize("leaves", [("name",), ("code",)])
 @pytest.mark.parametrize("source_backed", [True, False])
 def test_selected_executor_requires_each_fixed_output_receipt(fn, component, leaves, source_backed):
     source = build_capability_witness(fn)

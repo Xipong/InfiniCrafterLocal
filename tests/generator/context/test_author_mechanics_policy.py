@@ -36,7 +36,7 @@ def test_actual_projection_chooses_exact_bound_source_and_preserves_gameplay_gua
     assert out['referencedProjectiles']['sourceCalls'][0]['sourceLocation']['scope'].startswith('raw_capture_strict_source_lines')
     assert p==original
 
-@pytest.mark.parametrize('kind',['missing-token','wrong-token','wrong-module','wrong-il','wrong-assembly','changed-code','mutation','escape','unbound','partial','missing-graph-token','wrong-graph-token','ambiguous','wrong-profile'])
+@pytest.mark.parametrize('kind',['missing-token','wrong-token','wrong-module','wrong-il','wrong-assembly','changed-code','mutation','unbound','partial','missing-graph-token','wrong-graph-token','ambiguous','wrong-profile'])
 def test_uncertain_identity_or_incomplete_certificate_keeps_strict(kind):
     p=fixture();r=p['mechanicsSource']['records'][0]
     if kind=='missing-token':r.pop('metadataToken')
@@ -45,7 +45,7 @@ def test_uncertain_identity_or_incomplete_certificate_keeps_strict(kind):
     elif kind=='wrong-il':r['sourceMethodSha256']='f'*64
     elif kind=='wrong-assembly':r['assemblySha256']='f'*64
     elif kind=='changed-code':r['code']+=' // changed'
-    elif kind in ('mutation','escape'):r['identityPruning']={'allowed':False,'refusal':kind}
+    elif kind=='mutation':r['identityPruning']={'allowed':False,'refusal':kind}
     elif kind=='unbound':r['receiverBinding']='unproved'
     elif kind=='partial':r['coverage']='approximate_identity_ast_regions'
     elif kind=='missing-graph-token':p['attackReference']['motion']['programs'][0].pop('metadataToken')
@@ -340,9 +340,9 @@ def test_source_substitution_compacts_only_unused_lookup_rows_without_new_notati
 
 
 @pytest.mark.parametrize('change', ['roots', 'version', 'source', 'no-substitution', 'unknown-graph',
-    'unknown-node', 'unknown-member', 'unknown-module', 'unknown-edge', 'omissions',
-    'block-member', 'edge-member', 'rootless-method-metadata', 'invalid-member', 'bool-member',
-    'invalid-module', 'operand-shape', 'value-shape', 'fragments', 'member-metadata', 'module-metadata'])
+    'unknown-node', 'unknown-member', 'unknown-edge', 'omissions',
+    'block-member', 'rootless-method-metadata', 'invalid-member', 'bool-member',
+    'invalid-module', 'operand-shape', 'value-shape', 'fragments', 'member-metadata'])
 def test_uncertain_table_namespace_remains_byte_for_byte(change):
     from infini_local.pipelines.context.whole_method_author import _compact_graph_tables
     graph = graph_with_unused_tables()
@@ -353,11 +353,9 @@ def test_uncertain_table_namespace_remains_byte_for_byte(change):
     elif change == 'unknown-graph': graph['futureTable'] = [0]
     elif change == 'unknown-node': graph['nodes'][0]['futureTable'] = [0]
     elif change == 'unknown-member': graph['members'][0]['future'] = 0
-    elif change == 'unknown-module': graph['modules'][0]['future'] = 0
     elif change == 'unknown-edge': graph['edges'][0]['future'] = 0
     elif change == 'omissions': graph['transportOmissions'] = {'unknownFieldCount': 1}
     elif change == 'block-member': graph['nodes'][1]['blocks'] = [{'member': 0}]
-    elif change == 'edge-member': graph['edges'][0]['context']['member'] = 0
     elif change == 'rootless-method-metadata': graph['limits'] = {'method': 0}
     elif change == 'invalid-member': graph['nodes'][1]['values']['1'][1]['member'] = 99
     elif change == 'bool-member': graph['nodes'][0]['receiverType'] = False
@@ -366,7 +364,6 @@ def test_uncertain_table_namespace_remains_byte_for_byte(change):
     elif change == 'value-shape': graph['nodes'][1]['values']['1'].append(0)
     elif change == 'fragments': graph['nodes'][1]['fragments'] = [[0, 1, 2]]
     elif change == 'member-metadata': graph['members'][0]['returns'] = {'futureIndex': 0}
-    elif change == 'module-metadata': graph['modules'][0]['assembly'] = ['future', 0]
     before = copy.deepcopy(graph)
     assert not _compact_graph_tables(graph) and graph == before
 

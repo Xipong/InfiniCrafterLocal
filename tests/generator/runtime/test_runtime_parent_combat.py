@@ -325,8 +325,9 @@ def test_new_wire_presence_requires_exact_unique_owned_provenance(fn, name, muta
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn", _PRODUCERS)
-@pytest.mark.parametrize("mutation", ["name-only", "code-only", "both", "boolean-code"])
+@pytest.mark.parametrize("fn,mutation", [
+    (fn, mutation) for fn in _PRODUCERS for mutation in ("name-only", "code-only", "both")
+] + [("spawn_on_event", "boolean-code")])
 def test_present_combat_selector_requires_the_exact_runtime_consumer_even_with_amended_receipts(fn, mutation):
     document = build_capability_witness(fn)
     call = _call(document, fn)

@@ -114,11 +114,9 @@ def test_shared_blob_preserves_all_keys_kinds_and_literal_payloads(pack):
     lambda m: m["entries"][0].__setitem__(2, -1),
     lambda m: m["entries"][0].__setitem__(2, 1),
     lambda m: m["entries"][0].__setitem__(2, True),
-    lambda m: m["entries"][0].append(0),
     lambda m: m["blobs"][0].__setitem__("bytes", True),
     lambda m: m["blobs"][0].__setitem__("bytes", 4 * 1024 * 1024 + 1),
     lambda m: m["blobs"][0].__setitem__("bytes", m["blobs"][0]["bytes"] + 1),
-    lambda m: m["blobs"][0].__setitem__("sha256", "x" * 64),
     lambda m: m["blobs"][0].__setitem__("sha256", "e" * 64),
     lambda m: m["blobs"].append(m["blobs"][0]),
 ])

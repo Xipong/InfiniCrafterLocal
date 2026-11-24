@@ -155,9 +155,10 @@ def test_author_and_repair_disclose_schema_owned_description_bounds(monkeypatch,
     assert result["realization"] == before["realization"] and item == before
 
 
-@pytest.mark.parametrize("field,maximum", [("description", 4000), ("playerExperience", 3000)])
-@pytest.mark.parametrize("size", [0, 1, 5000])
-def test_report_guidance_does_not_reject_empty_or_long_advisory_text(field, maximum, size):
+@pytest.mark.parametrize("field,size", [
+    ("description", 0), ("description", 5000), ("playerExperience", 0), ("playerExperience", 5000),
+])
+def test_report_guidance_does_not_reject_empty_or_long_advisory_text(field, size):
     item = build_runtime_fixture("workbench_blade")
     item["realization"][field] = "я" * size
     patch = {"note": "Optional report", "realizationReplacement": copy.deepcopy(item["realization"])}

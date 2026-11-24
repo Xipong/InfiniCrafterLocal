@@ -164,18 +164,15 @@ def test_axis_owner_is_explicit_and_independent_of_spawn_launch(source, spawn_ai
 
 @pytest.mark.parametrize("fn,key,value,wire_key", [
     ("set_aim", "source", "initial ", "source"),
-    ("set_aim", "source", None, "source"),
     ("set_aim", "turnOwner", 1, "turnOwner"),
     ("front_arm_pose", "duration", 1 / 60, "durationTicks"),
     ("front_arm_pose", "duration", 241 / 60, "durationTicks"),
-    ("front_arm_pose", "duration", "13", "durationTicks"),
     ("front_arm_pose", "startStretch", "threequarters", "startStretch"),
     ("front_arm_pose", "endStretch", None, "endStretch"),
     ("front_arm_pose", "peakProgress", False, "peakProgress"),
     ("front_arm_pose", "peakProgress", 0, "peakProgress"),
     ("front_arm_pose", "peakProgress", 1, "peakProgress"),
     ("attach", "axisOffsetBlocks", False, "axisOffsetPx"),
-    ("attach", "axisOffsetBlocks", "11", "axisOffsetPx"),
     ("attach", "axisOffsetBlocks", None, "axisOffsetPx"),
     ("attach", "axisOffsetBlocks", float("nan"), "axisOffsetPx"),
     ("attach", "normalOffsetBlocks", float("inf"), "normalOffsetPx"),

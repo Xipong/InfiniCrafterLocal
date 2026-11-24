@@ -251,14 +251,6 @@ def test_public_panel_name_cannot_be_overridden(monkeypatch, capsys):
     assert 'unrecognized' in output.err
 
 
-def test_live40_requires_explicit_current_dump_without_traceback(monkeypatch, capsys):
-    code, captured = cli(monkeypatch, capsys, 'live40')
-    assert code == 2
-    assert not captured.out
-    assert 'requires an explicit current --runtime-dump' in captured.err
-    assert 'Traceback' not in captured.err
-
-
 def test_custom_forty_case_cli_preflight_uses_explicit_inputs(monkeypatch, capsys, tmp_path):
     cases = tmp_path / 'cases.json'
     parents = tmp_path / 'parents.jsonl'

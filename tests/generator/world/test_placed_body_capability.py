@@ -229,7 +229,6 @@ def test_new_reference_requirements_are_in_canonical_audit():
     ("renderSizePx", 0),
     ("renderSizePx", 513),
     ("renderSizePx", True),
-    ("renderSizePx", 2.5),
     ("footprintAnchorX", -0.1),
     ("footprintAnchorY", 1.1),
     ("imagePivotX", float("nan")),

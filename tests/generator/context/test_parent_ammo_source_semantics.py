@@ -187,8 +187,12 @@ def _nested_ammo_rewrite(*, pick=False, outer=(), inner=(), gap=(), entry=None):
             for n, (op, arg) in enumerate(pairs)]
 
 
-@pytest.mark.parametrize("pick", [False, True])
-@pytest.mark.parametrize("outer,inner", [([], []), ([17], []), ([17, 17], []), ([17], [17]), ([], [17]), ([], [17, 17])])
+@pytest.mark.parametrize("pick,outer,inner", [
+    # Every guard location is checked for both storage forms; repeated equal
+    # guards share the reader, so cover each repetition pattern once.
+    (False, [], []), (False, [17], []), (False, [], [17]), (False, [17, 17], []),
+    (True, [], []), (True, [17], []), (True, [], [17]), (True, [17], [17]), (True, [], [17, 17]),
+])
 def test_native_ammo_nested_equalities_preserve_exact_input(pick, outer, inner):
     from native_ammo_fact_analysis import ammo_method_facts
     code = _nested_ammo_rewrite(pick=pick, outer=outer, inner=inner)
@@ -1091,84 +1095,59 @@ def actual_ammo_observer_inputs():
     return result
 
 
+# These are mutation checks of the test observer, not additional game cases.
+# Keep distinct failure classes here; the positive packet test above still
+# compares every raw and serialized field for all three real weapons.
 @pytest.mark.parametrize("defect", [
-    "pick_rule", "state_guard", "snapshot_cycle", "snapshot_owner",
-    "replacement_default", "ammo_reordered", "ammo_duplicate", "fallback_slot",
-    "final_shot", "source_unknowns", "spawn_site", "spawn_input", "spawn_coverage",
-    "conditional_damage", "stage_call_site", "hook_order", "category_selector",
-    "replacement_references_missing", "replacement_reference_reordered",
-    "replacement_reference_duplicate", "replacement_reference_source_path",
-    "replacement_reference_fact", "replacement_reference_certificate",
-    "replacement_capture_extra_field",
+    "state_guard", "snapshot_owner", "ammo_duplicate", "spawn_coverage", "hook_order",
+    "replacement_reference_reordered", "replacement_reference_duplicate",
+    "replacement_reference_source_path", "replacement_capture_extra_field",
 ])
 def test_actual_author_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
     packet, original, _ = actual_ammo_observer_inputs["eventide"]
     mechanics = copy.deepcopy(original)
     ammo = mechanics["ammoInputs"]
-    source = ammo["projectileSemanticsReference"]
-    stages = source["stages"]
+    stages = ammo["projectileSemanticsReference"]["stages"]
     state = stages[1]["rules"][0]
     snapshots = mechanics["expressions"]["snapshots"]
     state_key = re.fullmatch(r"not\(bne\((snapshot[0-9]+), 2\)\)", state["whenSourceCondition"])[1]
-    sites = stages[1]["spawnSites"]
     profile = next(row for row in mechanics["projectiles"] if row["defaults"].get("type") == 932)
     capture = next(row for row in profile["captures"] if row["sourcePath"] == "ammo.nativeReplacementProjectileRaw[0]")
     references = capture["sourceReferences"]
     changes = {
-        "replacement_references_missing": lambda: capture.pop("sourceReferences"),
         "replacement_reference_reordered": lambda: references.reverse(),
         "replacement_reference_duplicate": lambda: references.append(copy.deepcopy(references[0])),
         "replacement_reference_source_path": lambda: references[1].update(sourcePath=references[0]["sourcePath"]),
-        "replacement_reference_fact": lambda: references[1]["sourceFact"].update(outputProjectileId=1),
-        "replacement_reference_certificate": lambda: references[1].update(sourceMethodSha256="0" * 64),
         "replacement_capture_extra_field": lambda: capture.update(finalShot=True),
-        "stage_call_site": lambda: stages[0]["sourceStageCallSites"].clear(),
         "hook_order": lambda: stages[0]["hookDispatchTrace"][0]["directHookCalls"].reverse(),
-        "category_selector": lambda: stages[0]["defaultProjectileSelection"]["categoryOffsetSelectors"][0].update(operation="ammo_shoot"),
-        "pick_rule": lambda: stages[0]["rules"].clear(),
         "state_guard": lambda: state.update(whenSourceCondition="true"),
         "snapshot_owner": lambda: snapshots[state_key].update(method="Player.PickAmmo"),
-        "snapshot_cycle": lambda: snapshots[state_key].update(value=state_key),
-        "replacement_default": lambda: profile["defaults"].pop("penetrate"),
-        "ammo_reordered": lambda: ammo["playerInventoryAmmoRaw"].reverse(),
         "ammo_duplicate": lambda: ammo["playerInventoryAmmoRaw"].append(copy.deepcopy(ammo["playerInventoryAmmoRaw"][0])),
-        "fallback_slot": lambda: ammo["fallbackAmmoRaw"][0].update(inventorySlot=0),
-        "final_shot": lambda: source.update(finalShotOutcome="executed"),
-        "source_unknowns": lambda: source["unknowns"].clear(),
-        "spawn_site": lambda: sites.pop(),
-        "spawn_input": lambda: sites[0]["spawnInputs"].pop("damage"),
-        "spawn_coverage": lambda: sites[0]["spawnInputCoverage"]["fields"].pop("damage"),
-        "conditional_damage": lambda: sites[0]["spawnInputs"]["damage"].pop("sourceDefinition"),
+        "spawn_coverage": lambda: stages[1]["spawnSites"][0]["spawnInputCoverage"]["fields"].pop("damage"),
     }
     changes[defect]()
     with pytest.raises((AssertionError, KeyError)):
         _assert_author_ammo(mechanics, packet, "eventide")
 
 
-@pytest.mark.parametrize("name,defect", [("terra", "companion"), ("terra", "speed"), ("terra", "ai"),
-                                          ("daedalus", "count"), ("daedalus", "origin"), ("daedalus", "uncertainty")])
+@pytest.mark.parametrize("name,defect", [
+    ("terra", "companion"), ("daedalus", "count"), ("daedalus", "uncertainty"),
+])
 def test_actual_spawn_observer_rejects_information_loss(actual_ammo_observer_inputs, name, defect):
     packet, original, _ = actual_ammo_observer_inputs[name]
     mechanics = copy.deepcopy(original)
-    stage = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]
-    sites = stage["spawnSites"]
+    site = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"][1]["spawnSites"][0]
     if defect == "companion":
-        sites[0]["spawnInputs"]["type"] = "1"
-    elif defect == "speed":
-        sites[1]["spawnInputs"]["velocity"] = "5.0"
-    elif defect == "ai":
-        sites[1]["spawnInputs"]["ai1"] = "0.0"
+        site["spawnInputs"]["type"] = "1"
     elif defect == "count":
-        sites[0]["spawnCountBounds"]["maximum"] = 2
-    elif defect == "origin":
-        stage["spawnOriginSetups"][0]["initialYRelativeToMountedCenterPx"] = 0
+        site["spawnCountBounds"]["maximum"] = 2
     else:
-        sites[0]["whenSourceCondition"] = True
+        site["whenSourceCondition"] = True
     with pytest.raises((AssertionError, KeyError)):
         _assert_author_ammo(mechanics, packet, name)
 
 
-@pytest.mark.parametrize("defect", ["source_reference", "source_guard", "source_certificate", "scope", "defaults"])
+@pytest.mark.parametrize("defect", ["source_reference", "source_guard", "scope"])
 def test_literal_ammo_observer_rejects_information_loss(actual_ammo_observer_inputs, defect):
     packet, _, original = actual_ammo_observer_inputs["eventide"]
     literal = copy.deepcopy(original)
@@ -1176,35 +1155,30 @@ def test_literal_ammo_observer_rejects_information_loss(actual_ammo_observer_inp
         literal["nativeReplacementProjectileRaw"][0]["sourceReferences"].pop()
     elif defect == "source_guard":
         literal["projectileSemanticsReference"]["stages"][1]["rules"][0].pop("whenSourceCondition")
-    elif defect == "source_certificate":
-        literal["projectileSemanticsReference"]["stages"][0].pop("sourceMethodSha256")
-    elif defect == "scope":
-        literal["nativeReplacementProjectileRaw"][0]["profileScope"] = "final shot"
     else:
-        literal["nativeReplacementProjectileRaw"][0].pop("penetrate")
+        literal["nativeReplacementProjectileRaw"][0]["profileScope"] = "final shot"
     with pytest.raises((AssertionError, KeyError)):
         _assert_literal_prepare_ammo(literal, packet["itemA"]["ammoRaw"])
 
 
 @pytest.mark.parametrize("name,defect", [
-    *[("eventide", f"snapshot_{store}") for store in (10664, 10695, 10861)],
-    ("eventide", "velocity_operand"), ("terra", "companion_velocity"), ("terra", "companion_ai1"),
-    ("terra", "direct_vector"), ("daedalus", "positionX"), ("daedalus", "positionY"),
-    ("terra", "false_pick_rewrite"), ("daedalus", "false_pick_rewrite"),
+    ("eventide", "snapshot"), ("eventide", "velocity_operand"),
+    ("terra", "companion_velocity"), ("terra", "direct_vector"), ("daedalus", "positionY"),
+    ("daedalus", "false_pick_rewrite"),
 ])
 def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observer_inputs, name, defect):
     packet, original, _ = actual_ammo_observer_inputs[name]
     mechanics = copy.deepcopy(original)
     stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
     sites = stages[1]["spawnSites"]
-    if defect.startswith("snapshot_") or defect == "velocity_operand":
-        store = int(defect.removeprefix("snapshot_")) if defect.startswith("snapshot_") else 10932
+    if defect in {"snapshot", "velocity_operand"}:
+        store = 10664 if defect == "snapshot" else 10932
         snapshot = next(row for row in mechanics["expressions"]["snapshots"].values()
                         if row["sourceStoreIlOffset"] == store)
         snapshot["value"] = ("unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, mul(0.0, 2.0))"
                              if defect == "velocity_operand" else "0.0")
-    elif defect.startswith("companion_"):
-        sites[0]["spawnInputs"][defect.removeprefix("companion_")] = "0.0"
+    elif defect == "companion_velocity":
+        sites[0]["spawnInputs"]["velocity"] = "0.0"
     elif defect == "direct_vector":
         sites[1]["spawnInputs"]["velocity"] = "unexecuted Microsoft.Xna.Framework.Vector2.op_Multiply(0.0, 5.0)"
     elif defect == "false_pick_rewrite":
@@ -1215,12 +1189,9 @@ def test_actual_ammo_observer_rejects_transformed_value_loss(actual_ammo_observe
         _assert_author_ammo(mechanics, packet, name)
 
 
-@pytest.mark.parametrize("name,defect", [
-    ("eventide", "extra_pick_spawn"), ("terra", "extra_pick_spawn"),
-    ("eventide", "extra_state_condition"), ("eventide", "extra_spawn_predicate"),
-])
-def test_actual_ammo_observer_rejects_invented_source_facts(actual_ammo_observer_inputs, name, defect):
-    packet, original, _ = actual_ammo_observer_inputs[name]
+@pytest.mark.parametrize("defect", ["extra_pick_spawn", "extra_state_condition", "extra_spawn_predicate"])
+def test_actual_ammo_observer_rejects_invented_source_facts(actual_ammo_observer_inputs, defect):
+    packet, original, _ = actual_ammo_observer_inputs["eventide"]
     mechanics = copy.deepcopy(original)
     stages = mechanics["ammoInputs"]["projectileSemanticsReference"]["stages"]
     if defect == "extra_pick_spawn":
@@ -1230,7 +1201,7 @@ def test_actual_ammo_observer_rejects_invented_source_facts(actual_ammo_observer
     else:
         stages[1]["spawnSites"][0]["whenInputProjectileId"] = 77
     with pytest.raises((AssertionError, KeyError)):
-        _assert_author_ammo(mechanics, packet, name)
+        _assert_author_ammo(mechanics, packet, "eventide")
 
 
 def test_spawn_argument_additions_leave_existing_catalog_facts_unchanged():

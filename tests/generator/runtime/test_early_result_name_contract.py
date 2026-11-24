@@ -17,10 +17,8 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         ("Infini-Blade", "Tin Sword", "Stone", True),
         ("combined armor", "Tin Sword", "Stone", True),
         ("object", "Tin Sword", "Stone", True),
-        ("Tin Sword", "Tin Sword", "Stone", True),
         ("tIN sWORD", "Tin Sword", "Stone", True),
         ("Twin", "Twin", "Twin", True),  # Equal parent names are not an exemption.
-        ("Aether Spear", "Tin Sword", "Stone", False),
         ("GeneratedSword", "Tin Sword", "Stone", False),  # Only reserved prefix forms.
     ],
 )

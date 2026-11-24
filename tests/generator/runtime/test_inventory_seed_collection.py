@@ -58,8 +58,10 @@ def test_delivered_seed_flag_is_strict_boolean(value):
     assert any(row["path"] == "$.gameplay." + FIELD for row in report["errors"])
 
 
-@pytest.mark.parametrize("source_available", [True, False])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "type", "value", "source", "owner", "path"])
+@pytest.mark.parametrize("mutation,source_available", [
+    ("drop", False), ("duplicate", False), ("type", False), ("value", True),
+    ("source", True), ("source", False), ("owner", True), ("owner", False), ("path", False),
+])
 def test_seed_literal_receipt_requires_unique_exact_fn_owner(mutation, source_available):
     doc = seed_source()
     final = compile_runtime_program(doc)

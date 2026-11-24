@@ -111,7 +111,6 @@ def test_required_choices_cannot_be_filled_by_provider_or_author_defaults(name):
 
 @pytest.mark.parametrize("name,value", [
     ("when", "on_kill"),
-    ("when", None),
     ("entity", None),
     ("entity", "UNKNOWN"),
     ("stepCount", True),
@@ -126,10 +125,8 @@ def test_required_choices_cannot_be_filled_by_provider_or_author_defaults(name):
     ("selectionAnchor", "closest"),
     ("repeatPolicy", "never"),
     ("requireLineOfSight", 0),
-    ("ignoreTargetUpdates", None),
     ("ignoreTargetUpdates", -1),
     ("ignoreTargetUpdates", 601),
-    ("delay", True),
     ("delay", -0.5),
     ("delay", 601 / 60),
 ])

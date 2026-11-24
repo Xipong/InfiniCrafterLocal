@@ -132,12 +132,14 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
     assert encoded == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,explicit,attack", [
-    pytest.param(fn, explicit, "presence", id=fn + ("-present" if explicit else "-omitted"))
-    for fn in ("item_stats", "move_straight") for explicit in (False, True)
-] + [pytest.param("item_stats", explicit, "foreign-target", id="foreign-target-" + str(explicit)) for explicit in (False, True)]
-  + [pytest.param("move_straight", True, "invalid-params", id="invalid-noarg-params")])
+@pytest.mark.parametrize("format_mode,fn,explicit,attack", [
+    (mode, fn, explicit, "presence")
+    for mode in ("json_object", "json_schema") for fn in ("item_stats", "move_straight") for explicit in (False, True)
+] + [
+    ("json_object", "item_stats", True, "foreign-target"),
+    ("json_schema", "item_stats", False, "foreign-target"),
+    ("json_schema", "move_straight", True, "invalid-params"),
+])
 def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monkeypatch, format_mode, fn, explicit, attack):
     from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from tests.generator.authoring.test_repair_gameplay_contract import _offline_gameplay_repair
@@ -621,8 +623,10 @@ def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes(
         assert source == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("value", ["unknown", {}, None])
+@pytest.mark.parametrize("format_mode,value", [
+    ("json_object", "unknown"), ("json_schema", "unknown"),
+    ("json_object", {}), ("json_schema", None),
+])
 def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypatch, format_mode, value):
     from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from infini_local.qa.capability_witnesses import build_capability_witness
@@ -653,8 +657,9 @@ def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypa
     assert source == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("value", [{}, None, ""])
+@pytest.mark.parametrize("format_mode,value", [
+    ("json_object", {}), ("json_schema", {}), ("json_schema", None), ("json_object", ""),
+])
 def test_noop_repair_preserves_malformed_whole_binding_container(monkeypatch, format_mode, value):
     from infini_local.core.errors import PlannerUnavailable
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch

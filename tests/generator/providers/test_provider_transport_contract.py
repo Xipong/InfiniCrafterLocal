@@ -657,9 +657,10 @@ def test_content_failure_returns_unchanged_without_reroll(wire, stage, mode, att
     assert "transportRetryCount" not in result.get("_debug", {})
 
 
-@pytest.mark.parametrize("pool_size", [1, 2])
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("attempts", [1, 2])
+@pytest.mark.parametrize("pool_size,mode,attempts", [
+    (1, "chat_completions", 1), (1, "responses", 2),
+    (2, "chat_completions", 2), (2, "responses", 1), (2, "responses", 2),
+])
 def test_transient_retry_budget_never_changes_selected_route(wire, mode, attempts, pool_size):
     provider = "openrouter"
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
@@ -1138,9 +1139,10 @@ def test_logical_call_scope_is_released_before_the_next_stage(wire, monkeypatch,
     assert len({data["logicalCallId"] for _, data in events}) == len(events)
 
 
-@pytest.mark.parametrize("pool_size", [1, 2])
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("status", [401, 402])
+@pytest.mark.parametrize("pool_size,mode,status", [
+    (1, "chat_completions", 401), (1, "responses", 402),
+    (2, "chat_completions", 402), (2, "responses", 401), (2, "responses", 402),
+])
 def test_pinned_terminal_auth_and_quota_do_not_retry(wire, pool_size, mode, status):
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
                  "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
@@ -1157,9 +1159,13 @@ def test_pinned_terminal_auth_and_quota_do_not_retry(wire, pool_size, mode, stat
     assert wire.calls[0][1]["provider"] == {"only": [PIN], "allow_fallbacks": False}
 
 
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("secondary_replies", [[503, None], [503, 503], [401], [402]],
-                         ids=["transient-success", "transient-exhausted", "auth-terminal", "quota-terminal"])
+@pytest.mark.parametrize("mode,secondary_replies", [
+    pytest.param("chat_completions", [503, None], id="chat-transient-success"),
+    pytest.param("responses", [503, None], id="responses-transient-success"),
+    pytest.param("responses", [503, 503], id="transient-exhausted"),
+    pytest.param("chat_completions", [401], id="auth-terminal"),
+    pytest.param("responses", [402], id="quota-terminal"),
+])
 def test_failover_into_pinned_profile_retains_in_place_retry_budget(wire, mode, secondary_replies):
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
                  "base_url": "https://secondary.example/v1", "model": "vendor/secondary",

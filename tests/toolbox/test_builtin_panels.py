@@ -70,6 +70,7 @@ def test_invalid_preset_selection_is_refused_before_running(flags, fragment):
 def test_current_panels_require_external_dump(command):
     result = subprocess.run([sys.executable, '-m', 'toolbox', command], cwd=ROOT, text=True, capture_output=True)
     assert result.returncode == 2
+    assert not result.stdout
     assert 'requires an explicit current --runtime-dump' in result.stderr
     assert 'Traceback' not in result.stderr
 

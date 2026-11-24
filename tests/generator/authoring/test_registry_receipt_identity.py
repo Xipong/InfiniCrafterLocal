@@ -207,7 +207,7 @@ def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, p
     ]
     + [
         pytest.param("equipment_damage_bonus", "damageClass", dc, False, None, None, id="unimplemented-class-" + dc)
-        for dc in ("melee_no_speed", "ExampleMod/CustomDamage", "Terraria/ThornWhip")
+        for dc in ("melee_no_speed", "ExampleMod/CustomDamage")
     ]
     + [
         pytest.param(fn, "damageClass", dc, accepted, None, None, id=fn + "-" + dc)

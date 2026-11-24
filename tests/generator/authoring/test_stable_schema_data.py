@@ -58,6 +58,8 @@ def wire_text(row):
 def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypatch, provider, base, api, model, mode, stage):
     # Fixture captures the actual builder, not a manually authored lookalike.
     first, second = stage_packets(monkeypatch, stage, format_mode=mode)
+    assert first["messages"][:2] == second["messages"][:2]
+    assert first["messages"][2]["content"] != second["messages"][2]["content"]
     context = {"provider": provider, "base_url": base, "api_mode": api, "model": model, "api_key": "offline"}
     before = copy.deepcopy(first)
     wires = [capture_wire(monkeypatch, p, context) for p in (first, second)]
@@ -80,11 +82,16 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
     assert [(r["role"], wire_text(r)) for r in authored] == expected
     assert first == before
     assert "_infini_prompt_cache" not in wires[0]
+    format_value = wires[0].get("response_format") or wires[0].get("text", {}).get("format")
     if mode == "json_schema":
-        format_value = wires[0].get("response_format") or wires[0]["text"]["format"]
         effective = format_value.get("json_schema", format_value)["schema"]
         assert effective == first["response_format"]["json_schema"]["schema"]
+        assert format_value.get("json_schema", format_value)["strict"] is True
         assert '"$ref"' not in json.dumps(effective) or stage in {"author", "repair"}
+    elif mode == "off":
+        assert format_value is None
+    else:
+        assert format_value == {"type": "json_object"}
     if base.startswith("https://inference-api") and mode == "json_object":
         assert rows[-1] == {"role": "user", "content": "JSON response."}
         assert rows.count(rows[-1]) == 1
@@ -100,33 +107,3 @@ def test_actual_senders_cache_grammar_instructions_and_preserve_author(monkeypat
 
 
 
-@pytest.mark.parametrize("fixture,stage,mode", [
-    pytest.param("door_on_chain", "visual", "json_schema", id="visual-door"),
-    pytest.param("returning_potion", "visual_repair", "json_object", id="visual-repair-potion"),
-    pytest.param("beam_geometry", "vfx", "json_object", id="vfx-beam"),
-    pytest.param("lash_geometry", "vfx_repair", "json_schema", id="vfx-repair-whip"),
-])
-def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
-    import vfx_material_fixtures
-    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from vfx_material_fixtures import _data
-    ordinary, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
-    if fixture in {"beam_geometry", "lash_geometry"}:
-        data = _data(fixture)
-    else:
-        data = compile_runtime_program(build_runtime_fixture(fixture))
-    monkeypatch.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
-    other, = stage_packets(monkeypatch, stage, format_mode=mode, labels=("novel-a",))
-    assert ordinary["messages"][:2] == other["messages"][:2]
-    assert ordinary["messages"][2] != other["messages"][2] or fixture == "workbench_blade"
-    # Provider schema stays inline; VFX transport defers local-only constraints.
-    from prompt_packet_helpers import request_dossier
-    schema_key = "responseSchema" if stage.startswith("visual") else "outputSchema"
-    if mode == "json_schema":
-        expected = request_dossier(other)[schema_key]
-        from infini_local.core.provider_schema import _provider_strict_projection, defer_provider_cross_field_constraints
-        if stage.startswith("vfx"):
-            expected = defer_provider_cross_field_constraints(expected)
-        expected = _provider_strict_projection(expected, omit_annotations=True)
-        assert other["response_format"]["json_schema"]["schema"] == expected

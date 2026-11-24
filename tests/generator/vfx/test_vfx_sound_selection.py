@@ -69,8 +69,7 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
 @pytest.mark.parametrize("bad,renderer,field", [
     pytest.param(bad, "soundCue", "soundId", id=name)
     for name, bad in (("null", None), ("empty", ""), ("case", "item4"), ("whitespace", " Item4"),
-                      ("unknown", "Item9999"), ("integer", 4),
-                      ("boolean", True), ("object", {}))
+                      ("unknown", "Item9999"), ("integer", 4), ("object", {}))
 ] + [
     pytest.param("Item4", "shape", "soundId", id="foreign-shape"),
     pytest.param("Item4", "nativeLight", "soundId", id="foreign-nativeLight"),

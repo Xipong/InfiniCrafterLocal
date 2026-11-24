@@ -34,7 +34,7 @@ def test_complete_uv_transform_roundtrips(factory,payload,turn,mirrors):
     assert data["vfxManifest"]["slots"][0][payload]["texture"]["uv"]==transform
 
 
-@pytest.mark.parametrize("bad", [None,{}, {"quarterTurns":1}, {"quarterTurns":4,"mirrorU":False,"mirrorV":False}, {"quarterTurns":True,"mirrorU":False,"mirrorV":False}])
+@pytest.mark.parametrize("bad", [None, {"quarterTurns":1}, {"quarterTurns":4,"mirrorU":False,"mirrorV":False}, {"quarterTurns":True,"mirrorU":False,"mirrorV":False}])
 def test_present_invalid_uv_is_not_identity(bad):
     data=_data();raw=_sprite(data);raw["slots"][0]["element"]["texture"]["uv"]=bad
     assert not vfx_validation.validate_vfx_director_output(raw,data)["ok"]

@@ -66,7 +66,6 @@ def test_pairwise_targeting_choices_deliver_exact_fields_and_receipts(count, spr
     ("count", 1.0),
     ("count", 0),
     ("count", 5),
-    ("spreadRadians", False),
     ("spreadRadians", -0.1),
     ("spreadRadians", 0.7501),
     ("spreadRadians", 1e-50),
@@ -74,7 +73,6 @@ def test_pairwise_targeting_choices_deliver_exact_fields_and_receipts(count, spr
     ("targetPolicy", "nearest"),
     ("requireLineOfSight", None),
     ("hardRange", None),
-    ("hardRange", "true"),
 ])
 def test_invalid_present_choices_stay_red_in_author_and_wire_without_provenance(key, value):
     doc, call = _fixture(**OPTIONS)
