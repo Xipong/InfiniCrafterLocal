@@ -181,6 +181,20 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
 
 
 
+def _responses_endpoint_rejected(exc: Exception) -> bool:
+    """Persist only endpoint incompatibility, not a transient request shape."""
+    if not _responses_chat_fallback_allowed(exc):
+        return False
+    body = str(getattr(exc, "_infini_body", "")).lower()
+    if any(term in body for term in ("previous_response_id", "model_not_found", "model not found",
+                                     "no such model", "model does not exist")):
+        return False
+    if getattr(exc, "code", None) in {404, 405}:
+        return True
+    return any(term in body for term in ("responses endpoint not supported",
+                                         "responses api not supported", "unsupported endpoint"))
+
+
 def _strict_schema_rejection_scope(exc: Exception, payload: dict[str, Any]) -> str:
     """Relevant provider evidence only: unsupported format vs this exact schema."""
     if not isinstance(exc, urlerror.HTTPError) or exc.code != 400:

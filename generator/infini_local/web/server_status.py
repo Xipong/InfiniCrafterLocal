@@ -23,6 +23,7 @@ from infini_local.core.vfx.config import (
 from infini_local.pipelines import generation_debug
 from infini_local.pipelines.images.backends import resolve_comfyui_workflow_path, sdcpp_debug_snapshot
 from infini_local.pipelines.transport.client import llm_auth_snapshot
+from infini_local.pipelines.transport.negotiation import snapshot as llm_negotiation_snapshot
 from infini_local.pipelines.transport.profiles import active_llm_provider
 from infini_local.services import combine_endpoint, network_info_service
 
@@ -62,6 +63,7 @@ def health_payload() -> dict[str, Any]:
         "ok": True,
         "version": APP_VERSION,
         "generationActivity": combine_endpoint.generation_activity_snapshot(),
+        "llmNegotiation": llm_negotiation_snapshot(),
         # Explicit partial acknowledgement: no secret values, endpoint query
         # strings or secret-derived hashes; 'auto' stays unresolved here.
         "effectiveConfig": {

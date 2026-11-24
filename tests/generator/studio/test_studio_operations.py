@@ -303,3 +303,28 @@ def test_owned_process_poll_failure_is_unknown_not_exit(host):
     assert host._server_lifecycle == 'unknown'
     assert host._sdcpp_lifecycle == 'unknown'
     assert not host.jobs
+
+
+def test_owned_health_poll_surfaces_negotiation_once_without_click(host, monkeypatch):
+    from types import SimpleNamespace
+    host.proc = SimpleNamespace(pid=42, poll=lambda: None)
+    host._owned_server_launch_id = 'owned'
+    row = {'kind':'responses_to_chat','profile':'llm_4','scope':'profile','state':'saved'}
+    safe_config = {
+        'cacheDir': str(host.config_path.parent/'cache'), 'worldRecipesDir': str(host.config_path.parent/'worlds'),
+        'llmProvider': 'openai_compat', 'llmModel': 'test', 'openrouterProvider': '',
+        'imageBackend': 'off', 'sdcppAutostart': False, 'language':'ru',
+    }
+    fake_health = {'ok':True, 'pid':42, 'studioLaunchId':'owned',
+                   'serverRoot':str(operations.ROOT), 'version':operations.__dict__.get('APP_VERSION',''),
+                   'effectiveConfig':safe_config,'llmNegotiation':[row | {'error':'secret-canary'}]}
+    monkeypatch.setattr(host, '_shutdown_identity_is_safe', lambda snap: True)
+    monkeypatch.setattr(host, '_fetch_health_snapshot', lambda **kwargs: fake_health)
+    for _ in range(2):
+        host._runtime_health_after = 0
+        host.observe_runtime_notifications()
+        host.drain_until(lambda: not host.actions.tasks)
+    assert host.runtime_status()['llm_negotiation'] == [row]
+    notices = [n for n in host.actions.notifications if 'Responses' in str(n)]
+    assert len(notices)==1 and 'сохранено' in str(notices[0])
+    assert 'secret-canary' not in str(host.actions.notifications)
