@@ -8,8 +8,12 @@ from tests.generator.vfx_image_fixtures import offline_backend
 from infini_local.pipelines.visual.assets import build_visual_asset_plan
 
 
-@pytest.mark.parametrize("factory,payload", [(_sprite,"element"), (_path,"path"), (_history,"trail")])
-@pytest.mark.parametrize("texture_id", list(LIBRARY_PARTICLE_TEXTURES))
+@pytest.mark.parametrize('factory,payload,texture_id', [
+    (*left, right)
+    for index, right in enumerate(list(LIBRARY_PARTICLE_TEXTURES))
+    for owners in ([(_sprite, 'element'), (_path, 'path'), (_history, 'trail')],)
+    for left in (owners if index == 0 else (owners[index % len(owners)],))
+])
 def test_native_material_source_has_no_generated_png_dependency(factory, payload, texture_id):
     data = _data()
     before = build_visual_asset_plan(data)

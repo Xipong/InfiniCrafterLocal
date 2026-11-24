@@ -185,8 +185,13 @@ def test_noncomparable_module_does_not_prove_mod_set_compatibility(tmp_path, mon
     assert profile["runtimeDumpProvenance"]["compatibility"] == "unverified"
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("state", ["verified_snapshot", "missing_manifest", "invalid_snapshot", "identity_mismatch"])
+# Snapshot trust is decided before either Author envelope is serialized.
+# Exercise matching and nonmatching identity in both, and each loader refusal once.
+@pytest.mark.parametrize("mode,state", [
+    ("json_object", "verified_snapshot"), ("json_schema", "verified_snapshot"),
+    ("json_object", "identity_mismatch"), ("json_schema", "identity_mismatch"),
+    ("json_object", "missing_manifest"), ("json_schema", "invalid_snapshot"),
+])
 def test_provenance_reaches_actual_serialized_author_request(tmp_path, monkeypatch, mode, state):
     import socket
     from infini_local.core import llm_config

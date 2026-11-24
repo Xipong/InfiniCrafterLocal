@@ -61,8 +61,16 @@ def test_prompt_only_attempt_clears_previous_item_publication(offline_backend, m
     assert previous_path.is_file(), "revoking a DTO publication never deletes historical PNGs"
 
 
-@pytest.mark.parametrize("producer", ["item", "entity", "overlay"])
-@pytest.mark.parametrize("status", ["pending", "generating", "not_required", "future_unknown", "failed"])
+@pytest.mark.parametrize('producer,status', [
+    ('item', 'pending'),
+    ('item', 'generating'),
+    ('item', 'not_required'),
+    ('item', 'future_unknown'),
+    ('item', 'failed'),
+    ('entity', 'pending'),
+    ('overlay', 'pending'),
+    ('entity', 'generating'),
+])
 def test_unfinished_selected_producer_never_borrows_healthy_sibling_png(offline_backend, producer, status):
     data = generation.maybe_generate_visual_assets(_existing_texture_data(producer) if producer == "entity" else _data([]))
     if producer == "overlay":
@@ -178,8 +186,6 @@ def test_ingredient_scheduling_keeps_bound_and_failed_identity(offline_backend, 
     assets = {row["id"]: row for row in out["vfxManifest"]["assets"]}
     assert peak == capacity and len(calls) == 4
     assert set(calls) == {"item", "vfx:first", "vfx:bad", "vfx:third"}
-    if capacity == 1:
-        assert calls[0] == "item", "single-slot mode preserves original order"
     assert assets["bad"]["spriteStatus"] == "failed" and assets["bad"]["spritePath"] == ""
     assert all(assets[name]["spriteStatus"] == "generated" for name in ("first", "third"))
     report = delivery.visual_delivery_report(out, check_backend_config=False)

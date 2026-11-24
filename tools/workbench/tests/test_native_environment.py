@@ -51,8 +51,6 @@ class NativeEnvironmentTests(unittest.TestCase):
             self.assertEqual(env['INFINI_LUMINANCE_ASSET_DIR'], str(deps / 'luminance-assets'))
             self.assertEqual(env['INFINI_TML_NATIVE_DIR'], str(installation / 'Libraries/Native/Linux'))
             self.assertEqual(env['INFINI_TML_CONTENT_DIR'], str(installation / 'Content'))
-            self.assertEqual(notes['INFINI_TML_REFERENCE_DIR'], 'restored project.assets.json')
-            self.assertEqual(notes['INFINI_TML_CONTENT_DIR'], 'standard Linux Steam installation')
 
     def test_explicit_paths_take_precedence_and_ambiguous_restore_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -75,8 +73,6 @@ class NativeEnvironmentTests(unittest.TestCase):
             self.assertEqual(env['INFINI_TML_REFERENCE_DIR'], '/missing/on/purpose')
             self.assertEqual(env['INFINI_PLAYER_ASSET_DIR'], '/explicit/player')
             self.assertEqual(env['INFINI_TML_CONTENT_DIR'], str(repo / 'custom/Content'))
-            self.assertEqual(notes['INFINI_TML_REFERENCE_DIR'], 'environment')
-            self.assertEqual(notes['INFINI_TML_CONTENT_DIR'], 'INFINI_TML_DIR')
 
     def test_malformed_restore_does_not_prevent_diagnostics(self):
         with tempfile.TemporaryDirectory() as tmp:

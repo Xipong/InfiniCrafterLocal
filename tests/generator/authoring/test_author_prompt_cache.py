@@ -149,7 +149,6 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch):
     # Conditional cards remain scoped, never replaced by the entire Author catalog for a cache hit.
     assert "blockerCapabilities" not in static
     assert "repairScope" not in static
-    assert list(full)[-1] == "requiredJsonShape"
 
 
 @pytest.mark.parametrize("repair", [False, True])

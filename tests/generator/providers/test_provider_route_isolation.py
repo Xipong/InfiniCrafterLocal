@@ -62,21 +62,13 @@ def test_explicit_xhigh_effort_is_preserved_across_api_modes(wire, mode):
     before = copy.deepcopy(request)
     client._llm_json_single_context(request, 1, context)
     sent = wire.calls[0][1]
-    effort = sent.get("reasoning_effort") or sent.get("reasoning", {}).get("effort")
-    assert effort == "xhigh"
+    if mode == "chat_completions":
+        assert sent["reasoning_effort"] == "xhigh"
+        assert "reasoning" not in sent
+    else:
+        assert sent["reasoning"]["effort"] == "xhigh"
+        assert "reasoning_effort" not in sent
     assert request == before
-
-
-def test_openai_chat_uses_its_native_reasoning_field(wire):
-    context = {"provider": "openai_compat", "base_url": "https://api.openai.com/v1",
-               "model": "gpt-6-sol", "api_mode": "chat_completions",
-               "api_key": "synthetic-platform-key"}
-    request = packet()
-    request["reasoning"] = {"effort": "medium", "exclude": True}
-    client._llm_json_single_context(request, 1, context)
-    sent = wire.calls[0][1]
-    assert sent.get("reasoning_effort") == "medium"
-    assert "reasoning" not in sent
 
 
 def test_openai_chat_rejects_numeric_reasoning_budget_before_sending(wire):

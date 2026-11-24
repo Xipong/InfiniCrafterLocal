@@ -25,7 +25,7 @@ internal static partial class EngineRuntimeChecks
         var observerType=typeof(GeneratorClient).GetNestedType("AttackSourceObservation",BindingFlags.NonPublic)!;
         var observer=Activator.CreateInstance(observerType,any,null,new object?[]{body,"dispatch",null,null},null)!;
         var program=(JsonObject)observerType.GetMethod("Finish",any)!.Invoke(observer,null)!;
-        return (JsonArray)observerType.GetMethod("LiteralProjectileSpawns",any)!.Invoke(observer,new object[]{program})!;
+        return (JsonArray)observerType.GetMethod("FiniteProjectileSpawns",any)!.Invoke(observer,new object?[]{program,null})!;
     }
     private static JsonObject? ExpandChildReferenceFixture(JsonArray calls)
         => (JsonObject?)typeof(GeneratorClient).GetMethod("ReferencedProjectileSnapshots",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,new object[]{calls});

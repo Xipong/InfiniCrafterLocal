@@ -174,12 +174,12 @@ def test_overlap_must_preserve_each_validated_png(offline, monkeypatch, kind, di
     assert returned['first'][0] != returned['second'][0]
 
 
-@pytest.mark.parametrize('name', ['procedural', 'offline', 'none'])
-def test_retired_image_backend_refuses_publication(offline, monkeypatch, name):
+def test_unknown_image_backend_refuses_publication(offline, monkeypatch):
+    name = 'unavailable-adapter'
     root, requests = offline
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', name)
     data = _data([])
-    result = invoke('item', 'retired_backend', data)
+    result = invoke('item', 'unknown_backend', data)
     assert result == ('', '', 0.0, 'backend_config_error')
     assert data['debug']['imageBackendConfigError'] == f'unsupported image backend: {name}'
     assert not requests and not list(root.rglob('*.png'))

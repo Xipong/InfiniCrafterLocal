@@ -541,7 +541,13 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
         assert filtered["bindingsUpsert"] != [candidate]
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
+# Exercise both small and structured branches of the shared discriminator.
+# The vertical registry suite still checks admission for every capability.
+@pytest.mark.parametrize("fn", [
+    "item_stats", "spawn", "attach", "emit_to_targets_on_event", "set_aim",
+    "projectile_collision", "place_object", "generated_buff_on_use",
+    "heal_owner_on_event", "beam_geometry", "refresh_held_effect", "weapon_ammo",
+])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]

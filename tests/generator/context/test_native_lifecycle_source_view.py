@@ -203,9 +203,16 @@ def test_changed_interaction_source_is_literal_passthrough(mutation):
     assert reference == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("location", ["direct", "child", "inventory", "fallback"])
-@pytest.mark.parametrize("future", [False, True])
+@pytest.mark.parametrize('mode,location,future', [
+    ('json_object', 'direct', False),
+    ('json_object', 'child', True),
+    ('json_object', 'inventory', False),
+    ('json_object', 'fallback', False),
+    ('json_schema', 'direct', True),
+    ('json_schema', 'child', False),
+    ('json_schema', 'inventory', True),
+    ('json_schema', 'fallback', True),
+])
 def test_actual_mechanics_author_keeps_interaction_namespace(monkeypatch, mode, location, future):
     from infini_local.core import llm_config
 

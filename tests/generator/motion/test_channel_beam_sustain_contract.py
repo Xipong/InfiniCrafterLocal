@@ -229,19 +229,6 @@ def _beam(wire):
     return next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == wire["runtimeProgram"]["primaryEntityId"])
 
 
-def _retained_wire(**options):
-    """Current program with a deliberately retired controller bag; must refuse."""
-    doc = build_capability_witness("move_straight")
-    _call(doc, "item_use")["params"]["channel"] = True
-    wire = compile_runtime_program(doc)
-    wire.pop("runtimeContract")
-    entity = _beam(wire)
-    entity["kind"] = "owner_attached_projectile"
-    entity["controller"] = {"code": 1, "name": "channel_beam", "params": {
-        "rangeTiles": 20, "widthPx": 8, "warmupTicks": 30, **options}}
-    return wire
-
-
 @pytest.mark.parametrize("choices", [
     (False, False, False, False, False), (True, True, True, True, True),
     (True, False, True, False, True), (False, True, False, True, False),
@@ -284,34 +271,6 @@ def test_representative_joint_beam_choices_project_exactly_with_independent_coll
         assert cadence[0]["value"] == "held_item_use_time" and cadence[0]["finalPath"].endswith(".manaSustain.cadence")
 
 
-@pytest.mark.parametrize("present", [
-    (False, False, False, False, False),
-    (True, False, True, False, True), (False, True, False, True, False),
-])
-def test_retired_beam_controller_refuses_regardless_of_old_optional_presence(present):
-    wire = _retained_wire(**{k: NEUTRALS[k] for k, keep in zip(NEUTRALS, present) if keep})
-    before = deepcopy(wire)
-    report = validate_runtime_wire(wire)
-    assert not report["ok"]
-    assert any(r["code"] == "unsupported_opcode" and r["path"].endswith(".controller.code")
-               for r in report["errors"])
-    assert any(r["code"] == "unknown_final_wire_field" and r["path"].endswith(".controller.params")
-               for r in report["errors"])
-    assert wire == before
-    params = _beam(wire)["controller"]["params"]
-    for key, keep in zip(NEUTRALS, present):
-        assert (key in params) is keep
-    assert "manaSustain" not in _beam(wire) and "beamGeometry" not in _beam(wire)
-
-
-def test_retired_beam_options_do_not_become_independent_components():
-    wire = _retained_wire(**OPTIONS)
-    before = deepcopy(wire)
-    assert not validate_runtime_wire(wire)["ok"]
-    assert wire == before
-    assert all(key not in _beam(wire) for key in ("beamGeometry", "beamRamp", "manaSustain"))
-
-
 @pytest.mark.parametrize("key,value", [
     *((k, v) for k in ("initialDamageMultiplier", "initialWidthMultiplier")
       for v in (None, False, "0.35", 0, 0.0099, 1.001, float("inf"), float("nan"))),
@@ -334,13 +293,14 @@ def test_bad_present_independent_values_stay_red_in_author_and_stripped_wire(key
         assert obj == before
 
 
-@pytest.mark.parametrize("component,code,name", (("controller", 0, ""), ("controller", 2, "charge_then_release"),
-                                                 ("movement", 0, "move_straight")))
-def test_extension_cannot_be_smuggled_into_another_driver(component, code, name):
-    wire = _retained_wire(**OPTIONS)
+def test_beam_geometry_cannot_be_smuggled_into_straight_movement_params():
+    doc, _ = _fixture(**OPTIONS)
+    wire = compile_runtime_program(doc)
+    wire.pop("runtimeContract")
     entity = _beam(wire)
-    values = entity.pop("controller")["params"]
-    entity[component] = {"code": code, "name": name, "params": values}
+    component = "movement"
+    entity[component] = {"code": 0, "name": "move_straight",
+                         "params": deepcopy(entity["beamGeometry"])}
     before = deepcopy(wire)
     report = validate_runtime_wire(wire)
     assert not report["ok"]

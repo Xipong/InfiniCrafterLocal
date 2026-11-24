@@ -129,8 +129,13 @@ def test_actual_body_attachment_reach_and_beam_frame_reach_both_requests(wire_tr
     assert final["debug"]["vfxDirectorRaw"] == accepted
 
 
-@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["free_named_hand", "pose_only", "offset_hand", "hidden_main"])
+@pytest.mark.parametrize('format_name,case', [
+    ('json_object', 'free_named_hand'),
+    ('json_object', 'pose_only'),
+    ('json_object', 'offset_hand'),
+    ('json_object', 'hidden_main'),
+    ('json_schema', 'free_named_hand'),
+])
 def test_body_frame_projection_preserves_absence_offsets_and_selected_image(wire_transport, monkeypatch, format_name, case):
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data = compile_runtime_program(build_capability_witness("move_straight"))

@@ -10,7 +10,7 @@ import infini_local.pipelines.visual.contract as visual_contract
 import infini_local.pipelines.visual.stage as visual_stage
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
-from tests.generator.motion.test_front_hand_movement import fixture, entity, saved_hand_wire
+from tests.generator.motion.test_front_hand_movement import fixture, entity
 from tests.generator.authoring.test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 
@@ -97,21 +97,11 @@ def test_current_optional_grip_and_disabled_plain_spawn_remain_readable():
         assert wire == before
 
 
-def test_captured_bundled_hand_is_refused_without_projection():
-    wire = saved_hand_wire()
-    before = deepcopy(wire)
-    report = validate_runtime_wire(wire)
-    assert not report["ok"]
-    assert any(e["code"] == "unsupported_opcode" and ".movement.code" in e["path"] for e in report["errors"])
-    assert wire == before
-
-
-@pytest.mark.parametrize("code,name", [(19, "move_forward_then_retract"), (20, "move_front_hand")])
-def test_retired_hand_code_cannot_hide_inside_an_otherwise_current_definition(code, name):
+def test_unknown_movement_opcode_in_current_wire_is_refused_without_projection():
     wire = compile_runtime_program(fixture()[0])
     wire.pop("runtimeContract")
     assert validate_runtime_wire(wire)["ok"]
-    entity(wire)["movement"] = {"code": code, "name": name}
+    entity(wire)["movement"] = {"code": 32767, "name": "unknown_fixture_opcode"}
     before = deepcopy(wire)
     report = validate_runtime_wire(wire)
     assert not report["ok"]

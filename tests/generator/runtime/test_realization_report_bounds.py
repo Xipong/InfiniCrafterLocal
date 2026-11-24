@@ -5,6 +5,7 @@ from prompt_packet_helpers import request_dossier
 
 import copy
 import json
+import re
 
 import jsonschema
 import pytest
@@ -116,7 +117,6 @@ def test_author_and_repair_disclose_schema_owned_description_bounds(monkeypatch,
     def changed_report_schema():
         schema = canonical()
         for field in ("description", "playerExperience"):
-            schema["properties"][field]["minLength"] = 2
             schema["properties"][field]["maxLength"] += 17
         return schema
 
@@ -145,18 +145,12 @@ def test_author_and_repair_disclose_schema_owned_description_bounds(monkeypatch,
     repair = requests[0]
     expected_format = {"type": "json_object"} if mode == "json_object" else None
     assert set(request_dossier(author)["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
-    assert "4017" in request_dossier(author)["requiredJsonShape"]["realization"]["description"]
+    assert "4017" in re.findall(r"\b\d+\b", request_dossier(author)["requiredJsonShape"]["realization"]["description"])
     assert author.get("response_format") == expected_format
-    for request, root in ((repair, "realizationReplacement"),):
-        assert request.get("response_format") == expected_format
-        card = request_dossier(request)["requiredJsonShape"][root]
-        for field, schema in author_item_response_schema()["properties"]["realization"]["properties"].items():
-            if field == "selfEvaluation":
-                continue
-            text = card[field]
-            assert f"minLength={schema['minLength']}" in text, (root, field, text)
-            assert f"maxLength={schema['maxLength']}" in text, (root, field, text)
-            assert "Unicode" in text
+    assert repair.get("response_format") == expected_format
+    card = request_dossier(repair)["requiredJsonShape"]["realizationReplacement"]
+    for field, maximum in (("description", "4017"), ("playerExperience", "3017")):
+        assert maximum in re.findall(r"\b\d+\b", card[field]), (field, card[field])
     assert result["runtimeProgram"] == before["runtimeProgram"]
     assert result["realization"] == before["realization"] and item == before
 

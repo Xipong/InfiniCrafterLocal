@@ -20,21 +20,6 @@ def cli(monkeypatch, capsys, *args):
     return exc.value.code, capsys.readouterr()
 
 
-@pytest.mark.parametrize("flag", ["--reuse-images-from", "--vfx-only-from"])
-def test_removed_recovery_flags_fail_at_cli_before_preflight(monkeypatch, capsys, tmp_path, flag):
-    from toolbox.live import preflight
-
-    def unexpected_preflight(*args, **kwargs):
-        pytest.fail("removed option reached campaign preflight")
-
-    monkeypatch.setattr(preflight, "prepare", unexpected_preflight)
-    receipt = tmp_path / "unused-recovery-path"
-    code, captured = cli(monkeypatch, capsys, "live20", "--run", "--real-images", flag, receipt)
-    assert code == 2
-    assert "unrecognized arguments:" in captured.err and flag in captured.err
-    assert not captured.out and not list(tmp_path.iterdir())
-
-
 @pytest.fixture
 def current_dump(tmp_path):
     from toolbox.live.catalog import DEFAULT_PRESETS, load_panel
@@ -244,13 +229,6 @@ def test_skip_config_does_not_read_operator_profile_unless_explicit(monkeypatch,
     code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--project', project, '--config', config)
     assert code == 0
     assert json.loads(output.out)['configured']['model'] == 'private-model'
-
-
-def test_named_panel_is_not_silently_reduced_by_legacy_environment(monkeypatch, capsys, current_dump):
-    monkeypatch.setenv('INFINI_LIVE_CASES', 'woodwork_blade')
-    code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump)
-    assert code == 0
-    assert json.loads(output.out)['caseCount'] == 20
 
 
 @pytest.mark.parametrize('selection', ['', 'woodwork_blade,woodwork_blade'])

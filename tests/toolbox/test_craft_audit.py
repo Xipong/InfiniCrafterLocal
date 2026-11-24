@@ -196,34 +196,3 @@ def test_cli_preserves_inputs_reports_failures_and_refuses_overwrite(author, tmp
     with pytest.raises(SystemExit) as exc:
         audit.main(["--item", str(path), "--out", str(out)])
     assert exc.value.code == 2 and (out / "audit.html").read_bytes() == first
-
-
-@pytest.mark.parametrize("source_available", [False, True], ids=["saved-only", "supplied-retired-author"])
-def test_retired_v6_names_stay_literal_without_current_docs_or_authentication(source_available):
-    import gzip
-    capture = json.loads(gzip.decompress((ROOT / "tests/generator/fixtures/gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
-    case = next(row for row in capture["cases"] if row["previousFn"] == "accumulate_projectile_charge")
-    saved = document(deepcopy(case["wire"]))
-    source = document(deepcopy(case["previousAuthor"])) if source_available else None
-    before = json.dumps([saved, source], sort_keys=True)
-    report = audit.build_report(saved, author=source)
-    link = next(row for row in report["receipts"]
-                if row["receipt"].get("fn") == "accumulate_projectile_charge"
-                and row["authorPath"].endswith("/durationSeconds"))
-    assert link["description"] == link["authorUnits"] == ""
-    assert link["wireValue"] == 1 and link["trust"] == "unverified"
-    assert report["authorAvailable"] is source_available
-    assert link["authorValuePresent"] is source_available
-    if source_available:
-        field = next(row for row in report["authorFields"] if row["path"] == link["authorPath"])
-        assert not field["documented"] and field["description"] == field["units"] == ""
-        assert link["authorValue"] == field["value"]
-        assert next(c for c in report["checks"] if c["name"] == "Текущий Author validator")["status"] == "failed"
-    else:
-        assert link["authorValue"] is None and link["schema"] == ""
-        assert report["authorFields"] == []
-    statuses = {row["name"]: row["status"] for row in report["checks"]}
-    assert statuses["Текущий wire validator"] == statuses["Текущий compiler receipt audit"] == "failed"
-    assert any(row["path"] == "$.runtimeProgram.itemUse.releaseTiming" and row["value"] == "immediate"
-               for row in report["unknownFields"])
-    assert json.dumps([saved, source], sort_keys=True) == before

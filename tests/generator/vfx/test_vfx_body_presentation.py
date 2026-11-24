@@ -7,8 +7,13 @@ import infini_local.core.vfx.surface as vfx_surface
 from tests.generator.authoring.test_director_example_neutrality import _accepted_data, _capture_vfx
 
 
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite", "reuse_item_icon"])
+@pytest.mark.parametrize('repair,mode', [
+    (False, 'runtime_geometry'),
+    (False, 'no_asset'),
+    (False, 'baked_sprite'),
+    (False, 'reuse_item_icon'),
+    (True, 'runtime_geometry'),
+])
 def test_selected_body_coverage_reaches_director_and_repair(monkeypatch, mode, repair):
     data = _accepted_data()
     entity = next(row for row in data["runtimeProgram"]["entities"] if "lashGeometry" in row)

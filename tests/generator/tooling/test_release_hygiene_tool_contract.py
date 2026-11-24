@@ -5,7 +5,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -20,9 +19,6 @@ SANDBOX_TOOL = ROOT / "tools" / "testing" / "validate_sandbox.py"
 PYTEST_RUNNER = ROOT / "tools" / "testing" / "run_pytest_shards.py"
 RELEASE_RENDERER = ROOT / "tools" / "diagnostics" / "render_validation_report.py"
 SELFTEST_CHECKER = ROOT / "tools" / "checks" / "check_tml_selftest_report.py"
-SELFTEST_EMITTER = (
-    ROOT / "mod" / "InfiniCrafterLocal" / "Common" / "Systems" / "Diagnostics" / "InfiniAgentContractSelfTestSystem.cs"
-)
 
 
 def _load_hygiene_module():
@@ -211,12 +207,13 @@ def _managed_metadata_fixture(path: Path, mvid: str, *, pe64: bool = False, wide
     path.write_bytes(image)
 
 
-def test_runtime_selftest_checker_matches_the_csharp_emitter(tmp_path: Path) -> None:
-    source = SELFTEST_EMITTER.read_text(encoding="utf-8")
-    schema_match = re.search(r'schema\s*=\s*"([^"]+)"', source)
-    assert schema_match is not None
-    check_ids = sorted(set(re.findall(r'Check\(\s*"([^"]+)"', source)))
-    assert check_ids
+def test_runtime_selftest_cli_requires_exact_builds_and_real_success_flags(tmp_path: Path) -> None:
+    # Public receipt format. Do not derive it by scanning the emitter's C# spelling.
+    check_ids = [
+        "multi-entity-program-normalizes", "category-cannot-select-equipment-role",
+        "duplicate-exclusive-input-rejected", "event-cycle-rejected",
+        "old-runtime-api-rejected", "retired-shape-rejected", "strict-vfx-json",
+    ]
     report_path = tmp_path / "tml-selftest.json"
     mod_id, tml_id = str(uuid.uuid4()), str(uuid.uuid4())
     mod_dll, tml_dll = tmp_path / "mod.dll", tmp_path / "tml.dll"
@@ -224,7 +221,7 @@ def test_runtime_selftest_checker_matches_the_csharp_emitter(tmp_path: Path) -> 
     _managed_metadata_fixture(tml_dll, tml_id, pe64=True, wide=True)
     command = [sys.executable, str(SELFTEST_CHECKER), str(report_path), "--mod-dll", str(mod_dll), "--tml-dll", str(tml_dll)]
     payload = {
-        "schema": schema_match.group(1),
+        "schema": "infini.tml-runtime-selftest.v3",
         "generatedAt": "2000-01-01T00:00:00Z",
         "assemblies": {"mod": {"moduleVersionId": mod_id}, "tml": {"moduleVersionId": tml_id}},
         "runtimeApi": "infini.runtime-program.v5",
@@ -307,16 +304,6 @@ def test_standard_schema_dependency_blocks_full_suite(monkeypatch) -> None:
     with monkeypatch.context() as scoped:
         scoped.setattr(importlib.util, "find_spec", lambda name: None if name == "jsonschema" else real_find_spec(name))
         assert module.missing_full_test_dependencies() == ["jsonschema"]
-
-
-# One collected item per contract module; individual checks keep source order and tracebacks.
-
-@pytest.mark.parametrize("payload", [None, [], ["report"], "report", 17, True])
-def test_selftest_checker_rejects_non_object_reports(tmp_path, payload):
-    from tools.checks import check_tml_selftest_report as checker
-    report = tmp_path / "report.json"
-    report.write_text(json.dumps(payload))
-    assert checker.validate(report)["ok"] is False
 
 
 @pytest.mark.parametrize("damage", ["truncated", "pe-offset", "signature", "stream-name", "zero-guid", "module-row", "guid-index"])

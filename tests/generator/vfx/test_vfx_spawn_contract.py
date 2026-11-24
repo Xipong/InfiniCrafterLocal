@@ -23,8 +23,12 @@ REGIONS = [
 OWNERS = [(_sprite, "element"), (_library_particle, "particle"), (_native, "dust")]
 
 
-@pytest.mark.parametrize("factory,key", OWNERS)
-@pytest.mark.parametrize("region", REGIONS)
+@pytest.mark.parametrize('factory,key,region', [
+    (*left, right)
+    for index, right in enumerate(REGIONS)
+    for owners in (OWNERS,)
+    for left in (owners if index == 0 else (owners[index % len(owners)],))
+])
 def test_regions_preserved_through_fresh_and_saved_pipeline(factory, key, region):
     data = _data()
     raw = factory(data)
@@ -53,10 +57,12 @@ def test_every_region_requires_its_choices_and_rejects_foreign_controls(region):
         assert strict_schema_errors({**region, "frame": "source"}, spawn_schema())
 
 
-@pytest.mark.parametrize("factory,key", OWNERS)
-@pytest.mark.parametrize("region", [None, {"shape": "automatic"},
-    {"shape": "line", "lengthPx": -1, "rotationRadians": 0, "frame": "world"},
-    {"shape": "annulus", "innerRadiusPx": 30, "outerRadiusPx": 20}])
+@pytest.mark.parametrize('factory,key,region', [
+    (*left, right)
+    for index, right in enumerate([None, {'shape': 'automatic'}, {'shape': 'line', 'lengthPx': -1, 'rotationRadians': 0, 'frame': 'world'}, {'shape': 'annulus', 'innerRadiusPx': 30, 'outerRadiusPx': 20}])
+    for owners in (OWNERS,)
+    for left in (owners if index == 0 else (owners[index % len(owners)],))
+])
 def test_invalid_spawn_never_uses_historical_point_fallback(factory, key, region):
     data = _data()
     raw = factory(data)

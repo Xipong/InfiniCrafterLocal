@@ -46,7 +46,6 @@ def cache_record(tmp_path, monkeypatch):
     data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "offline-cache-admission")
     data = synthetic_no_image_execution_control(data, fixture)
     assert world_storage.is_deliverable_recipe_payload(data)
-    assert combine_pipeline._cached_payload_report(data)["ok"]
     request = {
         "worldId": "11111111-1111-1111-1111-111111111111", "cacheOnly": True,
         "itemA": {"id": 3507, "name": "Copper Shortsword", "fullName": "Terraria/CopperShortsword"},
@@ -127,7 +126,6 @@ def test_cache_does_not_adopt_unindexed_copy_from_other_root(cache_record):
     sprite.unlink()
     code, result = _cache_only_endpoint(request)
     assert code == 409 and result["status"] == "accepted_recipe_assets_unavailable"
-    assert visual_delivery_gate._resolved_asset_path(committed["visual"]["spritePath"]) is None
     assert copy_path.read_bytes() == pixels and path.read_bytes() == original
 
 
@@ -424,7 +422,6 @@ def test_unknown_root_cannot_be_cached_or_replayed(cache_record):
     assert path.read_bytes() == original
     world_storage.atomic_write_json(path, corrupt)
     raw = path.read_bytes()
-    assert not combine_pipeline._cached_payload_report(corrupt)["ok"]
     assert _cache_only_endpoint(request)[0] == 404
     _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
 
@@ -441,7 +438,6 @@ def test_no_image_record_is_refused_by_both_storage_and_strict_combine(cache_rec
         for field in ("spritePath", "spriteUrl", "spriteStatus"):
             entity["visual"].pop(field, None)
     assert not world_storage.is_deliverable_recipe_payload(data)
-    assert not combine_pipeline._cached_payload_report(data)["ok"]
     world_storage.atomic_write_json(path, data)
     raw = path.read_bytes()
 

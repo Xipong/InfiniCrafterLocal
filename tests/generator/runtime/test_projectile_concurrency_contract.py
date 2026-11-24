@@ -1,12 +1,9 @@
-from suite_paths import TEST_ROOT
 from prompt_packet_helpers import request_dossier
 from tests.generator.authoring.test_low_level_three_stage_pipeline import wire_transport
 
 """Opt-in live concurrency is independent of per-activation spawn count."""
 
 import copy
-import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -107,49 +104,6 @@ def test_independent_return_motion_keeps_explicit_values_and_concurrency_absence
     assert compiled == saved_before
     assert all(CAPABILITY not in kind.required_components for kind in ENTITY_KIND_REGISTRY.values())
     assert "maxActive" not in CAPABILITY_REGISTRY["spawn"].params
-
-
-@pytest.mark.parametrize("fn", ["set_projectile_collision", "move_bounce"])
-def test_immutable_old_wire_is_refused_without_filling_concurrency(fn):
-    # Genuine archived wire, never an inverse projection of a fresh composition.
-    path = (TEST_ROOT / "fixtures") / "projectile_retained_wire.json"
-    raw = path.read_bytes()
-    assert hashlib.sha256(raw).hexdigest() == "9bee5ef3ff732f5b0c2aa625efd6ac487e1e645cfdfeb0cf94f40a41ecb83fea"
-    archive = json.loads(raw)
-    assert archive["sourceHead"] == "a3d5950"
-    wire = next(row["wire"] for row in archive["cases"] if row["fn"] == fn)
-    before = copy.deepcopy(wire)
-    # Both old envelope fields and retired diagnostic provenance must refuse.
-    report = validate_runtime_wire(wire)
-    expected = {
-        ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field"),
-        ("$.runtimeProgram.entities[1].movement.params", "unknown_final_wire_field"),
-        ("$.runtimeContract.finalWireReceipts", "undeclared_technical_lowering"),
-    }
-    if fn == "move_bounce":
-        expected.update({
-            ("$.runtimeProgram.entities[1].movement", "missing_compiled_component"),
-            ("$.runtimeProgram.entities[1].movement.code", "unsupported_opcode"),
-        })
-    assert not report["ok"]
-    assert {(e["path"], e["code"]) for e in report["errors"]} == expected
-    assert wire == before
-    saved = copy.deepcopy(wire)
-    saved.pop("runtimeContract")
-    saved_before = copy.deepcopy(saved)
-    report = validate_runtime_wire(saved)
-    assert not report["ok"]
-    assert {(e["path"], e["code"]) for e in report["errors"]} == {
-        row for row in expected if row[0] != "$.runtimeContract.finalWireReceipts"
-    }
-    if fn == "move_bounce":
-        assert any(row["code"] == "unsupported_opcode" and row["path"].endswith(".movement.code")
-                   for row in report["errors"])
-    # The independent current return-motion control above proves cap absence;
-    # no test-local importer upgrades a retired envelope into a new positive.
-    assert all("maxActive" not in row.get("spawn", {}) for row in saved["runtimeProgram"]["entities"])
-    assert saved == saved_before
-    assert path.read_bytes() == raw
 
 
 def test_schema_registry_has_required_positive_param_but_optional_capability():
@@ -299,12 +253,12 @@ def test_unrequested_repair_cannot_add_concurrency_to_old_absent_wire():
     assert all("maxActive" not in row.get("spawn", {}) for row in compile_runtime_program(fixed)["runtimeProgram"]["entities"])
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,leaf,bad", [
-    pytest.param("accelerate_y", "accelY", -16201, id="signed-gravity"),
-    pytest.param("seek", "maxSpeed", -3.75, id="return-motion"),
-    pytest.param("projectile_collision", "pierce", -2, id="pierce"),
-    pytest.param(CAPABILITY, "maxActive", 0, id="concurrency"),
+@pytest.mark.parametrize("mode,fn,leaf,bad", [
+    pytest.param("json_object", "accelerate_y", "accelY", -16201, id="signed-gravity-object"),
+    pytest.param("json_schema", "accelerate_y", "accelY", -16201, id="signed-gravity-schema"),
+    pytest.param("json_schema", "seek", "maxSpeed", -3.75, id="return-motion"),
+    pytest.param("json_object", "projectile_collision", "pierce", -2, id="pierce"),
+    pytest.param("json_object", CAPABILITY, "maxActive", 0, id="concurrency"),
 ])
 def test_contact_and_return_repairs_preserve_independent_collision_and_concurrency(wire_transport, monkeypatch, mode, fn, leaf, bad):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)

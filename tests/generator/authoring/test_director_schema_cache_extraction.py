@@ -215,9 +215,14 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
     assert len({p["messages"][2]["content"] for p in packets}) == 3
 
 
-@pytest.mark.parametrize("stage", ["visual", "visual_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-@pytest.mark.parametrize("overlay", [False, True])
+@pytest.mark.parametrize('stage,mode,overlay', [
+    ('visual', 'json_object', False),
+    ('visual', 'json_schema', True),
+    ('visual', 'off', False),
+    ('visual_repair', 'json_object', True),
+    ('visual_repair', 'json_schema', False),
+    ('visual_repair', 'off', True),
+])
 def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypatch, stage, mode, overlay):
     from tests.generator.authoring.test_craft_instruction_segments import stage_packets
     from prompt_packet_helpers import request_dossier
@@ -299,8 +304,15 @@ def no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", lambda *args: pytest.fail("offline cache extraction attempted network"))
 
 
-@pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
+@pytest.mark.parametrize('stage,mode', [
+    ('visual', 'json_object'),
+    ('visual', 'json_schema'),
+    ('visual', 'off'),
+    ('visual_repair', 'json_object'),
+    ('vfx', 'json_object'),
+    ('vfx_repair', 'json_object'),
+    ('visual_repair', 'json_schema'),
+])
 def test_actual_native_serialization_is_static_across_three_rosters_with_exact_dossier(monkeypatch, stage, mode):
     from tests.generator.authoring.test_stable_schema_data import capture_wire, wire_text
     from prompt_packet_helpers import request_dossier

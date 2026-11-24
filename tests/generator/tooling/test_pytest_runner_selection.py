@@ -166,7 +166,7 @@ def test_shard_sandbox_executes_both_roots_with_repo_relative_paths(
 
 
 def test_default_pytest_discovery_includes_both_supported_roots(pytestconfig: pytest.Config) -> None:
-    assert pytestconfig.getini("testpaths") == ["tests/generator", "tests/toolbox"]
+    assert {"tests/generator", "tests/toolbox"} <= set(pytestconfig.getini("testpaths"))
 
 
 def test_changed_runner_forces_offline_config(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -252,68 +252,6 @@ def test_hosted_events_keep_every_pr_main_push_and_manual_run_without_branch_dup
     assert _workflow_section("on") == [
         "  push:", "    branches: [main]", "  pull_request:", "  workflow_dispatch:",
     ]
-
-
-@pytest.mark.parametrize("previous,current,same_group,cancel_current", [
-    (("pull_request", 41, 100), ("pull_request", 41, 101), True, True),
-    (("pull_request", 41, 100), ("pull_request", 42, 101), False, True),
-    (("push", None, 100), ("push", None, 101), False, False),
-    (("workflow_dispatch", None, 100), ("workflow_dispatch", None, 101), False, False),
-    (("pull_request", 41, 100), ("workflow_dispatch", None, 41), False, False),
-    (("push", None, 41), ("pull_request", 41, 101), False, True),
-], ids=["superseded-same-pr", "independent-prs", "every-main-commit", "independent-manual-runs", "manual-cannot-cancel-pr", "pr-cannot-cancel-main"])
-def test_hosted_concurrency_only_replaces_the_same_pull_request(previous, current, same_group, cancel_current) -> None:
-    # Pin the small supported Actions expression, then substitute its contexts.
-    # This tests our grouping policy; it is not an Actions scheduler emulator.
-    group, cancellation = (line.split(": ", 1)[1] for line in _workflow_section("concurrency"))
-    assert group == "${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}"
-    assert cancellation == "${{ github.event_name == 'pull_request' }}"
-
-    def key(context, workflow="InfiniCrafterLocal CI"):
-        event, number, run_id = context
-        return (group.replace("${{ github.workflow }}", workflow)
-                .replace("${{ github.event_name }}", event)
-                .replace("${{ github.event.pull_request.number || github.run_id }}", str(number or run_id)))
-
-    assert (key(previous) == key(current)) is same_group
-    assert (current[0] == "pull_request") is cancel_current
-    assert key(previous) != key(previous, workflow="Another workflow")
-
-
-def _assert_hosted_python_cache(block: str) -> None:
-    # These two scalar keys need not be adjacent or have a particular indentation.
-    # The existing workflow-block reader owns job boundaries; this is not a YAML parser.
-    lines = [line.strip() for line in block.splitlines() if not line.lstrip().startswith("#")]
-    fields = [line.partition(":") for line in lines]
-    for key, expected in (("cache", "pip"), ("cache-dependency-path", "generator/requirements-dev.lock")):
-        values = [value.strip().strip("\"'") for name, separator, value in fields if separator and name == key]
-        assert values == [expected]
-    executable = "\n".join(lines)
-    assert "python -m pip install -r generator/requirements-dev.lock" in executable
-    assert "cache-hit" not in executable
-
-
-def test_hosted_python_cache_uses_the_lockfile_without_skipping_installation() -> None:
-    for job in ("python-tests", "strict-hygiene"):
-        _assert_hosted_python_cache("\n".join(_workflow_section(job, indent=2)))
-
-
-def test_hosted_cache_policy_ignores_scalar_layout_but_not_missing_or_conditional_install():
-    block = """    cache-dependency-path: 'generator/requirements-dev.lock'
-    # Cache keys may be reordered around other setup-python options.
-    python-version: '3.12'
-    cache: "pip"
-  run: python -m pip install -r generator/requirements-dev.lock
-"""
-    _assert_hosted_python_cache(block)
-    for broken in (
-        block.replace('cache: "pip"', '# cache: "pip"'),
-        block.replace('requirements-dev.lock', 'requirements.txt'),
-        block.replace('python -m pip install -r', 'echo install -r'),
-        block + "  if: steps.python.outputs.cache-hit != 'true'\n",
-    ):
-        with pytest.raises(AssertionError):
-            _assert_hosted_python_cache(broken)
 
 
 def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:

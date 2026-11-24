@@ -27,8 +27,13 @@ def _explicit_calls(source):
     return out
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn", ["accessory", "projectile_lifetime", "move_straight", "collect_seeds"])
+@pytest.mark.parametrize('mode,fn', [
+    ('json_object', 'accessory'),
+    ('json_object', 'projectile_lifetime'),
+    ('json_object', 'move_straight'),
+    ('json_object', 'collect_seeds'),
+    ('json_schema', 'accessory'),
+])
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
 

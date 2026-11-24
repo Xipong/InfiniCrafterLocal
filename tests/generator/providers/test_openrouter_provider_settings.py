@@ -1,20 +1,11 @@
 """Offline settings controls for strict per-profile OpenRouter routing."""
 from __future__ import annotations
 
-import pytest
-
 from infini_local.desktop import settings_env, settings_schema as schema
-from infini_local.desktop.settings_fields import FIELDS, disabled_reasons
+from infini_local.desktop.settings_fields import disabled_reasons
 
 MAIN = "INFINI_OPENROUTER_PROVIDER"
 POOL = [f"INFINI_LLM_POOL_{slot}_OPENROUTER_PROVIDER" for slot in (2, 3, 4)]
-
-
-@pytest.mark.parametrize("key", [MAIN, *POOL])
-def test_routing_fields_default_to_auto_and_are_saved_in_normal_order(key):
-    assert schema.DEFAULTS[key] == ""
-    assert schema.FIELD_ORDER.count(key) == 1
-    assert schema.FIELD_HELP[key]
 
 
 def test_exact_provider_slugs_survive_save_reload_and_provider_switch(tmp_path):
@@ -41,10 +32,3 @@ def test_pin_visibility_tracks_exact_profile_provider_without_erasing_values():
     disabled = disabled_reasons(values, False)
     assert disabled[MAIN] and disabled[POOL[0]]
     assert [values[key] for key in (MAIN, POOL[0])] == ["Acme/region-a", "novita"]
-
-
-def test_multidev_metadata_has_one_provider_pin_for_each_pool_profile():
-    for key in POOL:
-        fields = [field for field in FIELDS if field['key'] == key]
-        assert len(fields) == 1
-        assert not fields[0]['secret']

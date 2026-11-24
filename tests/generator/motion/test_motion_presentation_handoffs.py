@@ -219,12 +219,15 @@ def test_real_no_image_request_carries_selected_grip_and_actual_components(monke
     assert projected["visual"] == before["visual"]
 
 
-@pytest.mark.parametrize("law,expected", [
-    ("angular_sine", ["law.angular_sine.amplitudeRadiansPerSecond", "radians/second"]),
-    ("lateral_velocity_sine", ["law.lateral_velocity_sine.amplitudeBlocksPerSecond", "blocks/second"]),
-    (None, None), ("unknown", None),
+@pytest.mark.parametrize('law,expected,extra', [
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], None),
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], 0),
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], 2),
+    ('lateral_velocity_sine', ['law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'blocks/second'], None),
+    (None, None, None),
+    ('unknown', None, None),
+    ('lateral_velocity_sine', ['law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'blocks/second'], 0),
 ])
-@pytest.mark.parametrize("extra", [None, 0, 2])
 def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expected, extra):
     from infini_local.pipelines.author.prompt import source_wire_units_for_llm
     oscillator = {"amplitude": 0.125, **({"law": law} if law is not None else {})}

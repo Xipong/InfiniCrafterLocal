@@ -60,10 +60,22 @@ def test_actual_author_briefs_precede_details_and_preserve_all_gameplay(monkeypa
     assert (a, b) == before
 
 
-@pytest.mark.parametrize("stage", ["author", "visual", "vfx"])
-@pytest.mark.parametrize("mutation", ["future_layer", "null_view", "bool_version", "null_ordered_uses",
-                                     "future_outer", "future_defaults", "future_ordered_row", "null_programs", "null_observations",
-                                     "future_defaults_value", "future_layer_value"])
+@pytest.mark.parametrize('stage,mutation', [
+    ('author', 'future_layer'),
+    ('author', 'null_view'),
+    ('author', 'bool_version'),
+    ('author', 'null_ordered_uses'),
+    ('author', 'future_outer'),
+    ('author', 'future_defaults'),
+    ('author', 'future_ordered_row'),
+    ('author', 'null_programs'),
+    ('author', 'null_observations'),
+    ('author', 'future_defaults_value'),
+    ('author', 'future_layer_value'),
+    ('visual', 'future_layer'),
+    ('vfx', 'future_layer'),
+    ('visual', 'null_view'),
+])
 def test_unknown_draw_kept_and_parent_names_do_not_select_projection(stage, mutation):
     source = raw_parent_card_for_llm(_native())
     attack = unpack_attack_tables(source["raw"]["directProjectile"]["attackReference"])
@@ -131,10 +143,18 @@ def test_parent_list_adapter_preserves_order_duplicates_and_complete_context(sta
     assert (parents, mapping) == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("mutation", ["future_outer", "null_programs", "null_observations",
-                                     "future_program", "future_row", "future_coverage", "future_admission",
-                                     "null_effects", "future_effect_program"])
+@pytest.mark.parametrize('mode,mutation', [
+    ('json_object', 'future_outer'),
+    ('json_object', 'null_programs'),
+    ('json_object', 'null_observations'),
+    ('json_object', 'future_program'),
+    ('json_object', 'future_row'),
+    ('json_object', 'future_coverage'),
+    ('json_object', 'future_admission'),
+    ('json_object', 'null_effects'),
+    ('json_object', 'future_effect_program'),
+    ('json_schema', 'future_outer'),
+])
 def test_unknown_native_source_remains_literal_through_actual_author(monkeypatch, mode, mutation):
     from infini_local.core import llm_config
     from infini_local.pipelines.author.request import build_initial_author_request

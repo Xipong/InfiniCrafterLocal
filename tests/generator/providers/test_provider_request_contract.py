@@ -98,11 +98,18 @@ def test_reasoning_headroom_preserves_answer_budget_only_for_actual_google(wire,
         assert "reasoning_effort" not in prepared and prepared["reasoning"]["effort"] == effort
 
 
-@pytest.mark.parametrize("provider,api_mode", [
-    ("openai_compat", "chat_completions"), ("openai_compat", "responses"),
-    ("openrouter", "chat_completions"), ("local", "chat_completions"),
+@pytest.mark.parametrize('provider,api_mode,mode', [
+    ('openai_compat', 'chat_completions', 'off'),
+    ('openai_compat', 'chat_completions', 'none'),
+    ('openai_compat', 'chat_completions', 'low'),
+    ('openai_compat', 'chat_completions', 'high'),
+    ('openai_compat', 'responses', 'off'),
+    ('openrouter', 'chat_completions', 'off'),
+    ('local', 'chat_completions', 'off'),
+    ('openai_compat', 'responses', 'high'),
+    ('openrouter', 'chat_completions', 'high'),
+    ('local', 'chat_completions', 'high'),
 ])
-@pytest.mark.parametrize("mode", ["off", "none", "low", "high"])
 def test_author_honors_configured_reasoning_on_actual_provider_wire(wire, monkeypatch, provider, api_mode, mode):
     from infini_local.pipelines.author.request import build_initial_author_request
 

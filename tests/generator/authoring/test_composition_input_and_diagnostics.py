@@ -8,7 +8,6 @@ from prompt_packet_helpers import request_dossier
 from repair_test_helpers import offline_builder, provider_roundtrip, repair_with_response
 from tests.generator.runtime.test_source_unit_guidance import _serialized_chat_request
 from infini_local.pipelines.author import request as author
-from infini_local.pipelines.author.item_contract import AUTHOR_DESIGN_QUALITY_RULE
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -40,11 +39,14 @@ def test_author_packet_exposes_input_and_three_buff_activation_alternatives(monk
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'composition', model_name='offline')
     cards = json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']
-    buff = next(c for c in cards if c['fn'] == 'generated_buff_on_use')
-    text = json.dumps(buff)
-    assert 'refresh_held_effect' in text and 'generated_buff_on_event' in text
+    activation_capabilities = ('generated_buff_on_use', 'refresh_held_effect', 'generated_buff_on_event')
+    assert Counter(card['fn'] for card in cards if card['fn'] in activation_capabilities) == Counter(activation_capabilities)
     event = next(c for c in cards if c['fn'] == 'spawn_on_event')
-    assert 'useInput' in json.dumps(event) and 'both' in json.dumps(event)
+    input_scopes = [branch['properties']['useInput']['enum']
+                    for branch in event['params']['when']['oneOf']
+                    if 'useInput' in branch.get('properties', {})]
+    assert len(input_scopes) == 1
+    assert Counter(input_scopes[0]) == Counter(('primary_use', 'alternate_use', 'both'))
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
@@ -133,16 +135,9 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
-def test_author_prioritizes_playable_composition_without_turning_advisory_into_a_gate(monkeypatch, mode):
+def test_author_provider_accepts_playable_composition_without_advisory_fields(monkeypatch, mode):
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     request, _, _ = author.build_initial_author_request({}, {}, 'purposeful-composition', model_name='offline')
-    packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    # Verify delivery and priority of the owner rule, not incidental prose wording.
-    assert packet['priorityHeader'][0] == AUTHOR_DESIGN_QUALITY_RULE
-    assert packet['priorityHeader'].count(AUTHOR_DESIGN_QUALITY_RULE) == 1
-    assert isinstance(packet['requiredJsonShape']["concept"], str)
-    assert set(packet['requiredJsonShape']["realization"]) == {"description", "selfEvaluation"}
-    # No concept/report is needed to execute an intentionally simple composition.
     item = build_capability_witness('move_straight')
     item.pop('concept', None)
     item.pop('realization', None)

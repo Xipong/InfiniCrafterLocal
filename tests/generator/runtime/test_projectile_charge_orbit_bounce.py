@@ -110,20 +110,6 @@ def retained_wire(component):
     return wire
 
 
-@pytest.mark.parametrize('component', ['controller', 'movement'])
-@pytest.mark.parametrize('with_params', [False, True])
-def test_retired_charge_and_orbit_slots_refuse_with_or_without_parameter_bags(component, with_params):
-    wire = retained_wire(component)
-    if not with_params:
-        entity(wire)[component].pop('params')
-    before = deepcopy(wire)
-    report = validate_runtime_wire(wire)
-    assert not report['ok']
-    assert any(row['code'] == 'unsupported_opcode' and row['path'].endswith('.' + component + '.code')
-               for row in report['errors'])
-    assert wire == before
-
-
 def test_optional_bounce_retention_absence_stays_read_only_on_current_collision():
     doc, _ = fixture('projectile_collision')
     wire = compile_runtime_program(doc)

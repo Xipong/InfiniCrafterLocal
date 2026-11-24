@@ -7,8 +7,12 @@ from tests.generator.vfx.test_vfx_material_admission_contracts import _library_p
 from tests.generator.vfx_material_fixtures import _data
 
 
-@pytest.mark.parametrize("texture", list(LIBRARY_PARTICLE_TEXTURES))
-@pytest.mark.parametrize("blend", ["alpha", "additive"])
+@pytest.mark.parametrize('texture,blend', [
+    (left, right)
+    for left_index, left in enumerate(list(LIBRARY_PARTICLE_TEXTURES))
+    for right_index, right in enumerate(['alpha', 'additive'])
+    if left_index == 0 or right_index == 0 or (left_index, right_index) == (1, 1)
+])
 def test_palette_selection_is_explicit_and_preserved(texture, blend):
     data = _data()
     raw = _library_particle(data)

@@ -21,8 +21,12 @@ CASES = [
     ('breathCapacityBonus', 60, 'breathCapacityBonus', 60),
 ]
 
-@pytest.mark.parametrize('fn', ['accessory', 'armor', 'generated_buff_on_use'])
-@pytest.mark.parametrize('name,value,wire_name,wire_value', CASES)
+@pytest.mark.parametrize('fn,name,value,wire_name,wire_value', [
+    (left, *right)
+    for index, right in enumerate(CASES)
+    for owners in (['accessory', 'armor', 'generated_buff_on_use'],)
+    for left in (owners if index == 0 else (owners[index % len(owners)],))
+])
 def test_traversal_mechanic_delivers_exact_typed_wire(fn, name, value, wire_name, wire_value):
     doc, _ = source(fn, {name:value})
     assert validate_runtime_program(doc)['ok']

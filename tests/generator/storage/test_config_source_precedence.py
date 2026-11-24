@@ -88,7 +88,7 @@ def test_inert_framing_settings_warn_without_refusal_or_migration(tmp_path, key)
 
 
 @pytest.mark.parametrize("source", ["file", "process"])
-def test_startup_import_accepts_inert_settings_without_using_them(tmp_path, source):
+def test_startup_warns_about_inert_settings_without_rewriting_config(tmp_path, source):
     import subprocess
     import sys
     from suite_paths import GENERATOR_ROOT
@@ -99,7 +99,7 @@ def test_startup_import_accepts_inert_settings_without_using_them(tmp_path, sour
     env = dict(os.environ, PYTHONPATH=str(GENERATOR_ROOT), INFINI_DATA_DIR=str(tmp_path))
     if source == "process":
         env.update(values)
-    result = subprocess.run([sys.executable, "-c", "from infini_local.core import config_bootstrap; from infini_local.core.images import config; assert not hasattr(config, 'PROJECTILE_ICON_TARGET_FILL'); assert not hasattr(config, 'CHILD_ICON_TARGET_FILL')"], env=env, capture_output=True, text=True, timeout=20)
+    result = subprocess.run([sys.executable, "-c", "from infini_local.core import config_bootstrap"], env=env, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr
     assert all(key in result.stderr for key in values)
     assert "0.72" not in result.stderr and "0.84" not in result.stderr

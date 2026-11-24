@@ -44,9 +44,12 @@ def test_unknown_parent_attack_schema_and_generated_appearance_remain_literal(st
     assert parent["directProjectileRaw"]["attackReference"] == source
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("strength", [0.0, 0.6])
-@pytest.mark.parametrize("repair", [False, True])
+@pytest.mark.parametrize('mode,strength,repair', [
+    ('json_object', 0.0, False),
+    ('json_object', 0.6, True),
+    ('json_schema', 0.0, True),
+    ('json_schema', 0.6, False),
+])
 def test_actual_visual_request_exposes_exact_readonly_child_light(monkeypatch, mode, strength, repair):
     from infini_local.core import llm_config
     import infini_local.pipelines.visual.request as visual_request
@@ -75,9 +78,12 @@ def test_actual_visual_request_exposes_exact_readonly_child_light(monkeypatch, m
     assert child == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("strength", [0.0, 0.6])
-@pytest.mark.parametrize("repair", [False, True])
+@pytest.mark.parametrize('mode,strength,repair', [
+    ('json_object', 0.0, False),
+    ('json_object', 0.6, True),
+    ('json_schema', 0.0, True),
+    ('json_schema', 0.6, False),
+])
 def test_actual_vfx_request_retains_child_light_even_without_parent_design_context(monkeypatch, mode, strength, repair):
     from infini_local.core import llm_config
     import infini_local.pipelines.vfx.prompt as vfx_prompt

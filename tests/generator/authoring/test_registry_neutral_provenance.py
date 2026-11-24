@@ -440,14 +440,14 @@ def test_wire_provenance_is_optional_but_present_must_be_complete(provenance, ac
     assert validate_runtime_wire(wire)["ok"] is accepted
 
 
-@pytest.mark.parametrize("fn,broken,good,frozen,present,hostile", [
-    ("set_aim", "source", "initial", "turnOwner", True, False),
-    ("attach", "anchor", "owner_center", "axisOffsetBlocks", 2, 3),
-    ("rotate_sprite", "mode", "axis", "offsetRadians", 0.3, 0.4),
-    ("return_when", "afterSeconds", 1, "onTileCollision", True, False),
-    ("set_owner_control", "lifetime", "authored", "requireHeldItem", True, False),
+@pytest.mark.parametrize('fn,broken,good,frozen,present,hostile,explicit', [
+    ('set_aim', 'source', 'initial', 'turnOwner', True, False, False),
+    ('set_aim', 'source', 'initial', 'turnOwner', True, False, True),
+    ('attach', 'anchor', 'owner_center', 'axisOffsetBlocks', 2, 3, False),
+    ('rotate_sprite', 'mode', 'axis', 'offsetRadians', 0.3, 0.4, False),
+    ('return_when', 'afterSeconds', 1, 'onTileCollision', True, False, False),
+    ('set_owner_control', 'lifetime', 'authored', 'requireHeldItem', True, False, False),
 ])
-@pytest.mark.parametrize("explicit", [False, True], ids=["accepted-absence", "explicit-nonneutral"])
 def test_independent_primitive_repair_freezes_valid_absence_and_present_choice(fn, broken, good, frozen, present, hostile, explicit):
     doc = build_capability_witness(fn)
     call = _call(doc, fn)

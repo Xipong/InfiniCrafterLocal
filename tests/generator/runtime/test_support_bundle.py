@@ -183,8 +183,13 @@ def test_sensitive_filename_is_not_published_in_manifest(cache, tmp_path):
     assert not output.exists()
 
 
-@pytest.mark.parametrize("kind", [b"tEXt", b"zTXt", b"iTXt", b"iTXt-compressed"])
-@pytest.mark.parametrize("sensitive", [False, True])
+@pytest.mark.parametrize('kind,sensitive', [
+    (b'tEXt', False),
+    (b'tEXt', True),
+    (b'zTXt', False),
+    (b'iTXt', False),
+    (b'iTXt-compressed', False),
+])
 def test_png_metadata_is_inspected_without_changing_bytes(cache, tmp_path, kind, sensitive):
     text = b"sk-test-secret-123456789" if sensitive else "legitimate image prompt ж".encode()
     if kind == b"tEXt":

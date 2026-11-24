@@ -1,9 +1,7 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
-from suite_paths import TEST_ROOT
 
 import copy
-import hashlib
 import json
 from pathlib import Path
 
@@ -20,7 +18,6 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.pipelines.visual import contract as visual_contract
 from infini_local.pipelines.visual import request as visual_request
 from infini_local.pipelines.visual import stage as visual_stage
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from prompt_packet_helpers import request_dossier
 from tests.generator.world.test_dual_use_placeable_contract import _dual_use_placeable
 from tests.generator.authoring.test_low_level_three_stage_pipeline import wire_transport as wire_transport
@@ -320,23 +317,14 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert placement(missing)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
 
 
-def test_absent_placed_member_preserves_current_wire_without_migrating_archive():
-    fixture = TEST_ROOT / "fixtures/placed_body_legacy_wire_sha256.json"
-    assert hashlib.sha256(fixture.read_bytes()).hexdigest() == "41c670ba3fd12a44a2436bc6226bf815628e3d4c64d04f4efd3cc586b628a43a"
-    baseline = json.loads(fixture.read_text())
-    for name in baseline:
-        authored = build_runtime_fixture(name)
-        before = copy.deepcopy(authored)
-        compiled = compile_runtime_program(authored)
-        assert authored == before
-        assert validate_runtime_wire(compiled)["ok"]
-        rows = compiled["runtimeContract"]["finalWireReceipts"]
-        for source in (None, authored):
-            assert audit_compiler_receipts(rows, authored_document=source, final_document=compiled)["ok"]
-        assert not any(row.get("fn") == FN for row in rows)
-        for binding in compiled["runtimeProgram"]["bindings"]:
-            placed = binding["usePolicy"]["action"].get("placement", {})
-            assert "placedBody" not in placed
+def test_absent_placed_body_is_not_materialized():
+    authored = _dual_use_placeable()
+    compiled = compile_runtime_program(authored)
+    assert validate_runtime_wire(compiled)["ok"]
+    assert "placedBody" not in placement(compiled)
+    rows = compiled["runtimeContract"]["finalWireReceipts"]
+    assert not any(row.get("fn") == FN for row in rows)
+    assert audit_compiler_receipts(rows, authored_document=authored, final_document=compiled)["ok"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

@@ -32,23 +32,30 @@ def test_unknown_author_root_cannot_survive_validation_and_compilation():
     assert source == before and parsed == before
 
 
-@pytest.mark.parametrize("location", ["root", "entity"])
+@pytest.mark.parametrize("location", ["root", "entity", "visual"])
 def test_unknown_delivered_field_is_refused_not_sanitized(location):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
     wire = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     delivered = sanitize_recipe_for_delivery(wire)
     assert validate_runtime_wire(delivered)["ok"]
-    target = delivered if location == "root" else delivered["runtimeProgram"]["entities"][0]
+    def target_object(doc):
+        if location == "root":
+            return doc
+        entity = doc["runtimeProgram"]["entities"][0]
+        return entity["visual"] if location == "visual" else entity
+
+    target = target_object(delivered)
     target["unexpectedField"] = {"value": "unrecognized"}
-    path = "$.unexpectedField" if location == "root" else "$.runtimeProgram.entities[0].unexpectedField"
+    prefix = {"root": "$", "entity": "$.runtimeProgram.entities[0]", "visual": "$.runtimeProgram.entities[0].visual"}
+    path = prefix[location] + ".unexpectedField"
     before = deepcopy(delivered)
     projected = sanitize_recipe_for_delivery(delivered)
     report = validate_runtime_wire(projected)
     assert not report["ok"], "Python must not approve an unknown delivered field"
     assert any(row["path"] == path and row["code"] == "unknown_final_wire_field"
                for row in report["errors"])
-    projected_target = projected if location == "root" else projected["runtimeProgram"]["entities"][0]
+    projected_target = target_object(projected)
     assert projected_target["unexpectedField"] == target["unexpectedField"]
     assert delivered == before
 

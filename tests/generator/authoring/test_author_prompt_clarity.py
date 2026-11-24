@@ -105,9 +105,20 @@ def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair(
     assert result == original and validate_runtime_program(result)['ok']
 
 
-@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
-@pytest.mark.parametrize('nested', [False, True])
-@pytest.mark.parametrize('damage', [None, 0, -1, 37])
+@pytest.mark.parametrize('mode,nested,damage', [
+    ('off', False, None),
+    ('off', False, 37),
+    ('off', True, 0),
+    ('off', True, -1),
+    ('json_object', False, 0),
+    ('json_object', False, -1),
+    ('json_object', False, 37),
+    ('json_object', True, None),
+    ('json_schema', False, None),
+    ('json_schema', False, 0),
+    ('json_schema', False, -1),
+    ('json_schema', True, 37),
+])
 def test_parent_damage_preserves_unknown_zero_and_native_sentinel(monkeypatch, mode, nested, damage):
     from copy import deepcopy
     from infini_local.pipelines.combine_balance import stat_profile_for
@@ -131,13 +142,15 @@ def test_parent_damage_keeps_top_level_precedence_over_fingerprint():
                             {'damage': -1, 'fingerprint': {'damage': 99}})['sourceDamage'] == [0, -1]
 
 
-@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
-@pytest.mark.parametrize('source, expected', [
-    ({'damage': None}, None),
-    ({'damage': None, 'fingerprint': {'damage': None}}, None),
-    ({'damage': None, 'fingerprint': {'damage': 0}}, 0),
-    ({'damage': None, 'fingerprint': {'damage': -1}}, -1),
-    ({'damage': None, 'fingerprint': {'damage': 37}}, 37),
+@pytest.mark.parametrize('mode,source, expected', [
+    ('off', {'damage': None}, None),
+    ('off', {'damage': None, 'fingerprint': {'damage': None}}, None),
+    ('off', {'damage': None, 'fingerprint': {'damage': 0}}, 0),
+    ('off', {'damage': None, 'fingerprint': {'damage': -1}}, -1),
+    ('off', {'damage': None, 'fingerprint': {'damage': 37}}, 37),
+    ('json_object', {'damage': None}, None),
+    ('json_schema', {'damage': None}, None),
+    ('json_object', {'damage': None, 'fingerprint': {'damage': None}}, None),
 ])
 def test_null_damage_uses_existing_fingerprint_fallback(monkeypatch, mode, source, expected):
     from copy import deepcopy

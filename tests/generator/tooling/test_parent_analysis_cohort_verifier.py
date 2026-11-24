@@ -409,15 +409,6 @@ def test_contract_mode_retains_evidence_provenance_stability_and_target_gates(tm
     assert not (result["parityPass"] and result["targetPass"])
 
 
-def test_source_pack_workflow_requires_same_contract_byte_parity():
-    text = WORKFLOW.read_text()
-    assert "--comparison-mode exact-bytes" in text
-    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in text
-    assert "baseline-native-source-pack" in text
-    assert "--require-payloads --require-pins --require-target" in text
-    assert "$result.byteParityPass" in text
-
-
 def _source_pack_workflow_step(name: str) -> str:
     text = WORKFLOW.read_text()
     return text.split(f"      - name: {name}\n", 1)[1].split("\n      - ", 1)[0]
@@ -449,5 +440,11 @@ def test_source_pack_benchmark_is_manual_and_keeps_exact_runtime_scope():
     assert re.search(r"^on:\n  workflow_dispatch:\n\npermissions:", workflow, re.MULTILINE)
     assert "ref: ${{ github.sha }}" in workflow
     assert "--profile-parent-craft $scenario" in workflow
-    assert "--comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000" in workflow
+    assert "baseline-native-source-pack" in workflow
+    assert "$result.byteParityPass" in workflow
+    command = next(line.split() for line in workflow.splitlines()
+                   if "verify_parent_analysis_cohort.py verify " in line)
+    options = dict((flag, command[command.index(flag) + 1]) for flag in ("--comparison-mode", "--max-cold-ms"))
+    assert options == {"--comparison-mode": "exact-bytes", "--max-cold-ms": "5000"}
+    assert {"--require-payloads", "--require-pins", "--require-target"} <= set(command)
     assert "--roll-forward Disable" in workflow

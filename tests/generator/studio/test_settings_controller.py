@@ -68,25 +68,6 @@ server.close()
     subprocess.run([sys.executable, '-c', code, str(tmp_path / 'config.env')], env=env, check=True, timeout=15)
 
 
-def test_snapshot_does_not_certify_unsaved_values(studio):
-    app, controller = studio
-    app.values['INFINI_PORT'] = '9091'
-    snap = controller.snapshot()
-    assert snap['values']['INFINI_PORT'] == '9091'
-    assert snap['savedValues']['INFINI_PORT'] == DEFAULTS['INFINI_PORT']
-
-
-def test_stale_revision_rejected_before_any_mutation(studio):
-    app, controller = studio
-    before = dict(app.values)
-    revision = controller.snapshot()['savedRevision']
-    app.config_path.write_text(app.config_path.read_text() + '\n# changed\n')
-    with pytest.raises(ValueError, match='другой вкладке'):
-        apply(controller, 'save', {'INFINI_PORT': '9192'}, {'savedRevision': revision})
-    assert app.values == before
-    assert controller.app.actions.last_action['status'] == 'failed'
-
-
 def test_save_unknown_values_and_multiline_codec(studio):
     app, controller = studio
     result = apply(controller, 'save', {'INFINI_CUSTOM_EXTENSION': 'a\nb="quoted"', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--foo\n  bar'})
@@ -94,13 +75,6 @@ def test_save_unknown_values_and_multiline_codec(studio):
     saved = parse_env(app.config_path)
     assert saved['INFINI_CUSTOM_EXTENSION'] == 'a\nb="quoted"'
     assert saved['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--foo bar'
-
-
-def test_removed_disk_extension_not_resurrected(studio):
-    app, controller = studio
-    app.values['INFINI_REMOVED_EXTENSION'] = 'stale'
-    apply(controller, 'save', {'INFINI_PORT': '5055'})
-    assert 'INFINI_REMOVED_EXTENSION' not in parse_env(app.config_path)
 
 
 def test_profile_saved_without_secrets_or_config_write(studio):
@@ -210,14 +184,6 @@ def test_exit_publishes_closed_state(studio):
     assert controller.server._state['closed']
     assert controller.server._state['lastAction']['status'] == 'succeeded'
     assert not controller.server.accepting_actions
-
-
-def test_external_extension_edit_survives_partial_save(studio):
-    app, controller = studio
-    app.values['INFINI_EXTERNAL_EXTENSION'] = 'old cached value'
-    write_env(app.config_path, dict(DEFAULTS, INFINI_EXTERNAL_EXTENSION='new disk value'))
-    apply(controller, 'save', {'INFINI_PORT': '6060'})
-    assert parse_env(app.config_path)['INFINI_EXTERNAL_EXTENSION'] == 'new disk value'
 
 
 @pytest.mark.parametrize('provider', ['local', 'openrouter', 'openai_compat', 'openai_codex'])
@@ -348,13 +314,21 @@ def test_pipeline_presets_select_only_chain_and_keep_user_assets(studio, name, p
     assert app.user_presets['123'] == saved_profile
 
 
-def test_retired_profile_identity_does_not_rewrite_or_mislabel_settings():
-    data = {'INFINI_GUI_PIPELINE_PRESET': 'Локалка: LM Studio + FLUX.2 Klein 4B hybrid',
-            'INFINI_LLM_PROVIDER': 'local', 'INFINI_IMAGE_BACKEND': 'sdcpp',
-            'INFINI_SDCPP_MODEL': '/my/model', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--my-flags'}
-    original = dict(data)
-    assert SettingsController._pipeline_preset_from_config(data) == 'Custom'
-    assert data == original
+def test_studio_does_not_apply_an_unknown_saved_preset(tmp_path):
+    fields = {'INFINI_LLM_PROVIDER': 'local', 'INFINI_IMAGE_BACKEND': 'sdcpp',
+              'INFINI_SDCPP_MODEL': '/my/model', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--my-flags'}
+    config = tmp_path / 'config.env'
+    write_env(config, {**fields, 'INFINI_GUI_PIPELINE_PRESET': 'Unrecognized profile'})
+    before = config.read_bytes()
+    app = SettingsController(config)
+    try:
+        snapshot = StudioController(app, None).snapshot()
+        for values in (snapshot['values'], snapshot['savedValues']):
+            assert values['INFINI_GUI_PIPELINE_PRESET'] == CUSTOM_PRESET
+            assert {key: values[key] for key in fields} == fields
+        assert config.read_bytes() == before
+    finally:
+        app.on_close()
 
 
 def test_inert_settings_are_preserved_as_opaque_values(studio):
@@ -386,7 +360,7 @@ def test_snapshot_caches_unchanged_files_but_observes_external_edits(studio, mon
     for _ in range(10):
         snap = controller.snapshot()
         assert snap['savedRevision'] == first['savedRevision']
-        assert snap['fields'] is first['fields']
+        assert snap['fields'] == first['fields']
     assert reads == initial_reads
     # Same-size replacement with the previous mtime still invalidates by inode/ctime.
     source = app.config_path

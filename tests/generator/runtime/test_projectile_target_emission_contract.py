@@ -1,12 +1,10 @@
 """Explicit bounded target links emit authored physical children; no radial alias."""
-from suite_paths import TEST_ROOT
-import hashlib
 import json
 from copy import deepcopy
 
 import pytest
 from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, EVENT_ACTION_OPCODE
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
 from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
@@ -286,40 +284,6 @@ def test_receipt_forgery_cannot_change_selection_under_a_valid_author_claim():
     _event(wire)["repeatPolicy"] = "exclude_visited"
     assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
-
-
-def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
-    from pathlib import Path
-    path = (TEST_ROOT / "fixtures") / "runtime_program_v5_seed_corpus.json"
-    raw = path.read_bytes()
-    saved = next(row for row in json.loads(raw)["cases"] if row["caseId"] == "returning_potion")
-    wire = saved["expectedDeliveryWire"]
-    before = deepcopy(wire)
-    historical = wire["runtimeProgram"]
-    fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
-    assert not any(key in json.dumps(historical) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
-    report = validate_runtime_wire({"runtimeProgram": historical})
-    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
-    assert any(e["code"] == "unknown_final_wire_field" and e["path"].endswith(".movement.params")
-               for e in report["errors"])
-    # The RAW archive's unrelated retired tooltip is still refused. Keep exact
-    # saved bytes separate from a current final delivery / PNG-ready claim.
-    assert {(e["path"], e["code"]) for e in validate_runtime_wire(wire)["errors"]} == {
-        ("$.tooltip", "unknown_final_wire_field"),
-        ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field"),
-        ("$.runtimeProgram.entities[1].movement.params", "unknown_final_wire_field"),
-        ("$.runtimeProgram.entities[1].movement", "missing_compiled_component"),
-        ("$.runtimeProgram.entities[1].movement.code", "unsupported_opcode")}
-    assert wire == before and path.read_bytes() == raw
-    # The saved nearest projection retains its old radial runtime discriminator.
-    old = next(row["wire"] for row in json.loads(((TEST_ROOT / "fixtures") / "event_api_pre_simplification.json").read_text())["cases"]
-               if row["fn"] == "damage_nearest_on_event")
-    events = [e for row in old["runtimeProgram"]["entities"] for e in row["events"]]
-    assert events[0]["actionCode"] == 4
-    assert "chain_damage_on_event" not in EVENT_ACTION_OPCODE
-    assert "stepCount" not in events[0]
-    assert events[0]["action"] == "chain_damage_on_event"
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

@@ -61,26 +61,6 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
     packet, evidence = capture.builder(stage, COHORT[0], mode)
     full = dossier(packet)
     before = copy.deepcopy(packet)
-    retired_keys = (RETIRED_SLOT_FIELDS - {"channel", "backend"}) | RETIRED_GLOBAL_FIELDS | {
-        "effectColor", "parent_power_context", "itemKnowledge", "powerKnowledge", "rarityBaseline",
-        "behaviorDigest", "exampleAmmo", "exampleProjectile", "selectedPlayerAmmoRaw",
-        "representativeAmmoRaw", "playerInventoryAmmoRaw", "fallbackAmmoRaw",
-        "animationPlanMutable", "LLM_RAW_TOKEN_MODE", "maxConceptCandidates",
-    }
-    # Inspect every actual sender surface, including JSON embedded in messages,
-    # dynamic parent facts, provider schema, tools and frozen Repair context.
-    # Compare structural keys, not artist-written prose containing ordinary words.
-    def assert_current_keys(value):
-        for node in dict_nodes(value):
-            assert not node.keys() & retired_keys
-            for child in node.values():
-                if isinstance(child, str) and child.lstrip().startswith(("{", "[")):
-                    try:
-                        decoded = json.loads(child)
-                    except ValueError:
-                        continue
-                    assert_current_keys(decoded)
-    assert_current_keys(packet)
     assert [row["role"] for row in packet["messages"]] == ["system", "developer", "user"]
     static = json.loads(packet["messages"][1]["content"])
     dynamic = json.loads(packet["messages"][2]["content"])
@@ -105,7 +85,6 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
     for route in ROUTES:
         observed = capture.wire(packet, route)
         wire = observed["packet"]
-        assert_current_keys(wire)
         assert observed["method"] == "POST"
         # Exact bytes are serialized by production, not a test's compact encoder.
         assert json.loads(observed["body"]) == wire

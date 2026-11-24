@@ -13,14 +13,6 @@ using InfiniCrafterLocal.Common.Services;
 internal static partial class EngineRuntimeChecks
 {
 
-    private static void VfxRetiredMetadataRefuses()
-    {
-        var wire = JsonSerializer.SerializeToNode(new InfiniCrafterLocal.Common.Models.VfxManifestSpec())!.AsObject();
-        wire["motif"] = new System.Text.Json.Nodes.JsonObject { ["element"] = "fire" };
-        Equal(false, InfiniCrafterLocal.Common.Models.VfxManifestSpec.FromJson(wire.ToJsonString()).HasSlots, "retired motif is never executed");
-        Equal(true, InfiniCrafterLocal.Common.Models.ContractJsonDiagnostics.TryGet("VfxManifestSpec.FromJson", out _), "retired motif fails strict admission");
-    }
-
     private static void VisualDescriptivePaletteRoundtrip()
     {
         var source = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
@@ -31,16 +23,6 @@ internal static partial class EngineRuntimeChecks
         var roundtrip = InfiniCrafterLocal.Common.Models.GeneratedItemData.FromJson(source.ToJson())
             ?? throw new InvalidOperationException("descriptive palette definition refused");
         Equal(palette, roundtrip.Visual.Palette.Single(), "palette survives definition roundtrip");
-    }
-
-    private static void DescriptiveParentProseRoundtrip()
-    {
-        var source = new InfiniCrafterLocal.Common.Models.GeneratedParentSummarySpec {
-            Name = "Advisory context", Description = string.Concat(Enumerable.Repeat("🌟", 4000)),
-        };
-        string expected = source.Description;
-        source.Normalize();
-        Equal(expected, source.Description, "admitted optional prose survives recursive context");
     }
 
     private static void AuthoredNameUnicodePersistenceRoundtrip()
@@ -94,7 +76,7 @@ internal static partial class EngineRuntimeChecks
     {
         using var actorState = new NativeActorState();
         // Optional Author prose uses Unicode code points, not UTF-16 units.
-        string boundary = new string('ж', 3999) + "🌟";
+        string boundary = new string('ж', 5) + string.Concat(Enumerable.Repeat("🌟", 3995));
         string supplementary = string.Concat(Enumerable.Repeat("🌟", 3000));
         var original = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
         original.Id = "parent_unicode_probe";
@@ -127,7 +109,6 @@ internal static partial class EngineRuntimeChecks
                 .GetProperty("generatedParentSummary");
             Equal(boundary, summary.GetProperty("description").GetString(), "description clips at 4000 code points without splitting surrogate");
             Equal(supplementary, summary.GetProperty("playerExperience").GetString(), "accepted supplementary advisory prose is retained");
-            Equal(false, summary.TryGetProperty("notableEffects", out _), "no retired behavior report projection");
             Equal(debug, next.RootElement.GetProperty(side).GetProperty("generatedData")
                 .GetProperty("realization").GetProperty("selfEvaluation").GetString(), "full raw debug survives next-craft transport separately");
         }
@@ -627,12 +608,12 @@ internal static partial class EngineRuntimeChecks
         foreach (int byteLength in new[] { 64 * 1024, oldBodyLimit - 1, oldBodyLimit, oldBodyLimit + 1 })
         {
             string json = "{\"x\":\"" + new string('x', byteLength - 8) + "\"}";
-            using var content = GeneratorClient.CreateCraftHttpContent(json);
+            using var content = new GeneratorClient.PreparedGenerationRequest { PayloadJson = json }.CreateHttpContent(cacheOnly: false);
             Equal(byteLength > oldBodyLimit, content.Headers.ContentEncoding.Contains("gzip"), "all previously admissible requests remain plain JSON");
             if (byteLength <= oldBodyLimit)
                 Equal(json, await content.ReadAsStringAsync(), "legacy server sees original plain bytes");
         }
-        using (var unicode = GeneratorClient.CreateCraftHttpContent("{\"x\":\"" + new string('Ж', oldBodyLimit / 2) + "\"}"))
+        using (var unicode = new GeneratorClient.PreparedGenerationRequest { PayloadJson = "{\"x\":\"" + new string('Ж', oldBodyLimit / 2) + "\"}" }.CreateHttpContent(cacheOnly: false))
             Equal(true, unicode.Headers.ContentEncoding.Contains("gzip"), "threshold measures UTF-8 bytes, not UTF-16 characters");
         string large = new string('x', 3 * 1024 * 1024);
         foreach (string json in new[] { "{\"text\":\"Тест\"}", JsonSerializer.Serialize(new {
@@ -643,7 +624,7 @@ internal static partial class EngineRuntimeChecks
             itemB = new { ordered = new object?[] { null, 0, false, 0, null } },
         }) })
         {
-            using var content = GeneratorClient.CreateCraftHttpContent(json);
+            using var content = new GeneratorClient.PreparedGenerationRequest { PayloadJson = json }.CreateHttpContent(cacheOnly: false);
             byte[] wire = await content.ReadAsByteArrayAsync();
             bool compressed = content.Headers.ContentEncoding.Contains("gzip");
             Equal(System.Text.Encoding.UTF8.GetByteCount(json) > oldBodyLimit, compressed, "large requests use declared gzip");
@@ -673,7 +654,6 @@ internal static partial class EngineRuntimeChecks
 
     private static void CacheOnlyFlagPreservesRequest()
     {
-        var method = typeof(GeneratorClient).GetMethod("WithCacheOnlyFlag", BindingFlags.Static | BindingFlags.NonPublic)!;
         foreach (string json in new[] {
             "{}", " { } ",
             "{\"itemA\":{\"name\":\"Тест } ,\",\"damage\":17},\"itemB\":{\"id\":23},\"worldId\":7}",
@@ -681,7 +661,9 @@ internal static partial class EngineRuntimeChecks
             "{\"cacheOnly\":true}",
         })
         {
-            string result = (string)method.Invoke(null, new object[] { json })!;
+            var request = new GeneratorClient.PreparedGenerationRequest { PayloadJson = json };
+            using var content = request.CreateHttpContent(cacheOnly: true);
+            string result = content.ReadAsStringAsync().GetAwaiter().GetResult();
             JsonDocument parsed;
             try { parsed = JsonDocument.Parse(result); }
             catch (JsonException ex) { throw new InvalidOperationException("cache-only transform produced invalid JSON: " + result, ex); }
@@ -702,8 +684,9 @@ internal static partial class EngineRuntimeChecks
         foreach (string invalid in new[] { "[]", "null", "1", "\"text\"", "{", "" })
         {
             bool rejected = false;
-            try { method.Invoke(null, new object[] { invalid }); }
-            catch (TargetInvocationException ex) when (ex.InnerException is JsonException) { rejected = true; }
+            var request = new GeneratorClient.PreparedGenerationRequest { PayloadJson = invalid };
+            try { using var content = request.CreateHttpContent(cacheOnly: true); }
+            catch (JsonException) { rejected = true; }
             Equal(true, rejected, "non-object or malformed request rejected: " + invalid);
         }
     }

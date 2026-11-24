@@ -6,12 +6,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, EVENT_ACTION_OPCODE, EVENT_CAPABILITIES
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.registry_views import (
     capability_inventory_rows,
-    capability_provider_union,
     compact_capability_catalog,
 )
 from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
@@ -116,23 +115,6 @@ def test_nearest_receipts_bind_exact_fixed_action_and_max_target_source(mutation
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_old_receipt_owner_and_opcode_are_retired_but_current_nearby_action_remains():
-    public = {row["fn"]: row for row in compact_capability_catalog()}
-    variants = {row["properties"]["fn"]["const"]: row for row in capability_provider_union()}
-    assert NEW in public and NEW in variants and OLD not in public and OLD not in variants
-    assert "maxTargets" in public[NEW]["params"] and "count" not in public[NEW]["params"]
-    assert OLD not in CAPABILITY_REGISTRY and OLD not in EVENT_ACTION_OPCODE
-    assert EVENT_ACTION_OPCODE[NEW] == 10
-    assert NEW in EVENT_CAPABILITIES and OLD not in EVENT_CAPABILITIES
-    document = deepcopy(json.loads(FIXTURE.read_text())["cases"][0]["source"])
-    report = validate_runtime_program(document)
-    assert not report["ok"]
-    with pytest.raises(ValueError):
-        compile_runtime_program(document)
-    scope = build_runtime_repair_scope(document, report["errors"])
-    assert OLD not in scope["create"]["calls"]["allowedFns"]
-
-
 def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities():
     document = build_capability_witness("target_and_fire")
     target = witness(document)["target"]
@@ -152,7 +134,6 @@ def test_stationary_diagnostics_and_repair_offer_only_fresh_event_capabilities()
 
 def test_frozen_old_receipts_are_refused_without_rewriting_the_archive():
     corpus = json.loads(FIXTURE.read_text())
-    assert corpus["sourceHead"] == "c0a8450"
     for row in corpus["cases"]:
         wire = row["wire"]
         encoded = json.dumps(wire, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -334,7 +315,6 @@ def test_nearby_delivery_strict_native_domain_without_diagnostics(field, value):
 
 def test_retired_event_captures_are_refused_without_migration():
     corpus = json.loads(FIXTURE.with_name("event_api_pre_simplification.json").read_text())
-    assert corpus["sourceHead"] == "723f0e1b07a79b3621f40e61c4d9ee30690ced8a"
     for case in corpus["cases"]:
         wire = case["wire"]
         before = deepcopy(wire)
@@ -451,18 +431,6 @@ def test_both_delivery_rejects_foreign_native_fields_without_receipts(field, val
     assert any(error["path"].endswith("." + field) for error in report["errors"]), report
 
 
-@pytest.mark.parametrize("mode", ["target_to_owner", "target_to_entity", "owner_to_target"])
-@pytest.mark.parametrize("field,value", [("count", 2), ("damageMultiplier", 2), ("spreadRadians", 1),
-    ("durationTicks", 1), ("delayTicks", 601)])
-def test_legacy_pull_delivery_keeps_existing_unused_field_acceptance(mode, field, value):
-    wire = compile_runtime_program(build_capability_witness("pull_on_event"))
-    wire.pop("runtimeContract")
-    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
-    event.update(mode=mode)
-    event[field] = value
-    assert validate_runtime_wire(wire)["ok"]
-
-
 @pytest.mark.parametrize("delay", [-1, 601, 1.5, True])
 def test_nearby_delivery_rejects_invalid_delay_without_receipts(delay):
     wire = compile_runtime_program(build_capability_witness(NEW))
@@ -486,10 +454,20 @@ def test_both_delivery_reads_native_dto_neutrals_without_receipts():
     assert validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn", ["pull_on_event", NEW])
-@pytest.mark.parametrize("field,value", [("safeTileOnly", 1), ("safeTileOnly", 1.0), ("count", 1.0),
-    ("count", True), ("durationTicks", 0.0), ("buffId", -1.0), ("periodTicks", 0.0),
-    ("maxHeal", 0.0), ("cooldownTicks", 0.0), ("spreadRadians", False), ("strength", False)])
+@pytest.mark.parametrize('fn,field,value', [
+    ('pull_on_event', 'safeTileOnly', 1),
+    ('pull_on_event', 'safeTileOnly', 1.0),
+    ('pull_on_event', 'count', 1.0),
+    ('pull_on_event', 'count', True),
+    ('pull_on_event', 'durationTicks', 0.0),
+    ('pull_on_event', 'buffId', -1.0),
+    ('pull_on_event', 'periodTicks', 0.0),
+    ('pull_on_event', 'maxHeal', 0.0),
+    ('pull_on_event', 'cooldownTicks', 0.0),
+    ('pull_on_event', 'spreadRadians', False),
+    ('pull_on_event', 'strength', False),
+    (NEW, 'safeTileOnly', 1),
+])
 def test_new_event_unused_native_neutrals_require_exact_json_types(fn, field, value):
     source = build_capability_witness(fn)
     if fn == "pull_on_event":

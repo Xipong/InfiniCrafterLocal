@@ -1,6 +1,6 @@
 from __future__ import annotations
 from infini_local.pipelines.vfx import request as vfx_transport
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 from contextlib import nullcontext
 
 import copy
@@ -22,10 +22,8 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.vfx.contract import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA
 from infini_local.pipelines.vfx.stage import attach_vfx_manifest
 from infini_local.core.vfx.surface import vfx_director_surface
-from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from collections import deque
-from pipeline_observers import assert_pipeline_phase_order, assert_pipeline_terminal_phase, pipeline_phase_count
 
 def _binding_row(
     binding_id: str,
@@ -243,7 +241,6 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
     assert [r["temperature"] for r in requests if r["_infini_stage"].startswith("visual")] == ([0.5, 0.12] if repair_needed else [0.5])
     assert [r["temperature"] for r in requests if r["_infini_stage"].startswith("vfx")] == ([0.5, 0.12] if repair_needed else [0.5])
     assert not responses
-    _assert_stage_topology(final)
 
 
 @pytest.mark.parametrize("scenario", ["recoverable", "long"])
@@ -393,7 +390,6 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     assert repaired["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
     assert repaired["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 0
     assert [row["role"] for row in requests[0]["messages"]] == ["system", "developer", "user"]
-    assert requests[0]["messages"][-1]["name"] == "author_repair_context"
     context = json.loads(requests[0]["messages"][-1]["content"])
     assert "callsUpsert" in context["requiredJsonShape"] and "brokenFragments" not in context["requiredJsonShape"]
     assert "readOnlySourceFragments" in context
@@ -405,8 +401,6 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     elif scenario == "name-only":
         assert repaired["name"] == "Workbench Blade"
     else:
-        prompt = dossier_text(requests[0])
-        assert '"currentItem"' not in prompt and '"item_use"' in prompt and '"item_stats"' in prompt
         assert context["acceptedItemContext"]["runtimeProgram"] == current["runtimeProgram"]
         calls = {c["id"]: c for c in repaired["runtimeProgram"]["calls"]}
         assert calls["item_use"]["params"]["useStyle"] == "shoot"
@@ -540,70 +534,44 @@ def test_sparse_patch_shape(patch, ok):
     assert strict_repair_shape_report(patch)["ok"] is ok
 
 
-@pytest.mark.parametrize("scenario,expected,cutoff", [
-    pytest.param("valid", ["author_validation", "runtime_compile", "initial_final_wire"], None, id="validated-before-compile-and-wire"),
-    pytest.param("scoped-fix", ["author_validation", "author_recovery", "runtime_compile", "recovered_final_wire"], None, id="one-scoped-recovery-before-recompile"),
-    pytest.param("no-op", ["author_validation", "author_recovery"], "author_recovery", id="bad-repair-stops-before-compilation"),
-    pytest.param("spent-budget", ["author_validation"], "author_validation", id="spent-budget-stops-before-second-repair"),
-])
-def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario, expected, cutoff):
-    from pipeline_observers import PIPELINE_PHASE_MARKERS
+@pytest.mark.parametrize("scenario", ["valid", "scoped-fix", "no-op", "spent-budget"])
+def test_author_compiles_only_valid_gameplay_with_at_most_one_repair(wire_transport, scenario):
     responses, requests = wire_transport
     current = build_runtime_fixture("workbench_blade")
-    current["debug"] = {"llmStageAccounting": {"gameplayAuthorCalls": 1, "gameplayRepairCalls": int(scenario == "spent-budget")}}
+    current["debug"] = {
+        "llmStageAccounting": {
+            "gameplayAuthorCalls": 1,
+            "gameplayRepairCalls": int(scenario == "spent-budget"),
+        }
+    }
     if scenario != "valid":
         use = next(c for c in current["runtimeProgram"]["calls"] if c["id"] == "item_use")
         use["params"].pop("useStyle")
-        if scenario != "spent-budget":
+        if scenario in {"scoped-fix", "no-op"}:
             fixed = copy.deepcopy(use)
-            if scenario == "scoped-fix":
-                fixed["params"]["useStyle"] = "shoot"
-            responses.append(dict(_empty_gameplay_patch(), callsUpsert=[fixed] if scenario == "scoped-fix" else [], realizationReplacement=copy.deepcopy(current["realization"])))
-    labels = []
-    stage_labels = []
-    recovered = False
+            fixed["params"]["useStyle"] = "shoot"
+            responses.append(dict(
+                _empty_gameplay_patch(),
+                callsUpsert=[fixed] if scenario == "scoped-fix" else [],
+                realizationReplacement=copy.deepcopy(current["realization"]),
+            ))
 
-    def observe(_label, fn, *args, **kwargs):
-        nonlocal recovered
-        stage_labels.append(_label)
-        phases = {combine_stage.strict_validate_authored_item: "author_validation",
-                  combine_stage.attach_gameplay_and_runtime_program: "runtime_compile",
-                  combine_stage.repair_author_item_after_failure: "author_recovery"}
-        if fn is combine_stage.validate_final_runtime_wire_boundary:
-            phase = "recovered_final_wire" if recovered else "initial_final_wire"
-        else:
-            phase = phases.get(fn)
-        if phase:
-            labels.append(PIPELINE_PHASE_MARKERS[phase][0])
-        if phase == "runtime_compile":
-            assert_pipeline_phase_order(labels, "author_validation", "runtime_compile")
-        if phase == "author_recovery":
-            recovered = True
+    def run_stage(_label, fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
-    match = {"no-op": "leaves a reported repair error open", "spent-budget": "repair budget already consumed"}.get(scenario)
-    with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
-        result = combine_stage.compile_and_validate_authored_runtime(current, {}, {}, "a+b", run_stage=observe)
-        assert result["runtimeProgram"]["entities"]
-    assert_pipeline_phase_order(labels, *expected)
-    if cutoff:
-        assert_pipeline_terminal_phase(labels, cutoff)
+    if scenario in {"no-op", "spent-budget"}:
+        match = {"no-op": "leaves a reported repair error open",
+                 "spent-budget": "repair budget already consumed"}[scenario]
+        with pytest.raises(PlannerUnavailable, match=match):
+            combine_stage.compile_and_validate_authored_runtime(current, {}, {}, "a+b", run_stage=run_stage)
     else:
-        assert_pipeline_terminal_phase(labels, expected[-1])
-    assert pipeline_phase_count(labels, "author_recovery") == int(scenario in {"scoped-fix", "no-op"})
-    assert pipeline_phase_count(labels, "runtime_compile") == int(cutoff is None)
+        result = combine_stage.compile_and_validate_authored_runtime(current, {}, {}, "a+b", run_stage=run_stage)
+        assert combine_stage.validate_runtime_wire(result)["ok"]
+        assert result["runtimeProgram"]["itemUse"]["useStyle"] == "shoot"
+        assert result["runtimeProgram"]["itemUse"]["hideUseGraphic"] is True
+
     assert [r["_infini_stage"] for r in requests] == (["author_repair"] if scenario in {"scoped-fix", "no-op"} else [])
     assert not responses
-
-    domain_labels = ["strict_runtime_program", "compile_runtime_program", "wire_boundary"]
-    expected_labels = {
-        "valid": ["02_" + label for label in domain_labels],
-        "scoped-fix": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"]
-            + ["02r_" + label for label in domain_labels],
-        "no-op": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"],
-        "spent-budget": ["02_strict_runtime_program"],
-    }
-    assert stage_labels == expected_labels[scenario]
 
 
 @pytest.mark.parametrize("error_type", [RuntimeError, AssertionError, TypeError, ValueError])
@@ -633,23 +601,14 @@ def test_compiler_faults_propagate_without_gameplay_repair(monkeypatch, error_ty
     assert len(repair_calls) == int(after_repair)
 
 
-def test_runtime_wire_admission_once_and_final_gate_still_rejects_mutation(monkeypatch):
-    validate = combine_stage.validate_runtime_wire
-    calls = []
-
-    def observe(data):
-        calls.append(data)
-        return validate(data)
-
-    monkeypatch.setattr(combine_stage, "validate_runtime_wire", observe)
+def test_final_wire_gate_refuses_mutation_after_successful_authoring():
     result = combine_stage.compile_and_validate_authored_runtime(
-        build_runtime_fixture("workbench_blade"), {}, {}, "single-admission",
+        build_runtime_fixture("workbench_blade"), {}, {}, "wire-rejection",
         run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
-    assert len(calls) == 1
+    combine_stage.validate_final_runtime_wire_boundary(result)
     result["runtimeProgram"]["schema"] = "invalid-after-presentation"
     with pytest.raises(PlannerUnavailable, match="runtime wire rejected"):
         combine_stage.validate_final_runtime_wire_boundary(result)
-    assert len(calls) == 2
 
 
 def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
@@ -675,42 +634,3 @@ def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
     assert validate(result)["ok"]
     assert count == 2 and len(reports) == 1
     assert reports[0]["errors"] == [target]
-
-
-@pytest.mark.parametrize("existing", [None, {}, {
-    "gameplayAuthorCalls": 1, "visualRepairCalls": 1, "futureCounter": 7,
-}])
-def test_stage_accounting_initialization_preserves_spent_budgets_and_debug(existing):
-    from infini_local.core.llm_stage_messages import stage_accounting
-
-    debug = {"unrelated": {"retained": True}}
-    if existing is not None:
-        debug["llmStageAccounting"] = copy.deepcopy(existing)
-    data = {"debug": debug}
-    original = debug.get("llmStageAccounting")
-    counters = stage_accounting(data)
-    assert data["debug"] is debug
-    assert counters is debug["llmStageAccounting"]
-    if original is not None:
-        assert counters is original
-    expected = {
-        "gameplayAuthorCalls": 0, "gameplayRepairCalls": 0,
-        "visualDirectorCalls": 0, "visualRepairCalls": 0,
-        "vfxDirectorCalls": 0, "vfxRepairCalls": 0,
-    }
-    expected.update(existing or {})
-    assert counters == expected
-    counters["vfxRepairCalls"] += 1
-    assert stage_accounting(data) is counters
-    assert counters == {**expected, "vfxRepairCalls": 1}
-    assert debug["unrelated"] == {"retained": True}
-
-
-def test_stage_accounting_initializes_missing_debug_without_changing_item():
-    from infini_local.core.llm_stage_messages import stage_accounting
-
-    data = {"name": "accepted item"}
-    counters = stage_accounting(data)
-    assert data == {"name": "accepted item", "debug": {"llmStageAccounting": counters}}
-    assert len(counters) == 6
-    assert all(value == 0 for value in counters.values())

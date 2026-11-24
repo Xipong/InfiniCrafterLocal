@@ -18,7 +18,6 @@ from urllib.parse import parse_qs, urlsplit
 import infini_local.pipelines.transport.http as transport_http
 import pytest
 from infini_local.core import llm_config
-from infini_local.core.images import config
 from infini_local.pipelines.transport import client as llm
 from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.services import codex_auth as auth
@@ -766,7 +765,6 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     monkeypatch.setattr(visual_config, "BG_COLOR", color)
     monkeypatch.setattr(visual_config, "REMOVE_BG", remove_bg)
     monkeypatch.setattr(visual_config, "BG_REMOVE_MODE", mode)
-    assert "openai_codex" in config.SUPPORTED_IMAGE_BACKENDS
     import base64
     import contextlib
     import io
@@ -776,7 +774,6 @@ def test_codex_dispatch_writes_verified_png_and_preserves_authored_prompt(tmp_pa
     from infini_local.pipelines.images import stage as visual
     from infini_local.services import codex_auth as auth
     from PIL import Image
-    assert hasattr(backend, "generate_openai_codex"), "Codex is not connected to sprite dispatch"
     stream = io.BytesIO()
     Image.new("RGBA", (64, 64), (15, 120, 240, 255)).save(stream, format="PNG")
     calls, gate = [], []

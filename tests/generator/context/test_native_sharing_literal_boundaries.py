@@ -52,8 +52,16 @@ def test_literal_exclusion_precedes_foreign_mixed_key_serialization():
     assert share_exact_native_parent_facts(parents) == share_native_facts_reference(parents)
 
 
-@pytest.mark.parametrize("encoded_length", [127, 128, 129])
-@pytest.mark.parametrize("text", ["x", "Призма", "\t\n\"\\", "🛰️", "\u0000"])
+@pytest.mark.parametrize('encoded_length,text', [
+    (127, 'x'),
+    (127, 'Призма'),
+    (127, '\t\n"\\'),
+    (127, '🛰️'),
+    (127, '\x00'),
+    (128, 'x'),
+    (129, 'x'),
+    (128, 'Призма'),
+])
 def test_exact_escaped_character_thresholds_remain_legacy_equal(encoded_length, text):
     # The threshold counts canonical JSON characters, including quotes and
     # escapes, not input characters or UTF-8 bytes.

@@ -148,7 +148,10 @@ def test_disk_edit_refuses_old_in_memory_and_on_disk_scope(scope, monkeypatch):
     attempts.clear()
     assert negotiation.snapshot()[-1]["state"] == "saved"
     old = list(negotiation.bootstrap.CACHE_DIR.glob("llm-negotiation-v1/*.json"))
-    assert len(old) == 1 and client._RESPONSES_CAPABILITY
+    assert len(old) == 1
+    client._llm_json_single_context(PAYLOAD, 1, context)
+    assert attempts == ["chat"]
+    attempts.clear()
     config.write_bytes(raw+b"# edit after acknowledgement\n")
     assert negotiation.snapshot()[-1]["state"] == "saved_inactive"
     client._llm_json_single_context(PAYLOAD,1,context)
@@ -188,12 +191,15 @@ def test_request_shape_recovery_and_unresolved_models_are_attempt_only(scope, mo
 ])
 def test_json_after_refusal_or_nonfinal_completion_cannot_save(scope, monkeypatch, finish_reason, message_extra):
     _, _, context = scope
+    attempts = []
     def responses(*args):
+        attempts.append("responses")
         raise HTTPError("https://example.invalid/fixture", 404, "rejected", None, None)
     monkeypatch.setattr(client, "_llm_responses_json_single_context", responses)
     result = {"choices":[{"finish_reason":finish_reason,"message":{"content":'{}',**message_extra}}]}
     monkeypatch.setattr(client, "_llm_chat_json_single_context", lambda *a: result)
-    client._llm_json_single_context(PAYLOAD,1,context)
-    assert negotiation.snapshot()[-1]["state"] == "recovery_failed"
+    for _ in range(2):
+        assert client._llm_json_single_context(PAYLOAD, 1, context)["choices"] == result["choices"]
+        assert negotiation.snapshot()[-1]["state"] == "recovery_failed"
     assert not list(negotiation.bootstrap.CACHE_DIR.glob("llm-negotiation-v1/*.json"))
-    assert not client._RESPONSES_CAPABILITY
+    assert attempts == ["responses", "responses"]

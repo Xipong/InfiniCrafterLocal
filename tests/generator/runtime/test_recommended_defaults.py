@@ -17,13 +17,12 @@ def test_accept_updates_only_previewed_lines_and_keeps_unrelated_bytes(tmp_path,
                 b'INFINI_LLM_TEMPERATURE=0.5\r\nINFINI_EXTENSION=retain\r\n')
     config.write_bytes(original)
     offer = owner.defaults_offer(config)
-    assert offer['version'] == '0.5.02'
     row = next(change for change in offer['changes'] if change['key'] == 'INFINI_LLM_MAX_TOKENS')
-    assert row['current'] == '9000' and row['recommended'] == GENERATION_DEFAULTS[row['key']]
+    assert row['current'] == '9000' and row['recommended'] == '18000'
     assert {change['key'] for change in offer['changes']} == {'INFINI_LLM_MAX_TOKENS'}
     assert config.read_bytes() == original  # Opening/preview never writes.
     owner.decide_defaults(config, offer['revision'], accept=True)
-    assert config.read_bytes() == original.replace(b'"9000"', ('"' + row['recommended'] + '"').encode())
+    assert config.read_bytes() == original.replace(b'"9000"', b'"18000"')
     assert owner.defaults_offer(config)['changes'] == []
 
 
@@ -146,19 +145,15 @@ def test_duplicate_budget_preview_matches_runtime_first_assignment(tmp_path, mon
 
 
 def test_runtime_ui_and_example_use_same_recommended_generation_defaults():
-    from pathlib import Path
-    import re
+    from infini_local.desktop import settings_env
     from infini_local.desktop.settings_schema import DEFAULTS
     from infini_local.core import llm_config
-    example = (GENERATOR_ROOT / 'config.example.env').read_text()
-    assert DEFAULTS['INFINI_LLM_MAX_TOKENS'] == '18000'
-    assert llm_config.LLM_MAX_TOKENS == 18000
-    assert DEFAULTS['INFINI_LLM_TIMEOUT'] == '600'
-    assert DEFAULTS['INFINI_LLM_REASONING_MODE'] == 'medium'
-    assert DEFAULTS['INFINI_LLM_TEMPERATURE'] == '0.5'
-    assert DEFAULTS['INFINI_VISUAL_DIRECTOR_TEMPERATURE'] == '0.45'
-    for key in ('INFINI_LLM_MAX_TOKENS', 'INFINI_LLM_TIMEOUT', 'INFINI_LLM_REASONING_MODE', 'INFINI_LLM_TEMPERATURE', 'INFINI_VISUAL_DIRECTOR_TEMPERATURE'):
-        assert re.search(r'^' + key + '=' + re.escape(DEFAULTS[key]) + r'$', example, re.MULTILINE)
+
+    example = settings_env.parse_env(GENERATOR_ROOT / 'config.example.env')
+    assert llm_config.LLM_MAX_TOKENS == int(DEFAULTS['INFINI_LLM_MAX_TOKENS'])
+    keys = ('INFINI_LLM_MAX_TOKENS', 'INFINI_LLM_TIMEOUT', 'INFINI_LLM_REASONING_MODE',
+            'INFINI_LLM_TEMPERATURE', 'INFINI_VISUAL_DIRECTOR_TEMPERATURE')
+    assert {key: example.get(key) for key in keys} == {key: DEFAULTS[key] for key in keys}
 
 
 def test_multi_setting_accept_preserves_explicit_stage_budgets_and_unchanged_fields(tmp_path):

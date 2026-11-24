@@ -3,7 +3,6 @@ from suite_paths import REPO_ROOT, TEST_ROOT
 import copy
 import json
 from pathlib import Path
-import re
 
 import pytest
 
@@ -14,19 +13,28 @@ from prompt_packet_helpers import request_dossier, expand_native_source_referenc
 ROOT = REPO_ROOT
 
 
+def source_rows(report):
+    path = ROOT / 'contracts/reports' / report
+    return [row for source in json.loads(path.read_text(encoding='utf-8'))['sources']
+            for row in source['records']]
+
+
 def equipment(item_id):
-    text = (ROOT / 'mod/InfiniCrafterLocal/Common/Services/Generation/NativeEquipmentFactsCatalog.g.cs').read_text()
-    records = [row for raw in re.findall(r'"""(.*?)"""', text, re.S) for row in json.loads(raw)]
-    row = next(row for row in records if row.get('itemId') == item_id)
+    row = next(row for row in source_rows('native_equipment_sources.generated.json')
+               if row.get('itemId') == item_id)
     return {'source': 'verified_native_equipment_source_branches',
             'scope': 'source contributions; full sets conditional; other effects unknown',
             'equippedContributions': row}
 
 
+def buff_reference(receiver, buff_id):
+    row = next(row for row in source_rows('native_buff_effect_sources.generated.json')
+               if (row['receiver'], row['buffId']) == (receiver, buff_id))
+    return row | {'source': 'certified_native_buff_operation_fragments'}
+
+
 def regeneration():
-    text = (ROOT / 'mod/InfiniCrafterLocal/Common/Services/Generation/NativeBuffEffectCatalog.g.cs').read_text()
-    raw = re.search(r'\["player:2"\] = """(.*?)"""', text, re.S).group(1)
-    return json.loads(raw) | {'source': 'certified_native_buff_operation_fragments'}
+    return buff_reference('player', 2)
 
 
 def test_exact_equipment_records_use_hp_per_second_and_do_not_invert_mining_time():
@@ -112,15 +120,13 @@ def test_actual_author_request_uses_one_source_vocabulary_without_mutating_paren
     assert effect['stat'] == 'miningUseTimeMultiplier' and effect['value'] == -0.1
     buff = dossier['parents']['B']['packet']['raw']['item']['nativeBuffEffectReference']
     assert buff['fragments'][0]['operations'][0]['value'] == 2
-    assert buff['fragments'][0]['condition']['nativeControlFlowMustReachTest'] == 469
+    assert buff['fragments'][0]['condition'] == b['nativeBuffEffectReference']['fragments'][0]['condition']
     assert (a, b) == before
     assert raw_parent_card_for_llm(a)['raw']['item']['lifeRegen'] == 4
 
 
 def test_npc_counter_rate_requires_producer_unit_evidence_and_keeps_cadence_condition():
-    text = (ROOT / 'mod/InfiniCrafterLocal/Common/Services/Generation/NativeBuffEffectCatalog.g.cs').read_text()
-    buff = json.loads(re.search(r'\["npc:20"\] = """(.*?)"""', text, re.S).group(1))
-    buff['source'] = 'certified_native_buff_operation_fragments'
+    buff = buff_reference('npc', 20)
     source = {'item': {'nativeBuffEffectReference': buff}}
     original = buff['fragments'][0]['operations'][0]
     projected = parent_stat_context(source)['item']['nativeBuffEffectReference']['fragments'][0]['operations'][0]

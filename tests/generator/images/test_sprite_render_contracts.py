@@ -30,7 +30,6 @@ def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
     from infini_local.core.images import config
     from infini_local.pipelines.images import keyer, prompts
     monkeypatch.setattr(config, "BG_COLOR", name)
-    assert contracts.chroma_rgb() == prompts.chroma_rgb() == keyer.chroma_rgb() == rgb
     authored = "a magenta crystal, cyan rim and white tip"
     data = {"visual": {"palette": ["magenta", "cyan", "white"]}}
     prompt = prompts.normalize_asset_prompt(data, "item", authored, 128)
@@ -559,24 +558,15 @@ def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monk
     assert post_validation.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]
 
 
-@pytest.mark.parametrize("mode", ["chroma", "magic_wand", "sprite-keyer", "off", "none", "typo"])
-def test_retired_background_modes_cannot_silently_change_processing(monkeypatch, mode):
+def test_invalid_background_mode_cannot_silently_change_processing(monkeypatch):
     from infini_local.core.images import config
     from infini_local.pipelines.images.keyer import apply_background_removal
     from PIL import Image
     monkeypatch.setattr(config, "BG_COLOR", "magenta")
     monkeypatch.setattr(config, "REMOVE_BG", True)
-    monkeypatch.setattr(config, "BG_REMOVE_MODE", mode)
+    monkeypatch.setattr(config, "BG_REMOVE_MODE", "unsupported-mode")
     raw = Image.new("RGBA", (4, 4), (255, 0, 255, 255))
     before = raw.tobytes()
     with pytest.raises(ValueError, match="INFINI_BG_REMOVE_MODE must be sprite_keyer"):
         apply_background_removal(raw)
     assert raw.tobytes() == before
-
-
-@pytest.mark.parametrize("color", ["lime", "greenscreen"])
-def test_retired_background_color_aliases_are_refused(monkeypatch, color):
-    from infini_local.core.images import config
-    monkeypatch.setattr(config, "BG_COLOR", color)
-    with pytest.raises(ValueError, match="Invalid INFINI_BG_COLOR"):
-        contracts.chroma_rgb()

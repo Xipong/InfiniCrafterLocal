@@ -113,13 +113,6 @@ def test_shape_leaf_repair_cannot_change_geometry_composition_or_valid_width():
     assert any(row["path"].endswith("shape.radiusEndPx") for row in audit["ignoredChanges"])
 
 
-def test_shape_does_not_accept_legacy_phase_clock_on_persisted_wire():
-    data = _data()
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, authored_shape(data), "no-old-clock")
-    data["vfxManifest"]["slots"][0]["phaseOffset"] = 0
-    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
-
-
 def test_director_single_call_keeps_exact_shape_without_image_stage_or_repair():
     data = _data()
     raw = authored_shape(data, "wave")

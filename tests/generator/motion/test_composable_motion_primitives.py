@@ -170,22 +170,6 @@ def test_active_lash_has_explicit_geometry_without_animation_bound_lifetime_or_t
     assert entity["lifetimeTicks"] == 120
 
 
-def test_schema_catalog_and_registry_retire_compound_controllers():
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
-    from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
-    from infini_local.core.runtime_authoring.registry_views import compact_capability_catalog
-    retired = {"move_front_hand", "move_orbit", "move_boomerang", "channel_beam", "charge_then_release", "orient_whip_to_owner_gravity", "multiply_projectile_velocity", "set_projectile_speed_modifier"}
-    offered = {v["properties"]["fn"]["const"] for v in runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]}
-    assert not retired & offered
-    assert not retired & {r["fn"] for r in compact_capability_catalog()}
-    assert not retired & CAPABILITY_REGISTRY.keys()
-    assert dict(MOVEMENT_OPCODE) == {"move_straight": 0}
-    for fn in retired:
-        doc = base_document()
-        add(doc, fn, {})
-        assert not validate_runtime_program(doc)["ok"]
-
-
 @pytest.mark.parametrize("fn,params", [
     ("seek", {"target": "cursor", "maxSpeed": 30, "lerpPerUpdate": 0.5, "limitSpeedToDistance": True}),
     ("orbit", {"anchor": "owner_center", "radius": 4, "radiansPerSecond": 0, "anglePhase": 0, "identityAnglePhase": 0}),

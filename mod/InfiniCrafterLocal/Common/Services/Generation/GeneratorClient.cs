@@ -412,12 +412,8 @@ public sealed partial class GeneratorClient
         return null;
     }
 
-    // Lossless transport normalization only. The receiver decodes before strict
-    // parsing, recipe identity, cache lookup, or model-facing projection. Compress
-    // large requests only when doing so reduces the body size.
-    internal static HttpContent CreateCraftHttpContent(string payloadJson)
-        => PreparedCraftHttpPayload.Create(payloadJson).CreateContent();
-
+    // Lossless transport normalization: compression does not change the request
+    // seen by parsing, recipe identity, cache lookup or model-facing projection.
     private sealed class PreparedCraftHttpPayload
     {
         private readonly byte[] bytes;

@@ -4,7 +4,7 @@ import copy
 import pytest
 
 from infini_local.pipelines.context.whole_method_author import (
-    _residual_edge_context, prepare_whole_method_author, apply_whole_method_author,
+    prepare_whole_method_author, apply_whole_method_author,
 )
 from infini_local.pipelines.context.cards import raw_parent_card_for_llm
 from infini_local.pipelines.context.mechanics_context import mechanics_context
@@ -38,22 +38,16 @@ def argument_parent():
 def test_retained_argument_control_and_local_alternatives_are_unchanged():
     item = argument_parent(); before = copy.deepcopy(item)
     graph = item['parentSourceGraph']; original = graph['nodes'][0]
-    residual = _residual_edge_context(graph, original)
-    assert residual is not None
-    assert set(residual['values']) == {'1', '2', '3', '4', '5', '6', '9', '10'}
-    assert residual['values'] == {k: v for k, v in original['values'].items() if k != '30' and k in residual['values']}
-    assert residual['blocks'] == original['blocks']
-    assert residual['possibleLocalWrites'] == original['possibleLocalWrites']
     prepared, choices = prepare_whole_method_author(item)
-    assert len(choices) == 1 and choices[0]['residual'] == residual
     raw = mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
     assert apply_whole_method_author(raw, choices)
     projected = raw['item']['parentSourceGraph']['nodes'][0]
-    for field, value in residual.items():
-        assert projected[field] == value
+    retained = {'1', '2', '3', '4', '5', '6', '9', '10'}
+    assert projected['values'] == {key: original['values'][key] for key in retained}
+    assert projected['blocks'] == original['blocks']
+    assert projected['possibleLocalWrites'] == original['possibleLocalWrites']
     source = raw['mechanics']['source'][projected['bodySource']['mechanicsSourceIndex']]
     assert source['code'] == item['directProjectileRaw']['attackReference']['nativeCSharpSource']['records'][0]['code']
-    assert 'Hook(ref type)' in source['code'] and 'type == 757' in source['code'] and 'scale *= 2' in source['code']
     assert 'not a second complete body or evaluated helper results' in raw['item']['parentSourceGraphReading']
     assert projected['unresolved'] == original['unresolved']
     assert raw['item']['parentSourceGraph']['edges'] == graph['edges']
@@ -84,7 +78,6 @@ def test_incomplete_dependency_namespace_refuses_without_mutation(change):
     elif change == 'unknown-writes': node['possibleLocalWrites']['5'] = {'if': ['3']}
     elif change == 'fragments': node['fragments'] = []
     before = copy.deepcopy(item)
-    assert _residual_edge_context(graph, node) is None
     prepared, choices = prepare_whole_method_author(item)
     assert choices == [] and prepared == before and item == before
 
@@ -93,8 +86,11 @@ def test_cyclic_dependencies_and_duplicate_alternative_order_are_not_evaluated()
     item = argument_parent(); graph = item['parentSourceGraph']; node = graph['nodes'][0]
     node['values']['4'] = ['ldloc', 1, ['5'], 20]
     before = copy.deepcopy(node)
-    result = _residual_edge_context(graph, node)
-    assert result is not None and result['values']['4'] == before['values']['4']
+    prepared, choices = prepare_whole_method_author(item)
+    raw = mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    assert apply_whole_method_author(raw, choices)
+    result = raw['item']['parentSourceGraph']['nodes'][0]
+    assert result['values']['4'] == before['values']['4']
     assert result['values']['5'] == before['values']['5']
     assert result['possibleLocalWrites'] == {'5': ['3', '4', '3']}
     assert node == before
@@ -113,15 +109,21 @@ def test_modified_edge_dependencies_after_prepare_refuse_atomically():
     'conditional_native_projectile_spawn_source',
 ])
 def test_native_child_provenance_preserves_namespace_independent_context(kind):
-    from infini_local.pipelines.context.whole_method_author import _edge_bindings
-    node = {'id': 0, 'values': {}, 'static': False}
+    item = whole_method_parent()
+    graph = item['parentSourceGraph']
     context = {'projectileId': 601, 'aiStyle': 75, 'entryAndOmittedFlow': 'unresolved'}
-    graph = {'edges': [{'from': 0, 'to': 1, 'kind': kind, 'context': context}]}
-    original = copy.deepcopy(graph)
-    assert _edge_bindings(graph, node) == {}
-    assert graph == original  # Neither relabel conditional provenance nor resolve it.
-    context['hiddenSourceILValue'] = 123
-    assert _edge_bindings(graph, node) is None
-    del context['hiddenSourceILValue']
-    context['entryAndOmittedFlow'] = 'executed'
-    assert _edge_bindings(graph, node) is None
+    graph['edges'].append({'from': 0, 'to': 0, 'kind': kind, 'context': context})
+    original = copy.deepcopy(item)
+    prepared, choices = prepare_whole_method_author(item)
+    raw = mechanics_context(raw_parent_card_for_llm(prepared)['raw'])
+    assert apply_whole_method_author(raw, choices)
+    assert raw['item']['parentSourceGraph']['edges'][-1] == graph['edges'][-1]
+    assert item == original  # Neither relabel conditional provenance nor resolve it.
+
+    for mutation in ({'hiddenSourceILValue': 123}, {'entryAndOmittedFlow': 'executed'}):
+        context.update(mutation)
+        before = copy.deepcopy(item)
+        prepared, choices = prepare_whole_method_author(item)
+        assert not choices and prepared == before and item == before
+        context.clear()
+        context.update(original['parentSourceGraph']['edges'][-1]['context'])

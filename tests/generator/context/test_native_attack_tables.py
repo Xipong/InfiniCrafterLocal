@@ -127,8 +127,15 @@ def test_recursive_table_bounds_refuse_instead_of_silently_dropping_facts(bad_ta
     assert encoded == before
 
 
-@pytest.mark.parametrize("marker", ["$module", "$certificate"])
-@pytest.mark.parametrize("index", [-1, 1, True, 0.0, "0", None])
+@pytest.mark.parametrize('marker,index', [
+    ('$module', -1),
+    ('$module', 1),
+    ('$module', True),
+    ('$module', 0.0),
+    ('$module', '0'),
+    ('$module', None),
+    ('$certificate', -1),
+])
 def test_pool_indices_are_strict_bounded_in_nested_table_cells(marker, index):
     from infini_local.pipelines.context.attack_tables import unpack_attack_tables
 

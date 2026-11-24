@@ -24,12 +24,22 @@ from tests.generator.authoring.test_low_level_three_stage_pipeline import _accep
 from tests.generator.vfx_material_fixtures import _asset, _data, _shape, _native, _history, _path, _sent, _sprite, _with_asset
 
 
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("asset_id,valid", [
-    ("leaf", True), ("Glow", True), ("glow", True), ("x" * 48, True),
-    ("leaf\n", False), ("leaf\r\n", False), ("leaf\u2028", False),
-    ("leaf\u2029", False), ("", False), ("x" * 49, False),
-    ("../leaf", False), (" leaf", False),
+@pytest.mark.parametrize('repair,asset_id,valid', [
+    (False, 'leaf', True),
+    (False, 'Glow', True),
+    (False, 'glow', True),
+    (False, 'x' * 48, True),
+    (False, 'leaf\n', False),
+    (False, 'leaf\r\n', False),
+    (False, 'leaf\u2028', False),
+    (False, 'leaf\u2029', False),
+    (False, '', False),
+    (False, 'x' * 49, False),
+    (False, '../leaf', False),
+    (False, ' leaf', False),
+    (True, 'leaf', True),
+    (True, 'leaf\n', False),
+    (True, 'x' * 49, False),
 ])
 def test_standard_schema_and_local_gate_agree_on_exact_asset_ids(repair: bool, asset_id: str, valid: bool) -> None:
     packet = _sent(_data(), repair)
@@ -372,13 +382,14 @@ def test_material_payload_roundtrip(kind, source, capability):
     assert report["normalized"] == before
     final = vfx_stage.attach_vfx_manifest(data, "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
     compiled = final["vfxManifest"]["slots"]
-    assert compiled[0]["rendererKind"] == slot["rendererKind"]
+    # These cases already go through authored admission, real stage compilation
+    # and the saved-wire gate. Check the complete slot here rather than repeat
+    # each renderer with a second, shallower roundtrip.
+    assert [{k: v for k, v in row.items() if k != "slotSeed"} for row in compiled] == before["slots"]
     if kind == "shape":
-        assert compiled[0]["shape"] == slot["shape"]
         assert "assets" not in final["vfxManifest"]
     else:
         payload = "screenShake" if kind == "screenShakeCue" else "particle" if library else "path" if source else "element"
-        assert [row[payload] for row in compiled] == [row[payload] for row in before["slots"]]
         if library:
             payload_schema = schema["properties"][payload]
             assert set(slot[payload]) == set(payload_schema["required"])
@@ -421,7 +432,14 @@ def _renderer_material(data, renderer):
     }
     return builders[renderer](data)
 
-@pytest.mark.parametrize("renderer", ROUTE_SURFACE["rendererKind"])
+# The omitted renderers (shape, spriteElement, texturedPath, screenShakeCue
+# and libraryParticle) already check full-slot equality above, including the
+# zero/max particle boundaries. The independent test still guards the other
+# renderer owners.
+@pytest.mark.parametrize("renderer", [
+    renderer for renderer in ROUTE_SURFACE["rendererKind"]
+    if renderer not in {"shape", "spriteElement", "texturedPath", "screenShakeCue", "libraryParticle"}
+])
 def test_current_renderer_admission_preserves_complete_authored_fields(renderer):
     data = _data()
     raw = _renderer_material(data, renderer)

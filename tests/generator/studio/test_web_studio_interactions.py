@@ -404,7 +404,6 @@ def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatc
 
     app, controller, _server, config = studio
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=saved value\n'), encoding='utf-8')
-    app.values.update(INFINI_KEEP='old value', INFINI_REMOVED='stale removed value')
     app.values = {'INFINI_REMOVED': 'stale removed value'}
     values = parse_env(config)
     values['INFINI_KEEP'] = 'explicit new value'
@@ -421,7 +420,7 @@ def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatc
     app.drain_until(lambda: result['status'] != 'running')
     assert result['status'] == 'succeeded'
     assert parse_env(config)['INFINI_KEEP'] == 'explicit new value'
-    for actual in (parse_env(config), app.values, app.values, result['savedValues']):
+    for actual in (parse_env(config), result['savedValues']):
         if edit_removed:
             assert actual['INFINI_REMOVED'] == 'explicit restore'
         else:
@@ -437,7 +436,6 @@ def test_partial_save_keeps_current_disk_retained_keys(studio):
     app, controller, _server, config = studio
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=current disk value\n'), encoding='utf-8')
     app.values.update(INFINI_KEEP='stale adapter value', INFINI_REMOVED='stale removed value')
-    app.values = {'INFINI_REMOVED': 'stale removed value'}
     result = command(controller, 'save', values={'INFINI_PROMPT_STYLE': 'edited'})
     assert result['status'] == 'succeeded'
     assert parse_env(config)['INFINI_KEEP'] == 'current disk value'

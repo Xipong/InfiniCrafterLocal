@@ -916,12 +916,12 @@ def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_
     assert capture.code == status
     if status != 200:
         assert trace.read_text() == "retain diagnostic history\n"
-        assert combine_endpoint._GENERATION_ACCEPTING is True
+        assert combine_endpoint.generation_activity_snapshot()["accepting"] is True
         assert handler.rfile.read_calls == 0
     elif path == "/trace_clear":
         assert trace.read_bytes() == b""
     else:
-        assert combine_endpoint._GENERATION_ACCEPTING is False
+        assert combine_endpoint.generation_activity_snapshot()["accepting"] is False
         assert capture.payload["forced"] is True
         assert stopped.wait(2)
 

@@ -33,7 +33,7 @@
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.
 5. Для historical audit не называй builder messages exact HTTP wire; пустой physical-attempt list с unobserved owner — unknown, не «0 retries». Debug/manifest previews отдельно от полного сохранённого trace.
 
-Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Import isolation/order проверяет `test_runtime_import_boundaries.py`; это не замена behavioral tests.
+Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Запуск самостоятельных VFX и parameter contracts без генерационного слоя проверяет `test_runtime_import_boundaries.py`.
 
 <a id="tree"></a>
 ## Родительский граф: общие эффекты игрока

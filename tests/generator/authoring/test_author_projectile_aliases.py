@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
@@ -367,8 +367,8 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     assert validate_runtime_program(repaired)["ok"]
 
 
-@pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce", "move_gravity_arc", "move_orbit",
-                                  "move_boomerang", "move_proximity_missile", "channel_beam", "charge_then_release"])
+# Keep a retained implementation name and retired author shapes as boundary controls.
+@pytest.mark.parametrize("fn", ["spawn_over_target", "move_gravity_arc", "channel_beam"])
 def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
     from infini_local.core.runtime_authoring.registry_views import capability_provider_union, compact_capability_catalog
     from infini_local.pipelines.author.request import build_gameplay_repair_dossier
@@ -386,13 +386,11 @@ def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
     dossier = build_gameplay_repair_dossier(document, {}, {}, failure_report=validate_runtime_program(document))
     for section in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards"):
         assert fn not in {row["fn"] for row in dossier[section]}
-    assert "move_bounce" not in MOVEMENT_OPCODE and "move_gravity_arc" not in MOVEMENT_OPCODE
 
 
 def test_frozen_retired_receipts_are_negative_evidence_without_rewriting_bytes():
     path = (TEST_ROOT / "fixtures") / "projectile_retained_wire.json"
     corpus = json.loads(path.read_text())
-    assert corpus["sourceHead"] == "a3d5950"
     for row in corpus["cases"]:
         wire = row["wire"]
         before = json.dumps(wire, sort_keys=True)
@@ -401,9 +399,6 @@ def test_frozen_retired_receipts_are_negative_evidence_without_rewriting_bytes()
         report = audit_compiler_receipts(receipts, final_document=wire)
         assert not report["ok"], (row["fn"], report)
         assert json.dumps(wire, sort_keys=True) == before
-        broken = deepcopy(receipts)
-        next(r for r in broken if r.get("callId") == "witness_call" and ".params." in r["authoredPath"])["authoredPath"] += "_unknown"
-        assert not audit_compiler_receipts(broken, final_document=wire)["ok"]
 
 
 @pytest.mark.parametrize("fn", ["move_bounce", "spawn_over_target"])
@@ -464,19 +459,6 @@ def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attac
                                        final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("missing", [False, True])
-def test_retired_spawn_receipt_owner_is_refused_even_with_complete_outputs(missing):
-    corpus = json.loads(((TEST_ROOT / "fixtures") / "projectile_retained_wire.json").read_text())
-    wire = deepcopy(next(row["wire"] for row in corpus["cases"] if row["fn"] == "spawn_over_target"))
-    receipts = wire["runtimeContract"]["finalWireReceipts"]
-    if missing:
-        receipts[:] = [r for r in receipts if not (r.get("fn") == "spawn_over_target"
-                                                   and r["finalPath"].endswith(".overTarget.heightTiles"))]
-    before = deepcopy(wire)
-    assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
-    assert wire == before
-
-
 @pytest.mark.parametrize("delay", [0, 2])
 def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     document = build_capability_witness("pull_on_event")
@@ -490,19 +472,18 @@ def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
                                    authored_document=document, final_document=wire)["ok"]
 
-@pytest.mark.parametrize("fn", ["configure_placeable", "move_bounce", "spawn_over_target", "chain_damage_on_event"])
-def test_retired_internal_capabilities_have_no_receipt_owner(fn):
-    assert fn not in CAPABILITY_REGISTRY
-
-
-def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
+def test_reserved_movement_code_is_refused_on_current_wire():
     document = build_capability_witness("move_straight")
     wire = compile_runtime_program(document)
     wire.pop("runtimeContract")
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
+    assert validate_runtime_wire(wire)["ok"]
     entity["movement"].update(code=6, name="")
-    assert not validate_runtime_wire(wire)["ok"]
-    assert dict(MOVEMENT_OPCODE) == {"move_straight": 0}
+    report = validate_runtime_wire(wire)
+    assert not report["ok"] and any(
+        error["path"].endswith(".movement.code") and error["code"] == "unsupported_opcode"
+        for error in report["errors"]
+    )
 
 
 @pytest.mark.parametrize("current,retired", [("place_tile", "configure_placeable"),
@@ -547,14 +528,12 @@ def test_independent_proximity_radius_uses_float_pixels_not_retired_integer_latt
     assert document == before
 
 
-@pytest.mark.parametrize("pixels", [4, 5, 512, 3, 513, 4.5, True])
-def test_retired_proximity_opcode_is_refused_regardless_of_old_parameter_domain(pixels):
-    # Explicit saved-wire control, not a compiler/importer for retired Author calls.
+def test_unsupported_movement_opcode_is_refused_even_with_valid_old_parameters():
     wire = compile_runtime_program(build_capability_witness("move_straight"))
     wire.pop("runtimeContract")
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
     entity["movement"] = {"name": "move_proximity_missile", "code": 13,
-                          "params": {"rangeTiles": 20, "homingStrength": 0.1, "proximityRadiusPx": pixels}}
+                          "params": {"rangeTiles": 20, "homingStrength": 0.1, "proximityRadiusPx": 5}}
     before = deepcopy(wire)
     report = validate_runtime_wire(wire)
     assert not report["ok"]

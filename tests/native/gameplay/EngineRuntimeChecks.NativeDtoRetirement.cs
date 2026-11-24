@@ -22,39 +22,28 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
-    private static void NDTO05RetiredKnowledgeAndSummaryRefuse()
+    private static void DefinitionAdmissionKeepsAdvisorySidecarsLocal()
     {
         var source = GeneratedItemData.Placeholder();
         source.GeneratedParentSummary.Description = "Optional Author description";
         source.GeneratedParentSummary.PlayerExperience = "Advisory player experience";
-        foreach (string json in new[] { source.ToJson(), source.ToNetworkJson() })
+        string definition = source.ToJson();
+        var admitted = GeneratedItemData.FromJson(definition)
+            ?? throw new InvalidOperationException("current advisory summary rejected");
+        Equal(source.GeneratedParentSummary.Description, admitted.GeneratedParentSummary.Description, "optional description retained");
+        Equal(source.GeneratedParentSummary.PlayerExperience, admitted.GeneratedParentSummary.PlayerExperience, "optional experience retained");
+        foreach (var (owner, field, value) in new[] {
+            ("", "itemKnowledge", "{}"),
+            ("visual", "objectType", "\"unused\""),
+            ("gameplay", "powerBudget", "1"),
+            ("generatedParentSummary", "notableEffects", "[]"),
+        })
         {
-            var current = JsonNode.Parse(json)!;
-            foreach (string field in new[] { "itemKnowledge", "canonical", "sourceRepresentation", "inheritance", "lossBudget" })
-                Equal(false, current.AsObject().ContainsKey(field), "no dead classifier payload is emitted: " + field);
-            var summary = current["generatedParentSummary"]!.AsObject();
-            foreach (string key in new[] { "notableEffects", "runtimePrimaryEntityId", "runtimeEntityIds" })
-                Equal(false, summary.ContainsKey(key), "no dead recursive summary field is emitted: " + key);
-            var accepted = GeneratedItemData.FromJson(json)
-                ?? throw new InvalidOperationException("current advisory summary rejected");
-            Equal(source.GeneratedParentSummary.Description, accepted.GeneratedParentSummary.Description, "optional description retained");
-            Equal(source.GeneratedParentSummary.PlayerExperience, accepted.GeneratedParentSummary.PlayerExperience, "optional experience retained");
-        }
-        foreach (string field in new[] { "itemKnowledge", "canonical", "sourceRepresentation", "inheritance", "lossBudget" }) {
-            var retired = JsonNode.Parse(source.ToJson())!;
-            retired[field] = field is "sourceRepresentation" or "inheritance" ? new JsonArray() : new JsonObject();
-            Equal(true, GeneratedItemData.FromJson(retired.ToJsonString()) is null, "retired root classifier refuses, never hides in extension data: " + field);
-        }
-        foreach (string field in new[] { "objectType", "style", "requiredAnchors", "dominantColorHex", "accentColorHex", "semanticReviewStatus" }) {
-            var retired = JsonNode.Parse(source.ToJson())!;
-            retired["visual"]![field] = field == "requiredAnchors" ? new JsonArray() : JsonValue.Create("unused");
-            Equal(true, GeneratedItemData.FromJson(retired.ToJsonString()) is null, "retired visual metadata refuses: " + field);
-        }
-        foreach (string field in new[] { "stage", "powerBudget" }) {
-            var retired=JsonNode.Parse(source.ToJson())!;
-            Equal(false,retired["gameplay"]!.AsObject().ContainsKey(field),"no inert gameplay metadata serialized: "+field);
-            retired["gameplay"]![field]=field=="stage"?JsonValue.Create("early"):JsonValue.Create(1);
-            Equal(true,GeneratedItemData.FromJson(retired.ToJsonString()) is null,"inert gameplay metadata is refused: "+field);
+            var invalid = JsonNode.Parse(definition)!.AsObject();
+            var target = owner.Length == 0 ? invalid : invalid[owner]!.AsObject();
+            target[field] = JsonNode.Parse(value);
+            Equal(true, GeneratedItemData.FromJson(invalid.ToJsonString()) is null,
+                "strict definition refuses an unsupported field at " + owner + "." + field);
         }
         var sidecars = JsonNode.Parse(source.ToJson())!;
         foreach (string field in new[] { "concept", "realization", "llmStageAccounting", "contractVersions", "recipeHealth" })
@@ -65,19 +54,6 @@ internal static partial class EngineRuntimeChecks
         foreach (string field in new[] { "concept", "realization", "llmStageAccounting", "contractVersions", "recipeHealth" }) {
             Equal(sidecars[field]!.ToJsonString(), local[field]!.ToJsonString(), "current sidecar retained locally: " + field);
             Equal(false, network.AsObject().ContainsKey(field), "advisory sidecar omitted from native network definition: " + field);
-        }
-        foreach (string unknown in new[] { "futureGameplay", "runtimeContract", "visualKit", "stageAccounting" }) {
-            var invalid = JsonNode.Parse(source.ToJson())!; invalid[unknown] = new JsonObject();
-            Equal(true, GeneratedItemData.FromJson(invalid.ToJsonString()) is null, "unknown root field is refused: " + unknown);
-        }
-        JsonNode wire;
-        foreach (var field in new (string Key, string Literal)[] {
-            ("notableEffects", "[]"), ("runtimePrimaryEntityId", "\"unavailable_item\""), ("runtimeEntityIds", "[]"),
-        })
-        {
-            wire = JsonNode.Parse(source.ToJson())!;
-            wire["generatedParentSummary"]![field.Key] = JsonNode.Parse(field.Literal);
-            Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "retired recursive summary refuses: " + field.Key);
         }
     }
 

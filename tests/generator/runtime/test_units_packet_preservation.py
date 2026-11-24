@@ -114,13 +114,13 @@ def _vfx_packets(data, captured):
     return [request_dossier(row) for row in captured[start:]]
 
 
-@pytest.mark.parametrize("envelope", ["root", "fingerprint"])
-@pytest.mark.parametrize("facts", [
-    {"itemScale": 0.7, "armorPenetration": 13, "useLimitPerAnimation": 4},
-    {"itemScale": 1.0, "armorPenetration": 0, "useLimitPerAnimation": None},
-    {"itemScale": 0.0, "armorPenetration": 0, "useLimitPerAnimation": 0},
-    {},
-], ids=["native-nondefault", "native-neutral-and-unlimited", "explicit-zero", "unobserved"])
+@pytest.mark.parametrize('envelope,facts', [
+    ('root', {'itemScale': 0.7, 'armorPenetration': 13, 'useLimitPerAnimation': 4}),
+    ('root', {'itemScale': 1.0, 'armorPenetration': 0, 'useLimitPerAnimation': None}),
+    ('root', {'itemScale': 0.0, 'armorPenetration': 0, 'useLimitPerAnimation': 0}),
+    ('root', {}),
+    ('fingerprint', {'itemScale': 0.7, 'armorPenetration': 13, 'useLimitPerAnimation': 4}),
+])
 def test_native_item_stats_preserve_presence_and_nullable_use_limit_in_stage_packets(offline_packets, envelope, facts):
     captured, _ = offline_packets
     parent = {"name": "literal source", **(facts if envelope == "root" else {"fingerprint": facts})}

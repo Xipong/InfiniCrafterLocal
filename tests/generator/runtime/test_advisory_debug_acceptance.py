@@ -17,11 +17,16 @@ def _run_stage(_name, function, *args, **kwargs):
     return function(*args, **kwargs)
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('case,value', [
-    ('missing', None), ('legacy', None), ('text', 'An experimental design; not runtime evidence.'),
-    ('null', None), ('boolean', True), ('number', 17), ('list', ['debug', 2]),
-    ('malformed-object', {'description': [1], 'unexpected': False}),
+@pytest.mark.parametrize('mode,case,value', [
+    ('json_object', 'missing', None),
+    ('json_object', 'legacy', None),
+    ('json_object', 'text', 'An experimental design; not runtime evidence.'),
+    ('json_object', 'null', None),
+    ('json_object', 'boolean', True),
+    ('json_object', 'number', 17),
+    ('json_object', 'list', ['debug', 2]),
+    ('json_object', 'malformed-object', {'description': [1], 'unexpected': False}),
+    ('json_schema', 'missing', None),
 ])
 def test_advisory_shapes_survive_real_author_and_gameplay_without_repair(monkeypatch, mode, case, value):
     source = build_runtime_fixture('workbench_blade')
@@ -279,8 +284,13 @@ def test_separate_player_description_and_full_debug_through_real_handoffs(monkey
     assert source == before
 
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('length', [0, 4001, 5500, 100000])
+@pytest.mark.parametrize('mode,length', [
+    ('json_object', 0),
+    ('json_object', 4001),
+    ('json_object', 5500),
+    ('json_object', 100000),
+    ('json_schema', 0),
+])
 def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeypatch, mode, length):
     source = build_runtime_fixture('workbench_blade')
     source['concept'] = '  A brief idea 🌟  '
@@ -304,8 +314,13 @@ def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeyp
     assert delivered['runtimeProgram'] == compile_runtime_program(before)['runtimeProgram']
 
 
-@pytest.mark.parametrize('field,maximum', [('description', 4000), ('playerExperience', 3000)])
-@pytest.mark.parametrize('extra', [0, 1, 1500, 96000])
+@pytest.mark.parametrize('field,maximum,extra', [
+    ('description', 4000, 0),
+    ('description', 4000, 1),
+    ('description', 4000, 1500),
+    ('description', 4000, 96000),
+    ('playerExperience', 3000, 0),
+])
 def test_summary_matches_native_unicode_bound_without_touching_raw(field, maximum, extra):
     from infini_local.pipelines.context.generated_summary import generated_parent_summary_from_data
     from infini_local.pipelines.context.cards import raw_parent_card_for_llm

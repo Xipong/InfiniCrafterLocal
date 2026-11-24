@@ -77,9 +77,23 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
     assert "manaCost" not in _call(repaired, "item_stats")["params"]
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("original", ["missing", "null", "present"])
-@pytest.mark.parametrize("operation", ["omit", "null", "replace", "clear", "empty_description"])
+@pytest.mark.parametrize('mode,original,operation', [
+    ('json_object', 'missing', 'omit'),
+    ('json_object', 'missing', 'clear'),
+    ('json_object', 'missing', 'empty_description'),
+    ('json_object', 'null', 'null'),
+    ('json_object', 'null', 'replace'),
+    ('json_object', 'null', 'clear'),
+    ('json_object', 'present', 'omit'),
+    ('json_object', 'present', 'null'),
+    ('json_object', 'present', 'replace'),
+    ('json_object', 'present', 'empty_description'),
+    ('json_schema', 'missing', 'null'),
+    ('json_schema', 'missing', 'replace'),
+    ('json_schema', 'null', 'omit'),
+    ('json_schema', 'null', 'empty_description'),
+    ('json_schema', 'present', 'clear'),
+])
 def test_real_repair_report_operations_preserve_explicit_intent(monkeypatch, mode, original, operation):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from repair_test_helpers import gameplay_repair

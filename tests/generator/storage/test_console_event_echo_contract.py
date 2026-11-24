@@ -13,6 +13,8 @@ second source of truth or swallow a level the user asked to see.
 import io
 import json
 
+import pytest
+
 
 def test_file_record_is_written_regardless_of_echo(tmp_path, capsys):
     from infini_local.storage import trace_tools
@@ -89,35 +91,36 @@ def test_echo_line_is_readable_and_bounded(tmp_path, capsys):
     assert "…" in printed
 
 
-def test_level_threshold_resolution(monkeypatch):
-    import importlib
+@pytest.mark.parametrize("configured,visible", [
+    (None, ("warn", "error")),
+    ("nonsense", ("warn", "error")),
+    ("WARN", ("warn", "error")),
+    ("error", ("error",)),
+    ("info", ("info", "warn", "error")),
+    ("debug", ("debug", "info", "warn", "error")),
+    ("off", ()),
+])
+def test_configured_echo_threshold_filters_console_not_saved_events(tmp_path, configured, visible):
+    import os
+    import subprocess
+    import sys
+    from suite_paths import GENERATOR_ROOT
 
-    from infini_local.storage import trace_runtime
-
-    cases = {
-        "warn": ("warn", "error"),
-        "WARN": ("warn", "error"),
-        "error": ("error",),
-        "info": ("info", "warn", "error"),
-        "debug": ("debug", "info", "warn", "error"),
-        # Silence has to be asked for explicitly.
-        "off": (),
-        "none": (),
-        "silent": (),
-        # An empty or unrecognized value means "not configured", so the
-        # recommended default applies instead of silently losing diagnostics.
-        "": ("warn", "error"),
-        "nonsense": ("warn", "error"),
-    }
-    for value, expected in cases.items():
-        monkeypatch.setenv("INFINI_CONSOLE_EVENT_LEVEL", value)
-        reloaded = importlib.reload(trace_runtime)
-        assert reloaded._configured_echo_levels() == expected, value
-
-    # Default with the variable absent must be the recommended warn+error.
-    monkeypatch.delenv("INFINI_CONSOLE_EVENT_LEVEL", raising=False)
-    reloaded = importlib.reload(trace_runtime)
-    assert reloaded._configured_echo_levels() == ("warn", "error")
+    env = dict(os.environ, PYTHONPATH=str(GENERATOR_ROOT), INFINI_SKIP_CONFIG_FILE="1",
+               INFINI_CACHE_DIR=str(tmp_path))
+    env.pop("INFINI_CONSOLE_EVENT_LEVEL", None)
+    if configured is not None:
+        env["INFINI_CONSOLE_EVENT_LEVEL"] = configured
+    levels = ("debug", "info", "warn", "error")
+    result = subprocess.run(
+        [sys.executable, "-c", "from infini_local.storage.trace_runtime import log_event; "
+         f"[log_event(level, 'echo-probe-' + level) for level in {levels!r}]"],
+        env=env, capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert tuple(level for level in levels if f"echo-probe-{level}" in result.stdout) == visible
+    events = (tmp_path / "events.ndjson").read_text().splitlines()
+    assert [json.loads(row)["message"] for row in events] == [f"echo-probe-{level}" for level in levels]
 
 
 def test_runtime_echo_preserves_the_file_record(tmp_path, capsys, monkeypatch):

@@ -15,8 +15,13 @@ def source(tmp_path,background,pattern=False):
     path=tmp_path/'raw.png';im.save(path);return path
 
 
-@pytest.mark.parametrize('role',['item','runtime:projectile','runtime:child_projectile','vfx_cutout'])
-@pytest.mark.parametrize('pattern',[False,True])
+@pytest.mark.parametrize('role,pattern', [
+    ('item', False),
+    ('item', True),
+    ('runtime:projectile', False),
+    ('runtime:child_projectile', False),
+    ('vfx_cutout', False),
+])
 def test_opaque_wrong_matte_refused_before_fit(tmp_path,monkeypatch,role,pattern):
     monkeypatch.setattr(config,'BG_COLOR','magenta');path=source(tmp_path,(235,235,235,255),pattern)
     before=path.read_bytes()

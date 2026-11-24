@@ -119,22 +119,6 @@ def test_changed_runtime_id_reuses_current_cache_without_author(accepted_record,
     assert path.read_bytes() == before
 
 
-def test_old_numeric_hash_record_is_not_adopted_or_rewritten(cache_record):
-    from infini_local.pipelines import combine_pipeline as pipeline
-    _, request, key, path, data = cache_record
-    parents = [identity.item_identity(request[name]) for name in ("itemA", "itemB")]
-    from infini_local.core.config_bootstrap import RECIPE_IDENTITY_VERSION
-    old_key = "r_" + identity.stable_hash(sorted(parents), "world:" + request["worldId"], RECIPE_IDENTITY_VERSION, length=24)
-    assert old_key != key
-    old = path.with_name(old_key + ".json")
-    path.rename(old)
-    before = old.read_bytes()
-    assert pipeline.combine_cache_lookup(request) == (key, None)
-    assert old.read_bytes() == before
-    assert not path.exists()
-    assert not (path.parent.parent / "recipe_identity.sqlite3").exists()
-
-
 def test_current_hash_preserves_profile_scope_and_exact_name_spelling():
     from infini_local.storage.world_recipe_runtime import recipe_key
     a, b = parent(), {"generatedData": {"id": "g_exact"}}

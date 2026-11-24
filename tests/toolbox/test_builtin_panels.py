@@ -57,8 +57,7 @@ def test_explicit_preset_loads_its_versioned_cases_and_parent_fixture(tmp_path, 
 
 @pytest.mark.parametrize('flags,fragment', [
     (['--preset', 'live20-classic'], 'different live command'),
-    (['--preset', 'live10-starter'], 'unknown built-in preset'),
-    (['--preset', 'live20-classic-sprites'], 'unknown built-in preset'),
+    (['--preset', 'unregistered-preset'], 'unknown built-in preset'),
     (['--preset', '../live10-midgame'], 'invalid built-in preset'),
     (['--preset', 'live10-midgame', '--cases-file', 'unused.json'], 'mutually exclusive'),
 ])

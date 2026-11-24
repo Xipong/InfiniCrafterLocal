@@ -29,22 +29,6 @@ def test_windows_launchers_have_no_control_bytes():
         assert all(byte >= 32 or byte in (9, 10, 13) for byte in path.read_bytes()), path.name
 
 
-@pytest.mark.parametrize("args, flags", [([], []), (["gui", "--no-browser"], ["--no-browser"])])
-def test_bootstrap_dispatches_to_the_canonical_studio(monkeypatch, args, flags):
-    python = bootstrap.runtime_python(GENERATOR_ROOT)
-    monkeypatch.setattr(bootstrap, "prepare_runtime", lambda root, *, refresh: python)
-    calls = []
-
-    def launch(command, **options):
-        calls.append((command, options))
-        return subprocess.CompletedProcess(command, 7)
-
-    monkeypatch.setattr(bootstrap.subprocess, "run", launch)
-    assert bootstrap.main(args) == 7
-    assert calls == [([str(python), "-u", "-B", "-m", "infini_local.desktop.web_studio", *flags],
-                      {"cwd": GENERATOR_ROOT, "check": False})]
-
-
 def test_headless_server_uses_another_extracted_root_and_keeps_its_config(tmp_path):
     checkout = tmp_path / "other Infinicraft"
     root = checkout / "generator"

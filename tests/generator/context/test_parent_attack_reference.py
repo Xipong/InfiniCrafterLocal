@@ -56,13 +56,16 @@ def assert_exact_json(actual, expected):
 
 def test_attack_observation_reaches_serialized_author_without_loss_or_parent_mutation():
     observation = source_defined_attack_fixture()
+    sets = {"TrailCacheLength": 7}
     parent = {"name": "source-defined fixture", "directProjectileRaw": {
-        "type": 42, "attackReference": observation}}
+        "type": 42, "setsRaw": sets, "attackReference": observation}}
     before = copy.deepcopy(parent)
     request, _, _ = author.build_initial_author_request(
         parent, {}, "source-defined-attack", model_name="offline-test-model")
     packet = expand_native_source_references(request_dossier(request))
-    sent = packet["parents"]["A"]["packet"]["raw"]["directProjectile"]["attackReference"]
+    projectile = packet["parents"]["A"]["packet"]["raw"]["directProjectile"]
+    assert_exact_json(projectile["setsRaw"], sets)
+    sent = projectile["attackReference"]
     assert_exact_json(sent, observation)
     sent["motion"]["samples"].append("detached consumer edit")
     assert_exact_json(parent, before)
@@ -105,23 +108,6 @@ def test_card_selects_current_fields_without_recursive_legacy_hint_scrubbing():
     card = raw_parent_card_for_llm(parent)
     assert "behaviorDigest" not in card and "tags" not in card["raw"]["item"]
     assert_exact_json(parent, before)
-
-
-def test_retired_parent_profile_probe_and_item_sets_shapes_are_not_admitted(monkeypatch):
-    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
-    from infini_local.services import runtime_dump_service as dumps
-
-    monkeypatch.setattr(dumps, "RUNTIME_DUMP_SNAPSHOT", dumps.RuntimeDumpSnapshot({}, {}, {"status": "absent"}, {}))
-    profile = {"type": 42, "timeLeft": 90}
-    retired = {"projectileProfile": profile, "runtimeProbeRaw": {"observedHits": 2},
-               "itemSetsRaw": {"staff": True}, "setsRaw": {"sword": True},
-               "fingerprint": {"projectileProfile": profile}}
-    card = raw_parent_card_for_llm(retired)
-    assert "directProjectile" not in card["raw"] and "effectiveProjectile" not in card["raw"]
-    assert "runtimeProbe" not in card["raw"] and "vanillaFlags" not in card["raw"]
-    # Actual current projectile sets remain supported, unlike retired item aliases.
-    current = raw_parent_card_for_llm({"directProjectileRaw": {**profile, "setsRaw": {"TrailCacheLength": 7}}})
-    assert current["raw"]["directProjectile"]["setsRaw"] == {"TrailCacheLength": 7}
 
 
 @pytest.mark.parametrize("origin", ["live", "fingerprint", "runtime_dump"])

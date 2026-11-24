@@ -233,15 +233,13 @@ def test_malformed_child_keeps_following_capture_index_and_style_mismatch_refuse
     assert mechanics_context(raw) is None
 
 
-def test_current_item_flags_and_unit_views_survive_without_retired_runtime_probe():
+def test_item_flags_and_units_survive_mechanics_projection():
     raw = _raw()
     raw["vanillaFlags"] = {"accessory": True, "defense": 7}
-    raw["runtimeProbe"] = {"observedHits": 2, "scope": "single test observation"}
     raw["sourceMotionUnits"] = {"values": [{"sourcePath": "raw.directProjectile.timeLeft", "value": 60, "units": "projectile updates"}]}
     result = mechanics_context(raw)
     assert result is not None
     assert result["vanillaFlags"] == raw["vanillaFlags"]
-    assert "runtimeProbe" not in result
     assert result["sourceMotionUnits"] == raw["sourceMotionUnits"]
 
 
