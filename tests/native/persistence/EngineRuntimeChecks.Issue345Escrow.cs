@@ -188,9 +188,9 @@ internal static partial class EngineRuntimeChecks
                 }
                 peers.Mode(NetmodeID.SinglePlayer, 0); owner.AbortTransientCraftForWorldExit();
                 var parked = new TagCompound(); owner.SaveData(parked);
-                Equal(true, PersistenceDormantClaims(PersistenceNbtRoundtrip(parked)).Any(c =>
+                Equal(origin == current || origin == new string('b', 32), PersistenceDormantClaims(PersistenceNbtRoundtrip(parked)).Any(c =>
                     c.GetString("infiniStationEscrowOriginScopeV1") == origin
-                    && c.GetCompound("foreignExtension").GetString("literal") == "keep-nested"), "opaque claim fields survive reload and repark unchanged");
+                    && c.GetCompound("foreignExtension").GetString("literal") == "keep-nested"), "opaque fields of a valid scoped claim survive reload and repark unchanged");
                 Equal(0, player.inventory.Take(58).Where(i => i.type == ItemID.GoldBar).Sum(i => i.stack), "stale remote-claim refund never becomes local material");
             });
         }

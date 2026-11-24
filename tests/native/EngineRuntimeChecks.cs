@@ -580,7 +580,7 @@ internal static partial class EngineRuntimeChecks
             ("quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry", NativeFloat32BuffNearNeutralIdentityAndExpiry),
             ("persistence PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn", PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn),
             ("persistence PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation", PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation),
-            ("persistence PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed", PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed),
+            ("persistence PlacementPrefixRequiresExplicitIdentityAndPreservesQuarantine", PlacementPrefixRequiresExplicitIdentityAndPreservesQuarantine),
             ("cancelled craft reconnect resolves only owned journal", CancelledCraftReconnectResolvesOnlyOwnedJournal),
             ("persistence EscrowSessionTokenRotationAndConcurrentClaimRefused", EscrowSessionTokenRotationAndConcurrentClaimRefused),
             ("persistence EscrowSessionReconnectCommitAndReload", EscrowSessionReconnectCommitAndReload),

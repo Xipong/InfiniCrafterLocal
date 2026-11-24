@@ -15,6 +15,7 @@ import zipfile
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+WORKFLOW = ROOT / ".github/workflows/parent-source-analysis-benchmark.yml"
 TOOL = ROOT / "tools" / "testing" / "verify_parent_analysis_cohort.py"
 SPEC = importlib.util.spec_from_file_location("ifc_cohort_verifier_tests", TOOL)
 assert SPEC is not None and SPEC.loader is not None
@@ -409,7 +410,7 @@ def test_contract_mode_retains_evidence_provenance_stability_and_target_gates(tm
 
 
 def test_source_pack_workflow_requires_same_contract_byte_parity():
-    text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
+    text = WORKFLOW.read_text()
     assert "--comparison-mode exact-bytes" in text
     assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in text
     assert "baseline-native-source-pack" in text
@@ -418,7 +419,7 @@ def test_source_pack_workflow_requires_same_contract_byte_parity():
 
 
 def _source_pack_workflow_step(name: str) -> str:
-    text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
+    text = WORKFLOW.read_text()
     return text.split(f"      - name: {name}\n", 1)[1].split("\n      - ", 1)[0]
 
 
@@ -443,16 +444,10 @@ def test_source_pack_workflow_rebuilds_inside_each_variant_and_restores_location
     assert len(re.findall(r"^\s*dotnet build\b", step, re.MULTILINE)) == len(builds)
 
 
-def test_pr333_benchmark_uses_the_same_populated_contract_and_strict_pipeline():
-    # Historical baseline had empty catalogs and uncompilable legacy Reverse
-    # calls. Do not patch its semantics or compare it to populated data.
-    old = (ROOT / ".github/workflows/pr333-parent-analysis-benchmark.yml").read_text()
-    current = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
-    assert old.split("jobs:\n", 1)[1] == current.split("jobs:\n", 1)[1]
-    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in old
-    assert "tests/native/EngineRuntimeChecks.csproj" in old
-    assert "baseline/tools/native" not in old
-    assert "scenarios.Reverse()" not in old
-    assert "--comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000" in old
-    assert "--roll-forward Disable" in old
-    assert "PopulatedParentProfiling.cs" in old
+def test_source_pack_benchmark_is_manual_and_keeps_exact_runtime_scope():
+    workflow = WORKFLOW.read_text()
+    assert re.search(r"^on:\n  workflow_dispatch:\n\npermissions:", workflow, re.MULTILINE)
+    assert "ref: ${{ github.sha }}" in workflow
+    assert "--profile-parent-craft $scenario" in workflow
+    assert "--comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000" in workflow
+    assert "--roll-forward Disable" in workflow

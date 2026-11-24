@@ -125,12 +125,10 @@ public partial class GeneratedItem
         return tag;
     }
 
-    // Old ledger rows never recorded a prefix. Their explicit historical meaning
-    // is unprefixed, not a request to roll a new prefix during reconstruction.
-    internal static int ResolvePlacementPrefix(TagCompound? tag)
+    // An unprefixed source must explicitly attest prefix zero.
+    internal static int ResolvePlacementPrefix(TagCompound tag)
     {
-        if (tag is null) return 0;
-        if (!tag.ContainsKey(NativePrefixSaveKey) || tag[NativePrefixSaveKey] is not int token || token < 0)
+        if (tag is null || !tag.ContainsKey(NativePrefixSaveKey) || tag[NativePrefixSaveKey] is not int token || token < 0)
             throw new InvalidDataException("Malformed placement prefix token");
         bool named = tag.ContainsKey(NativePrefixSaveKey + "Mod") || tag.ContainsKey(NativePrefixSaveKey + "Name");
         if (named)

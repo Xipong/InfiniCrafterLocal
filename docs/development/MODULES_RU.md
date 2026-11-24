@@ -5,7 +5,7 @@
 <a id="generator"></a>
 ## 1. Authoring, сервисы и хранение
 
-`generator/infini_local/` — production-пакет. Launchers `generator/server.py` и `settings_gui.py` только открывают соответствующее приложение; тесты и tools импортируют настоящего владельца, а не launcher или HTTP composition root.
+`generator/infini_local/` — production-пакет. Пользовательский запускатор делегирует `generator/scripts/bootstrap.py`: он запускает Studio напрямую как Python-модуль или передаёт управление `generator/server.py`. Тесты и tools импортируют владельца логики, а не launcher или HTTP composition root.
 
 `generator/scripts/bootstrap.py` готовит изолированную `generator/.venv`, не меняет системный Python/config.env и не импортирует приложение до запуска. `gui` открывает browser Studio, `setup` устанавливает runtime requirements, `server` — прямой console server **без GUI ownership guards**, `doctor` — только read-only пути/Python без установки/сети. При переносе воспроизводимую `.venv` можно пересоздать, но личные config/profiles/cache/recipes сохраняют; пользовательский вход остаётся `OPEN_INFINICRAFT.bat`.
 

@@ -83,7 +83,7 @@ docs/                           user / development / reference / archive
 .agent/ + .github/               impact metadata и CI, не игровой runtime
 ```
 
-`OPEN_INFINICRAFT.bat` — пользовательский launcher. `generator/scripts/bootstrap.py` владеет setup/gui/server/doctor; `generator/server.py` и `settings_gui.py` не используются как import barrels. Cache, `.venv`, `bin`/`obj`, build logs и workspace indexes не являются canonical source. Для поиска неизвестного symbol ограничь roots: `rg -n --glob "*.py" "<symbol>" generator/infini_local` или `rg -n --glob "*.cs" --glob "!*.g.cs" "<symbol>" mod/InfiniCrafterLocal`. `.aiignore`/`.cursorignore` исключают локальные artifacts и caches из индекса, но не заменяют scope команды `rg`. Generated contract ищи через producer в [GENERATED](../reference/GENERATED_RU.md), а не правь его копию вручную.
+`OPEN_INFINICRAFT.bat` — пользовательский launcher. `generator/scripts/bootstrap.py` владеет setup/gui/server/doctor; `generator/server.py` — точка запуска генератора, не import barrel. Cache, `.venv`, `bin`/`obj`, build logs и workspace indexes не являются canonical source. Для поиска неизвестного symbol ограничь roots: `rg -n --glob "*.py" "<symbol>" generator/infini_local` или `rg -n --glob "*.cs" --glob "!*.g.cs" "<symbol>" mod/InfiniCrafterLocal`. `.aiignore`/`.cursorignore` исключают локальные artifacts и caches из индекса, но не заменяют scope команды `rg`. Generated contract ищи через producer в [GENERATED](../reference/GENERATED_RU.md), а не правь его копию вручную.
 
 <a id="python"></a>
 ## Python

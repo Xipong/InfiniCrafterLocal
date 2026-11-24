@@ -1,5 +1,4 @@
 """Browser presentation must never invoke hidden desktop interactions."""
-from suite_paths import GENERATOR_ROOT
 from pathlib import Path
 from types import SimpleNamespace
 import json
@@ -372,15 +371,6 @@ def test_file_picker_is_authenticated_filtered_bounded_and_read_only(studio, tmp
     exact = server.list_files(str(tmp_path / 'model-304.gguf'), 'model')
     assert exact['selected']['name'] == 'model-304.gguf'
     assert exact['truncated'] is True
-
-
-def test_desktop_launcher_opens_browser_studio(monkeypatch):
-    import runpy
-    from infini_local.desktop import web_studio
-    called = []
-    monkeypatch.setattr(web_studio, 'main', lambda: called.append(True))
-    runpy.run_path(str(GENERATOR_ROOT / "settings_gui.py"), run_name="__main__")
-    assert called == [True]
 
 
 def test_config_viewer_masks_parser_equivalent_whitespace_and_retained_keys(studio):

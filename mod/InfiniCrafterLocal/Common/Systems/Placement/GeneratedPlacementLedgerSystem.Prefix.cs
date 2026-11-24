@@ -22,8 +22,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static int ResolvePlacementPrefixEnvelope(TagCompound? envelope)
     {
-        if (envelope is null) return GeneratedItem.ResolvePlacementPrefix(null);
-        if (envelope["nativePrefix"] is not TagCompound prefix)
+        if (envelope is null || !envelope.ContainsKey("nativePrefix") || envelope["nativePrefix"] is not TagCompound prefix)
             throw new InvalidDataException("Placement prefix must be a compound identity");
         return GeneratedItem.ResolvePlacementPrefix(prefix);
     }
