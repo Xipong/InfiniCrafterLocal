@@ -41,7 +41,7 @@ def test_no_changed_paths_is_not_a_test_pass(monkeypatch: pytest.MonkeyPatch, ca
 
 
 @pytest.mark.parametrize("path", [
-    "pyproject.toml", "generator/infini_local/new_owner.py", "toolbox/fixtures/items.jsonl",
+    "pyproject.toml", "generator/infini_local/new_owner.py", "toolbox/fixtures/panels/live20-classic.json",
     "tests/generator/conftest.py", "tests/generator/**/test_deleted.py",
 ])
 def test_shared_config_or_deleted_test_selects_both_roots(

@@ -78,9 +78,9 @@ def test_actual_request_and_parser_through_campaign_hooks(tmp_path, mutation, ex
         nodes = [node for node in ast.parse(harness.read_text()).body if isinstance(node, ast.FunctionDef) and node.name in selected]
         exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), 'exec'), ns)
         transport_http.http_json = ns['captured_http_json']
-        items = [json.loads(line) for line in (root / 'toolbox/fixtures/items.jsonl').read_text(encoding='utf-8-sig').splitlines() if line.strip()]
-        parents = {row['internalName']: row for row in items}
-        request, _, _ = build_initial_author_request(parents['WoodenSword'], parents['WorkBench'], 'qa-request')
+        request, _, _ = build_initial_author_request(
+            {'internalName': 'WoodenSword', 'name': 'Wooden Sword', 'damage': 7},
+            {'internalName': 'WorkBench', 'name': 'Work Bench'}, 'qa-request')
         request = with_llm_stage(request, 'planner')
         if mutation == 'temperature':
             request['temperature'] = 1.9

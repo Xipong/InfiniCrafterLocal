@@ -22,17 +22,9 @@ def load_panel(name: str) -> dict[str, Any]:
         raise ValueError(f'invalid built-in panel metadata: {name}')
     if not isinstance(payload.get('cases'), list) or not payload['cases']:
         raise ValueError(f'empty built-in panel: {name}')
-    dump_name = payload.get('runtimeDump')
-    if payload.get('requiresRuntimeDump') is True:
-        if dump_name is not None:
-            raise ValueError(f'external-input panel must not ship a default dump: {name}')
-        return {**payload, 'sourcePath': source, 'runtimeDumpPath': None}
-    if not isinstance(dump_name, str) or not dump_name:
-        raise ValueError(f'missing parent fixture for panel: {name}')
-    dump = (source.parent / dump_name).resolve()
-    if not dump.is_relative_to(FIXTURES.resolve()) or not dump.is_file():
-        raise ValueError(f'parent fixture escapes toolbox or is missing: {name}')
-    return {**payload, 'sourcePath': source, 'runtimeDumpPath': dump}
+    if payload.get('requiresRuntimeDump') is not True or payload.get('runtimeDump') is not None:
+        raise ValueError(f'built-in panel requires an explicit input dump: {name}')
+    return {**payload, 'sourcePath': source}
 
 
 def panel_catalog() -> list[dict[str, Any]]:
@@ -44,8 +36,8 @@ def panel_catalog() -> list[dict[str, Any]]:
             'id': panel['id'], 'command': panel['command'], 'title': panel['title'],
             'caseCount': len(panel['cases']), 'historical': panel['historical'],
             'casesFile': panel['sourcePath'].relative_to(root).as_posix(),
-            'runtimeDump': panel['runtimeDumpPath'].relative_to(root).as_posix() if panel['runtimeDumpPath'] else None,
-            'requiresRuntimeDump': panel.get('requiresRuntimeDump', False),
+            'runtimeDump': panel['runtimeDump'],
+            'requiresRuntimeDump': panel['requiresRuntimeDump'],
             'provenance': panel['provenance'], 'notes': panel.get('notes', ''),
             'cases': panel['cases'],
         })

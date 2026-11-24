@@ -8,7 +8,7 @@ import json
 from typing import Any
 from pathlib import Path
 
-from toolbox.live.catalog import DEFAULT_PRESETS, FIXTURES, load_panel
+from toolbox.live.catalog import DEFAULT_PRESETS, load_panel
 
 
 def select_case_routes(routes: Iterable[tuple[str, str, str]], selected_ids: set[str]) -> list[tuple[str, str, str]]:
@@ -26,16 +26,15 @@ def load_selection(args: Namespace):
     package = None
     if args.cases_file:
         source_path = args.cases_file.expanduser().resolve()
-        default_dump = FIXTURES / 'items.jsonl'
     else:
         package = load_panel(preset_name or DEFAULT_PRESETS[args.panel])
         if package['command'] != args.panel:
             raise ValueError('--preset belongs to a different live command')
         source_path = package['sourcePath']
-        default_dump = package['runtimeDumpPath']
-    if args.runtime_dump is None and default_dump is None:
-        raise ValueError(f"{package['id']} requires an explicit current --runtime-dump; private native snapshots are not bundled")
-    runtime_dump = (args.runtime_dump or default_dump).expanduser().resolve()
+    if args.runtime_dump is None:
+        selection = package['id'] if package is not None else '--cases-file'
+        raise ValueError(f"{selection} requires an explicit current --runtime-dump; private native snapshots are not bundled")
+    runtime_dump = args.runtime_dump.expanduser().resolve()
     if not runtime_dump.is_file():
         raise ValueError(f"parent runtime dump is missing: {runtime_dump}")
     items: dict[str, dict[str, Any]] = {}

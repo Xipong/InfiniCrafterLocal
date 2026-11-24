@@ -12,7 +12,7 @@ from tests.toolbox.test_cli import cli
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('panel, manifest', [('live10', 'live10-midgame'), ('live40', 'live40-diverse')])
+@pytest.mark.parametrize('panel, manifest', [('live10', 'live10-midgame'), ('live20', 'live20-classic'), ('live40', 'live40-diverse')])
 @pytest.mark.parametrize('dll', [False, True])
 @pytest.mark.parametrize('returncode', [0, 7])
 def test_capture_forwards_absolute_paths_and_native_status_without_bootstrap(monkeypatch, capsys, tmp_path, dll, returncode, panel, manifest):

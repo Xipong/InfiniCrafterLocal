@@ -27,7 +27,7 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--runtime-dump", type=Path,
-        help="Parent item JSONL; required for revised Live10 and Live40; classic Live20 has its historical fixture.",
+        help="Current parent item JSONL, required for all generation panels and custom cases.",
     )
     parser.add_argument("--expected-case-count", type=int, help="Require the selected case count before network.")
     parser.add_argument("--transport-retries", type=int, default=0, help="Explicit retries per case for confirmed network failures only.")

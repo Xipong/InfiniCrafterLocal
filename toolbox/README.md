@@ -7,14 +7,14 @@ python -m toolbox --help
 python -m toolbox panels
 python -m toolbox doctor
 python -m toolbox live10 --runtime-dump /path/to/current-parents.jsonl
-python -m toolbox live20
+python -m toolbox live20 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox live40 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox workbench --help
 python -m toolbox workbench doctor
 ```
 
 **`live10` / `live20` / `live40` без `--run` — только read-only preflight:** выбор родителей из
-fixture, проверка аргументов, явных ожиданий конфигурации и Git identity. Нет
+явно указанного JSONL, проверка аргументов, явных ожиданий конфигурации и Git identity. Нет
 LLM/image-запросов, импорта runtime, создания cache/PNG/каталога результатов.
 Успешный preflight не означает доступность провайдера или качество генерации.
 Нужны обычный Python проекта и его зависимости; toolbox ничего не устанавливает.
@@ -23,10 +23,9 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 
 | Задача | Команда | Что действительно проверяет |
 |---|---|---|
-| Midgame10 / classic20 / diverse40 | `python -m toolbox live10` / `live20` / `live40` | Три поддерживаемые панели; Live10 и Live40 требуют актуальный внешний `--runtime-dump` |
+| Midgame10 / classic20 / diverse40 | `python -m toolbox live10` / `live20` / `live40` | Все три панели требуют актуальный внешний `--runtime-dump` |
 | Собственная панель, в том числе 40 случаев | `python -m toolbox live20 --cases-file /path/to/cases.json --runtime-dump /path/to/parents.jsonl --expected-case-count 40` | Явно предоставленные оператором пары и parent inputs; [формат и границы](fixtures/README.md#входы-и-запуск) |
-| Снять 40 native-входов без моделей | `python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture
-# Для более широкой панели замените live10 на live40.` | Raw Prepare inputs существующего native harness; не Author, не генерация и не gameplay |
+| Снять 10 / 20 / 40 native-входов без моделей | `python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture` | Raw Prepare inputs существующего native harness; не Author, не генерация и не gameplay |
 | Найти все пакеты запросов | `python -m toolbox panels` | Пары ингредиентов, provenance, число cases и пути к исходным fixtures |
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
@@ -50,7 +49,7 @@ Exit 0 означает согласованный завершённый учё
 
 ```bash
 python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks --output /path/new-capture
-# Для более широкой панели замените live10 на live40.
+# Для другой панели замените live10 на live20 или live40.
 # Для собранного managed DLL:
 python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks.dll --dotnet /path/dotnet --output /path/new-capture
 ```
@@ -60,7 +59,7 @@ python -m toolbox live10 --offline --native-executable /path/EngineRuntimeChecks
 не запускает Author или image backend. Без `--dotnet` DLL запускается через
 `dotnet` из PATH. Флаги генерации и `--runtime-dump` здесь недопустимы.
 
-Передаётся ровно встроенный `live10-midgame` или `live40-diverse` по имени команды
+Передаётся ровно один встроенный manifest: `live10-midgame`, `live20-classic` или `live40-diverse` по имени команды
 в существующий `EngineRuntimeChecks --capture-parent-panel`. Весь capture принадлежит нативному
 владельцу: он проверяет manifest, использует настоящий Prepare и фиксированные
 language/seed/inventory, пишет packets, копию manifest и `report.json` с hashes.
@@ -106,7 +105,6 @@ toolbox/
     README.md             настройки и явный live-запуск
   fixtures/
     panels/               пары Midgame10 / classic20 / diverse40
-    items.jsonl           неизменённые 39 родителей классического Live20
     *_provenance.json      SHA256 и источники входов
   testing/                adapters к существующим verify/replay owners, doctor
   tests/                  offline CLI, transport, pipeline и accounting tests

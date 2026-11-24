@@ -35,14 +35,26 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
             if event in ('socket.connect', 'socket.getaddrinfo', 'socket.sendto'):
                 raise AssertionError('unexpected external network')
         sys.addaudithook(offline)
-        # A tiny explicit Git fixture owns source-admission state even in source archives.
-        # Runtime still comes from the source under test; no operator checkout is changed.
+        # Stub only the separate source-admission boundary. This test checks the
+        # actual runner + provider interception, not Git's clean-tree behavior.
         project = output.parent / 'source-admission-fixture'
         (project / 'generator/infini_local').mkdir(parents=True)
-        subprocess.run(['git', 'init', '-q', str(project)], check=True)
-        subprocess.run(['git', '-C', str(project), '-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid',
-                        'commit', '--allow-empty', '-qm', 'synthetic admission fixture'], check=True)
-        head = subprocess.check_output(['git', '-C', str(project), 'rev-parse', 'HEAD'], text=True).strip()
+        (project / '.git').mkdir()
+        head = 'f' * 40
+        original_check_output = subprocess.check_output
+        def fake_check_output(command, *args, **kwargs):
+            if command == ['git', '-C', str(project), 'rev-parse', 'HEAD']:
+                return head + '\\n'
+            if command == ['git', '-C', str(project), 'status', '--porcelain']:
+                return ''
+            return original_check_output(command, *args, **kwargs)
+        subprocess.check_output = fake_check_output
+        parents = [
+            {'internalName': 'WoodenSword', 'name': 'Wooden Sword', 'sourceMod': 'Terraria', 'damage': 7},
+            {'internalName': 'WorkBench', 'name': 'Work Bench', 'sourceMod': 'Terraria'},
+        ]
+        dump = output.parent / 'current-parents.jsonl'
+        dump.write_text(''.join(json.dumps(row) + '\\n' for row in parents))
         from infini_local.pipelines.transport import http as transport_http
         physical = []
         responses = None
@@ -66,7 +78,7 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
         transport_http.http_json = synthetic_sender
         sys.argv = ['campaign', '--run', '--panel', panel, '--output', str(output),
             '--project', str(project), '--expected-head', head, '--cases', case_id, '--preset', preset,
-            '--expected-case-count', '1', '--parallel-crafts', '1',
+            '--expected-case-count', '1', '--parallel-crafts', '1', '--runtime-dump', str(dump),
             '--expected-provider', 'openai_compat', '--expected-model', 'qa-model',
             '--expected-base-url', 'https://example.invalid/v1/', '--expected-api-mode', 'chat_completions',
             '--expected-response-format', 'json_object', '--expected-temperature', '0.5',
