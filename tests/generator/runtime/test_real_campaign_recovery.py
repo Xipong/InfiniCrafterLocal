@@ -93,15 +93,6 @@ def test_observer_write_loss_fails_closed(tmp_path):
     assert observer.summary()['observationWriteFailed']
 
 
-def test_options_keep_legacy_default_and_explicit_unavailable_modes():
-    args = build_parser(internal=True).parse_args([])
-    assert not args.real_images and args.attempt_budget is None
-    assert args.reuse_images_from is None and args.vfx_only_from is None
-    args.reuse_images_from = Path('old')
-    with pytest.raises(ValueError, match='does not yet support'):
-        prepare(args)
-
-
 def test_canonical_transport_observer_counts_actual_send_boundary(tmp_path, monkeypatch):
     from urllib.request import Request
     from infini_local.services import codex_auth

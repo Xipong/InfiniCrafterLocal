@@ -270,7 +270,7 @@ def prepare_whole_method_author(item: dict) -> tuple[dict, list[dict]]:
 def _compact_graph_tables(graph: dict) -> bool:
     """Normalization: discard unused lookup rows, not graph facts or sources.
 
-    Match BuildExport's member/module namespace and preserve row order. This is
+    Preserve the exported graph's member/module namespace and row order. This is
     only for the known rootless graph after whole-body substitution. Any hidden
     table reference, unfamiliar row field, or invalid index keeps the original tables.
     """

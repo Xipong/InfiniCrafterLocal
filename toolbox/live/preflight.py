@@ -45,8 +45,6 @@ def validate_endpoint(value: str) -> str:
 
 def prepare(args: Namespace) -> tuple[dict[str, Any], dict[str, str]]:
     real_images = bool(getattr(args, 'real_images', False))
-    if getattr(args, 'reuse_images_from', None) or getattr(args, 'vfx_only_from', None):
-        raise ValueError('recovered runner does not yet support exact image reuse or frozen VFX replay; source evidence must not be guessed')
     if not 0 <= getattr(args, 'image_retries', 0) <= 8:
         raise ValueError('--image-retries must be within 0..8')
     if args.run and args.preflight_only:

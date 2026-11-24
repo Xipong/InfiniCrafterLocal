@@ -149,10 +149,8 @@ Codex не отправляет logical temperature/output-token budget в wire:
 
 Каждая попытка имеет input, admission, logical requests, physical metadata,
 final DTO (если получен) и terminal receipt. Существующий output не перезаписывается.
-Pipeline PASS не является art/native gameplay PASS. Exact image reuse и VFX-only
-replay пока не восстановлены: соответствующие flags явно отклоняются, а не молча
-подменяются новой полной генерацией. Старые тестовые результаты не относятся
-автоматически к этой реконструкции.
+Pipeline PASS не является art/native gameplay PASS. Старые тестовые результаты
+не относятся автоматически к этой реконструкции.
 
 Effective projected text model/effort/format также проверяются перед canonical SSE send;
 Visual reasoning override не может незаметно поменять выбранный effort.

@@ -147,37 +147,31 @@ public sealed partial class InfiniDumpCommand
         File.Move(temporary, path, overwrite: true);
     }
 
-    private static JsonObject CaptureDumpEnvironment() => CaptureDumpEnvironmentCore(includeFileHash: true);
-
-    private static JsonObject CaptureDumpEnvironmentCore(bool includeFileHash)
+    internal static JsonObject CaptureDumpEnvironmentMetadata()
     {
         var mods = new JsonArray();
         foreach (Mod mod in (ModLoader.Mods ?? Array.Empty<Mod>()).OrderBy(m => m.Name, StringComparer.Ordinal))
             mods.Add(new JsonObject { ["name"] = mod.Name, ["version"] = mod.Version.ToString(),
-                ["module"] = DescribeAssembly(mod.GetType().Assembly, includeFileHash) });
+                ["module"] = DescribeAssembly(mod.GetType().Assembly) });
         return new JsonObject
         {
             ["gameVersion"] = Main.versionNumber,
-            ["tModLoader"] = DescribeAssembly(typeof(ModLoader).Assembly, includeFileHash),
-            ["exporter"] = DescribeAssembly(typeof(InfiniDumpCommand).Assembly, includeFileHash),
+            ["tModLoader"] = DescribeAssembly(typeof(ModLoader).Assembly),
+            ["exporter"] = DescribeAssembly(typeof(InfiniDumpCommand).Assembly),
             ["mods"] = mods, ["modSetStatus"] = ModLoader.Mods is null ? "unavailable" : "observed",
-            // A reproducible roster fingerprint, not a claim that another
-            // process has the same runtime mods or that this dump is current.
-            ["modSetSha256"] = Convert.ToHexString(SHA256.HashData(
-                Encoding.UTF8.GetBytes(mods.ToJsonString(DumpJsonOptions)))).ToLowerInvariant()
         };
     }
 
-    private static JsonObject DescribeAssembly(Assembly assembly, bool includeFileHash)
+    private static JsonObject DescribeAssembly(Assembly assembly)
     {
         string path = assembly.IsDynamic ? "" : assembly.Location;
         var identity = new JsonObject { ["assembly"] = assembly.GetName().Name,
             ["version"] = assembly.GetName().Version?.ToString(),
             ["mvid"] = assembly.ManifestModule.ModuleVersionId.ToString(),
-            ["fileSha256"] = includeFileHash ? TryAssemblyFileHash(path) : null,
-            ["informationalVersion"] = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion };
-        // Internal transfer field. Removed before serialization/publication.
-        if (!includeFileHash) identity["captureFile"] = path;
+            ["fileSha256"] = null,
+            ["informationalVersion"] = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+            // Internal transfer field. Removed before serialization/publication.
+            ["captureFile"] = path };
         return identity;
     }
 
@@ -207,6 +201,7 @@ public sealed partial class InfiniDumpCommand
             if (!hashes.TryGetValue(path, out string? hash)) hashes[path] = hash = TryAssemblyFileHash(path);
             identity["fileSha256"] = hash;
         }
+        // Observed roster fingerprint, not a comparison with another process.
         environment["modSetSha256"] = Convert.ToHexString(SHA256.HashData(
             Encoding.UTF8.GetBytes(mods.ToJsonString(DumpJsonOptions)))).ToLowerInvariant();
     }

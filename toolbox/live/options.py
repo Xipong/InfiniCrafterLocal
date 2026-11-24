@@ -14,8 +14,6 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
     parser.add_argument("--expected-image-quality", choices=("low", "medium", "high", "auto"))
     parser.add_argument("--expected-image-size", choices=("1024x1024", "1536x1024", "1024x1536", "auto"))
     parser.add_argument("--image-retries", type=int, default=0, help="Explicit configured image retry allowance; every physical send remains accounted.")
-    parser.add_argument("--reuse-images-from", type=Path, help="Reserved recovery option; rejected until exact request-fingerprint reuse is restored.")
-    parser.add_argument("--vfx-only-from", type=Path, help="Reserved recovery option; rejected until frozen-stage replay is restored.")
     parser.add_argument("--project", type=Path, help="Authoritative InfiniCrafterLocal worktree.")
     parser.add_argument("--preset", help="Supported case set; inspect with python -m toolbox panels.")
     parser.add_argument("--output", type=Path, help="Private trace directory; required for --run, untouched by preflight.")

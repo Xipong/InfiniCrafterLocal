@@ -77,7 +77,7 @@ python tools/agentctl.py verify --changed --base origin/main --plan
 python tools/agentctl.py verify --changed --base origin/main
 # После изменения runtime contracts: существующие generators, затем offline handbook.
 python tools/validate_release.py --refresh runtime
-# Полная приёмка интегрированного commit; тот же набор используют CI и release wrappers.
+# Полная приёмка интегрированного commit; CI вызывает тот же CLI.
 python tools/validate_release.py
 ```
 

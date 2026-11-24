@@ -20,6 +20,21 @@ def cli(monkeypatch, capsys, *args):
     return exc.value.code, capsys.readouterr()
 
 
+@pytest.mark.parametrize("flag", ["--reuse-images-from", "--vfx-only-from"])
+def test_removed_recovery_flags_fail_at_cli_before_preflight(monkeypatch, capsys, tmp_path, flag):
+    from toolbox.live import preflight
+
+    def unexpected_preflight(*args, **kwargs):
+        pytest.fail("removed option reached campaign preflight")
+
+    monkeypatch.setattr(preflight, "prepare", unexpected_preflight)
+    receipt = tmp_path / "unused-recovery-path"
+    code, captured = cli(monkeypatch, capsys, "live20", "--run", "--real-images", flag, receipt)
+    assert code == 2
+    assert "unrecognized arguments:" in captured.err and flag in captured.err
+    assert not captured.out and not list(tmp_path.iterdir())
+
+
 @pytest.fixture
 def current_dump(tmp_path):
     from toolbox.live.catalog import DEFAULT_PRESETS, load_panel

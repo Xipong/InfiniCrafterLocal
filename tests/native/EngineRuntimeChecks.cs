@@ -67,13 +67,8 @@ internal static partial class EngineRuntimeChecks
                 return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
                 return ReplayGeneratedContracts(args[1]);
-            if (args.Length == 2 && args[0] == "--capture-vfx-preview")
-            {
-                CaptureVfxPreview(args[1]);
-                return 0;
-            }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --profile-populated-parent-panel <manifest> <output>, --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
+                throw new ArgumentException("Expected --profile-populated-parent-panel <manifest> <output>, --check-filter <filter>, --replay-contracts <jsonl-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -356,7 +351,6 @@ internal static partial class EngineRuntimeChecks
             ("runtime dump Nebula Rainbow available content roundtrip", RuntimeDumpNebulaRainbowAvailableContentRoundTrip),
             ("runtime dump atomic paired manifest and failed publication", RuntimeDumpPublishesImmutablePairAndPreservesPreviousOnFailure),
             ("runtime dump shares complete parent and projectile capture", RuntimeDumpSharesCompleteParentAndProjectileCapture),
-            ("runtime dump preserves capture failures as explicit unavailable rows", RuntimeDumpKeepsCaptureFailuresAsExplicitRows),
             ("parent complete projectile attack source reaches live and dump", ParentProjectileAttackSemanticsReachPrepareAndDump),
             ("projectile attack source symbolic dependencies and predicates", ProjectileAttackSourceObservationsKeepExpressionsAndPredicates),
             ("projectile attack shared AI selection before source budgets", ProjectileSharedAiCaptureSelectsBeforeSourceBudgets),

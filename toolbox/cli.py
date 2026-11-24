@@ -89,8 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.run:
             # The child runs at BASE_ROOT; preserve the caller's selected files.
             forwarded = list(values[1:])
-            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump', 'attempt_budget',
-                         'reuse_images_from', 'vfx_only_from'):
+            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump', 'attempt_budget'):
                 path = getattr(args, name)
                 if path is not None:
                     forwarded += ['--' + name.replace('_', '-'), str(path.expanduser().resolve())]
