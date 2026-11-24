@@ -1,4 +1,4 @@
-"""The public workbench entry delegates; it does not own native execution."""
+"""The public Workbench CLI works from the caller directory."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,6 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-OWNER = ROOT / 'tools/workbench/workbench.py'
 
 
 def invoke(tmp_path, *args):
@@ -18,26 +17,6 @@ def invoke(tmp_path, *args):
                DOTNET=str(tmp_path / 'absent-dotnet'))
     return subprocess.run([sys.executable, '-m', 'toolbox', 'workbench', *args],
                           cwd=tmp_path, env=env, capture_output=True, text=True)
-
-
-@pytest.mark.parametrize('status', [0, 7])
-def test_forwarding_preserves_argv_exit_and_caller_context(monkeypatch, tmp_path, status):
-    from toolbox.cli import main
-    monkeypatch.chdir(tmp_path)
-    args = ['run', '--item', 'my item.json', '--scenario', '../scene.json',
-            '--out', 'new output', '--unknown-owner-flag']
-    calls = []
-
-    def child(command, **kwargs):
-        calls.append(command)
-        assert kwargs == {}  # inherit cwd, environment and all three streams
-        assert Path.cwd() == tmp_path
-        return subprocess.CompletedProcess(command, status)
-
-    monkeypatch.setattr(subprocess, 'run', child)
-    assert main(['workbench', *args]) == status
-    assert calls == [[sys.executable, str(OWNER), *args]]
-    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize('args', [('--help',), ('run', '--help')])

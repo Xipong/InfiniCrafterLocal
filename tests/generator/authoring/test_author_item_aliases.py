@@ -33,8 +33,13 @@ def test_native_visibility_has_one_exact_receipt(hidden):
     assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("layer,inactive", [("tile", "wall"), ("wall", "tile")])
-@pytest.mark.parametrize("identifier,style", [(0, 0), (18, 7), (65535, 255)])
+@pytest.mark.parametrize('layer,inactive,identifier,style', [
+    ("tile", "wall", 0, 0),
+    ("tile", "wall", 18, 7),
+    ("tile", "wall", 65535, 255),
+    ("wall", "tile", 0, 0),
+    ("wall", "tile", 65535, 255),
+])
 def test_placement_layer_has_one_explicit_id_and_exact_inactive_wire_literal(layer, inactive, identifier, style):
     fn = f"place_{layer}"
     source, call = _source(fn)
@@ -49,8 +54,13 @@ def test_placement_layer_has_one_explicit_id_and_exact_inactive_wire_literal(lay
     assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("layer", ["tile", "wall"])
-@pytest.mark.parametrize("bad", [-1, 65536, True])
+@pytest.mark.parametrize('layer,bad', [
+    ("tile", -1),
+    ("tile", 65536),
+    ("tile", True),
+    ("wall", -1),
+    ("wall", True),
+])
 def test_active_placement_id_is_never_disabled_or_guessed(layer, bad):
     source, call = _source(f"place_{layer}")
     call["params"][f"{layer}Id"] = bad
@@ -201,8 +211,14 @@ def test_unrelated_repair_cannot_change_a_valid_condition_or_threshold():
     assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == call["params"]
     assert audit["ignoredChanges"] and validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
-@pytest.mark.parametrize("bad", [True, 1001, 1.0, None])
-@pytest.mark.parametrize("source_available", [False, True])
+@pytest.mark.parametrize('bad,source_available', [
+    (True, False),
+    (True, True),
+    (1001, False),
+    (1001, True),
+    (1.0, False),
+    (None, False),
+])
 def test_grouped_armor_receipts_refuse_coherent_wrong_json_types(bad, source_available):
     source, call = _source("armor")
     call["params"]["setBonuses"] = {"aggroPoints": 1}

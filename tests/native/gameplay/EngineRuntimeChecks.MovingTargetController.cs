@@ -80,19 +80,30 @@ internal static partial class EngineRuntimeChecks
     {
         using var scope = new SwarmRuntimeScope();
         var data = MovingTargetFixture("orbit"); var root = data.RuntimeProgram.TryGetEntity("root")!;
-        var host = SwarmHost(data, root);
-        var owner = Terraria.Main.player[0]; owner.dead = true;
-        typeof(GeneratedProjectile).GetField("_controllerTimer", RootPrivate)!.SetValue(host, 5);
+        var control = SwarmHost(data, root);
+        var cancelled = SwarmHost(data, root, slot: 1);
+        var owner = Terraria.Main.player[0]; owner.Center = new Vector2(1600, 1600);
+        var npc = Terraria.Main.npc[0]; npc.SetDefaults(Terraria.ID.NPCID.BlueSlime); npc.active = true;
+        npc.Center = owner.Center + new Vector2(200, 0);
+        control.Projectile.Center = cancelled.Projectile.Center = owner.Center + new Vector2(64, 0);
         int kills = 0, shots = 0;
         using var kill = new Hook(typeof(Projectile).GetMethod(nameof(Projectile.Kill), Type.EmptyTypes)!,
             (Action<Projectile>)(p => { kills++; p.active = false; }));
         using var native = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
             ((source, position, velocity, type, damage, knockback, player, ai0, ai1, ai2) => { shots++; return new Projectile(); }));
-        host.AI();
-        Equal(1, kills, "movement owner cancellation retires helper");
-        Equal(0, shots, "retired moving helper does not enter firing path");
-        Equal(5, (int)typeof(GeneratedProjectile).GetField("_controllerTimer", RootPrivate)!.GetValue(host)!, "firing timer is not advanced after movement cancellation");
+        for (int tick = 1; tick < root.Targeting.IntervalTicks; tick++)
+        {
+            control.AI();
+            cancelled.AI();
+        }
+        Equal(0, shots, "neither helper fires early");
+        control.AI();
+        Equal(1, shots, "live owner fires on the next update");
+        owner.dead = true;
+        cancelled.AI();
+        Equal(1, kills, "loss of owner retires the helper on its firing update");
+        Equal(1, shots, "retired helper cannot fire an additional shot");
     }
 
     private static void TargetAndFireLaunchAndDelayKeepExplicitMotion()

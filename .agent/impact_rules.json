@@ -277,7 +277,6 @@
         "tools/testing/run_focused_pytests.py",
         "tools/testing/run_pytest_shards.py",
         "tools/validate_release.py",
-        "tools/build/validate_release*",
         "tools/diagnostics/render_validation_report.py",
         ".agent/**",
         ".github/workflows/ci.yml",

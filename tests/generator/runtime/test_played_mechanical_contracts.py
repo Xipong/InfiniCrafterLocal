@@ -1,17 +1,8 @@
-"""Played RAW stays frozen: retired Author/wire refusals and current controls.
-
-Fresh dependency/Repair controls explicitly compose independent components. These
-are not retrofits of the A2/A3/A4 items or claims of final PNG-ready delivery.
-"""
-from suite_paths import TEST_ROOT
-import hashlib
-import json
+"""Current projectile producers and frozen owner-release repair."""
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
@@ -19,14 +10,6 @@ from infini_local.core.runtime_authoring.repair.scope import build_runtime_repai
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-
-_FIXTURES = (TEST_ROOT / 'fixtures')
-_CAPTURED = json.loads((_FIXTURES / 'played_a2_a3_a4_author.json').read_text())
-CAPTURES = _CAPTURED
-DOOR = 'g_90e0879b1756a18b'
-PICK = 'g_fb3aca59f2dc1ac3'
-SPEARS = tuple(key for key in CAPTURES if key not in (DOOR, PICK))
-
 
 def call(doc, fn):
     return next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == fn)
@@ -71,20 +54,6 @@ def _compile_receipts(doc):
     return wire
 
 
-def test_a2_exact_door_refuses_retired_author_without_mutation():
-    doc = deepcopy(CAPTURES[DOOR])
-    before = deepcopy(doc)
-    report = validate_runtime_program(doc)
-    old = call(doc, 'move_flail_tether')
-    index = doc['runtimeProgram']['calls'].index(old)
-    assert any(row['code'] == 'unknown_capability' and row['path'] == f'$.runtimeProgram.calls[{index}].fn'
-               for row in report['errors'])
-    assert old['fn'] not in CAPABILITY_REGISTRY
-    assert doc == before
-    with pytest.raises(ValueError):
-        compile_runtime_program(doc)
-
-
 @pytest.mark.parametrize('cursor', [False, True], ids=['return', 'cursor-seek-return'])
 def test_release_repair_thaws_only_channel_not_motion_or_valid_siblings(cursor):
     doc = _only_projectile_lane(release_witness(cursor))
@@ -108,9 +77,12 @@ def test_release_repair_thaws_only_channel_not_motion_or_valid_siblings(cursor):
     assert 'rotation' not in entity and 'controller' not in entity
 
 
-@pytest.mark.parametrize('lane', ['primary_use', 'alternate_use'])
-@pytest.mark.parametrize('channel', [False, True])
-@pytest.mark.parametrize('cursor', [False, True])
+@pytest.mark.parametrize('lane,channel,cursor', [
+    ('primary_use', False, False),
+    ('primary_use', True, True),
+    ('alternate_use', False, True),
+    ('alternate_use', True, False),
+])
 def test_release_active_root_dependency_is_exact_target_and_input(lane, channel, cursor):
     doc = _only_projectile_lane(release_witness(cursor), lane)
     call(doc, 'item_use')['params']['channel'] = channel
@@ -151,8 +123,7 @@ def test_passive_and_event_release_keep_owner_channel_semantics_without_item_cha
 
 
 @pytest.mark.parametrize('lane', ['primary_use', 'alternate_use', 'hold'])
-@pytest.mark.parametrize('retired', ['move_flail_tether', 'move_yoyo_hover'])
-def test_missing_movement_repair_never_offers_retired_author_for_any_producer(lane, retired):
+def test_missing_movement_repairs_the_declared_producer(lane):
     doc = _only_projectile_lane(build_capability_witness('move_straight'), lane)
     movement = call(doc, 'move_straight')
     target = movement['target']
@@ -160,7 +131,6 @@ def test_missing_movement_repair_never_offers_retired_author_for_any_producer(la
     before = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)['errors'])
     requirement = next(row for row in scope['repairRequirements'] if row['code'] == 'missing_movement_component')
-    assert retired not in requirement['requiredOneOfCapabilities']
     assert 'move_straight' in requirement['requiredOneOfCapabilities']
     assert scope['create']['calls']['allowedTargetIds'] == [target]
     replacement = {'id': 'new_motion', 'fn': 'move_straight', 'target': target, 'params': {}}
@@ -179,68 +149,3 @@ def test_channel_dependency_does_not_accept_truthy_or_null_values(invalid):
     call(doc, 'item_use')['params']['channel'] = invalid
     before = deepcopy(doc)
     assert not validate_runtime_program(doc)['ok'] and doc == before
-
-
-def test_a3_archived_pick_is_not_imported_as_current_author():
-    doc = deepcopy(CAPTURES[PICK])
-    before = deepcopy(doc)
-    assert not validate_runtime_program(doc)['ok']
-    with pytest.raises(ValueError):
-        compile_runtime_program(doc)
-    assert doc == before
-
-
-@pytest.mark.parametrize('key', SPEARS)
-def test_a4_exact_code19_author_is_retired_without_rewriting_captured_mechanics_or_advice(key):
-    doc = deepcopy(CAPTURES[key])
-    before = deepcopy(doc)
-    assert 'initial' in doc['realization']['description'].lower()
-    movement = call(doc, 'move_forward_then_retract')
-    report = validate_runtime_program(doc)
-    index = doc['runtimeProgram']['calls'].index(movement)
-    assert any(e['code'] == 'unknown_capability' and e['path'] == f'$.runtimeProgram.calls[{index}].fn' for e in report['errors'])
-    assert movement['fn'] not in CAPABILITY_REGISTRY
-    with pytest.raises(ValueError):
-        compile_runtime_program(doc)
-    assert doc == before == CAPTURES[key]
-
-
-@pytest.mark.parametrize('case_id,code', [('door_on_chain', 16), ('umbrella_grenade', 17), ('shield_and_disc', 19)])
-def test_saved_motion_programs_are_refused_without_recompiling_retired_author(case_id, code):
-    path = _FIXTURES / 'runtime_program_v5_seed_corpus.json'
-    raw = path.read_bytes()
-    row = next(c for c in json.loads(raw)['cases'] if c['caseId'] == case_id)
-    full = row['expectedDeliveryWire']
-    before = deepcopy(full)
-    assert hashlib.sha256(json.dumps(full, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest() == row['expectedDeliveryWireSha256']
-    # Exact archived envelope has the independently retired tooltip root. Do not
-    # call it final-delivery GREEN or change the archive to hide that refusal.
-    assert not validate_runtime_wire(full)['ok']
-    # Isolate the retired movement in an admitted current envelope: it still refuses.
-    from infini_local.qa.capability_witnesses import build_capability_witness
-    program_control = compile_runtime_program(build_capability_witness('move_straight'))
-    program_control.pop('runtimeContract')
-    saved_movement = next(e['movement'] for e in full['runtimeProgram']['entities']
-                          if e.get('movement', {}).get('code') == code)
-    current_body = next(e for e in program_control['runtimeProgram']['entities'] if 'movement' in e)
-    current_body['movement'] = deepcopy(saved_movement)
-    assert not validate_runtime_wire(program_control)['ok']
-    assert any(e.get('movement', {}).get('code') == code for e in full['runtimeProgram']['entities'])
-    assert full == before and path.read_bytes() == raw
-
-
-@pytest.mark.parametrize('channel', [False, True])
-def test_retired_yoyo_author_refusal_is_independent_of_explicit_channel(channel):
-    doc = _only_projectile_lane(build_capability_witness('move_straight'))
-    old = call(doc, 'move_straight')
-    old.update(fn='move_yoyo_hover', params={'range': 10, 'speedBlocksPerSecond': 52.5})
-    call(doc, 'item_use')['params']['channel'] = channel
-    before = deepcopy(doc)
-    index = doc['runtimeProgram']['calls'].index(old)
-    report = validate_runtime_program(doc)
-    assert any(e['code'] == 'unknown_capability' and e['path'] == f'$.runtimeProgram.calls[{index}].fn'
-               for e in report['errors'])
-    assert 'move_yoyo_hover' not in CAPABILITY_REGISTRY
-    with pytest.raises(ValueError):
-        compile_runtime_program(doc)
-    assert doc == before

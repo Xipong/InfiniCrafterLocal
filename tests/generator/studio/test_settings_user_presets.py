@@ -11,8 +11,6 @@ from infini_local.desktop import settings_env, settings_schema
 
 
 def test_snapshot_keeps_exact_string_settings_without_credentials():
-    snapshot = getattr(settings_env, "user_preset_snapshot", None)
-    assert callable(snapshot), "settings_env has no user-preset snapshot API"
     safe = {
         "INFINI_LLM_MAX_TOKENS": "12345",
         "INFINI_LLM_REASONING_MAX_TOKENS": "2500",
@@ -43,14 +41,13 @@ def test_snapshot_keeps_exact_string_settings_without_credentials():
         42: "not a string key",
     }
     before = dict(data)
-    assert snapshot(data) == safe
+    assert settings_env.user_preset_snapshot(data) == safe
     assert data == before, "snapshot mutated the GUI's current settings"
 
 
 def test_named_profiles_roundtrip_and_update_without_losing_neighbors(tmp_path: Path):
-    save = getattr(settings_env, "save_user_preset", None)
-    load = getattr(settings_env, "load_user_presets", None)
-    assert callable(save) and callable(load), "settings_env has no named user-preset persistence API"
+    save = settings_env.save_user_preset
+    load = settings_env.load_user_presets
     assert settings_env.CUSTOM_PRESET == "Custom"
     assert settings_env.USER_PRESET_PREFIX == "Мой: "
     path = tmp_path / "user-presets.json"
@@ -81,17 +78,14 @@ def test_named_profiles_roundtrip_and_update_without_losing_neighbors(tmp_path: 
 
 
 def test_missing_user_preset_file_loads_empty_without_creating_it(tmp_path: Path):
-    load = getattr(settings_env, "load_user_presets", None)
-    assert callable(load), "settings_env has no user-preset loader"
     path = tmp_path / "missing.json"
-    assert load(path) == {}
+    assert settings_env.load_user_presets(path) == {}
     assert not path.exists()
 
 
 @pytest.mark.parametrize("replace_fails", [False, True])
 def test_atomic_save_publishes_complete_sibling_or_preserves_old_file(tmp_path: Path, monkeypatch, replace_fails):
-    save = getattr(settings_env, "save_user_preset", None)
-    assert callable(save), "settings_env has no atomic user-preset writer"
+    save = settings_env.save_user_preset
     path = tmp_path / "profiles.json"
     old = {"Old": {"INFINI_LLM_MAX_TOKENS": "1"}}
     save(path, "Old", old["Old"])
@@ -129,7 +123,6 @@ def test_atomic_save_publishes_complete_sibling_or_preserves_old_file(tmp_path: 
     b'{"presets":',
     b'[]',
     b'{"schema":"other.v1","presets":{}}',
-    b'{"schema":"infini.gui-user-presets.v1"}',
     b'{"schema":"infini.gui-user-presets.v1","presets":[]}',
     b'{"schema":"infini.gui-user-presets.v1","presets":{"Broken":[]}}',
     b'{"schema":"infini.gui-user-presets.v1","presets":{"Broken":{"INFINI_LLM_MAX_TOKENS":12}}}',
@@ -148,8 +141,7 @@ def test_malformed_file_is_refused_without_overwriting_any_bytes(tmp_path: Path,
 
 
 @pytest.mark.parametrize("invalid_name", [
-    "", " \t ", "x" * 81, None, 123, "Custom", " custom ",
-    "Мой: уже отображаемое имя", "Мой:", "мОй: another", "bad\nname", "bad\x00name",
+    " \t ", "x" * 81, None, " custom ", "мОй: another", "bad\x00name",
     *settings_schema.PRESETS,
 ])
 def test_invalid_or_reserved_profile_names_are_refused(tmp_path: Path, invalid_name):

@@ -25,8 +25,7 @@ def test_panels_command_lists_readable_case_packages():
     assert panels['live20-classic']['casesFile'].endswith('live20-classic.json')
     assert set(panels) == {'live10-midgame', 'live20-classic', 'live40-diverse'}
     assert panels['live40-diverse']['caseCount'] == 40
-    assert panels['live40-diverse']['requiresRuntimeDump'] is True
-    assert panels['live40-diverse']['runtimeDump'] is None
+    assert all(p['requiresRuntimeDump'] is True and p['runtimeDump'] is None for p in panels.values())
 
 
 @pytest.mark.parametrize('command,preset,count', [
@@ -56,23 +55,9 @@ def test_explicit_preset_loads_its_versioned_cases_and_parent_fixture(tmp_path, 
 
 
 
-@pytest.mark.parametrize('filename,count,original_sha', [
-    ('items.jsonl', 39, '62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06'),
-])
-def test_historical_parent_rows_preserve_original_source_bytes(filename, count, original_sha):
-    import hashlib
-    raw = (ROOT / 'toolbox/fixtures' / filename).read_bytes()
-    rows = [json.loads(line) for line in raw.splitlines() if line.strip()]
-    assert hashlib.sha256(raw).hexdigest() == original_sha
-    assert len(rows) == len({row['internalName'] for row in rows}) == count
-    if filename == 'items.jsonl':
-        assert {row['sourceMod'] for row in rows} == {'Terraria'}
-
-
 @pytest.mark.parametrize('flags,fragment', [
     (['--preset', 'live20-classic'], 'different live command'),
-    (['--preset', 'live10-starter'], 'unknown built-in preset'),
-    (['--preset', 'live20-classic-sprites'], 'unknown built-in preset'),
+    (['--preset', 'unregistered-preset'], 'unknown built-in preset'),
     (['--preset', '../live10-midgame'], 'invalid built-in preset'),
     (['--preset', 'live10-midgame', '--cases-file', 'unused.json'], 'mutually exclusive'),
 ])
@@ -81,10 +66,11 @@ def test_invalid_preset_selection_is_refused_before_running(flags, fragment):
     assert result.returncode == 2 and fragment in result.stderr
 
 
-@pytest.mark.parametrize('command', ['live10', 'live40'])
+@pytest.mark.parametrize('command', ['live10', 'live20', 'live40'])
 def test_current_panels_require_external_dump(command):
     result = subprocess.run([sys.executable, '-m', 'toolbox', command], cwd=ROOT, text=True, capture_output=True)
     assert result.returncode == 2
+    assert not result.stdout
     assert 'requires an explicit current --runtime-dump' in result.stderr
     assert 'Traceback' not in result.stderr
 

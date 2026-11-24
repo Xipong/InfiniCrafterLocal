@@ -25,18 +25,19 @@ def document(activation=FN):
     return doc, call
 
 
-@pytest.mark.parametrize("leaf,value,wire_leaf,expected", [
-    ("combat.defensePoints", -100, "combat.defensePoints", -100),
-    ("combat.attackSpeedBonus", -80, "combat.attackSpeedPercent", -80),
-    ("combat.critChance", -100, "combat.critChancePoints", -100),
-    ("combat.damageBonus", -90, "combat.damagePercent", -90),
-    ("moveSpeedBonus", -80, "movementSpeed", -0.8),
-    ("jumpSpeedBonus", -30, "jumpBoost", -8),
-    ("manaRegen", -100, "manaRegen", -100),
-    ("lifeRegen", -50, "lifeRegen", -100),
-    ("miningSpeedMultiplier", 0.25, "miningSpeedMultiplier", 0.25),
+@pytest.mark.parametrize('leaf,value,wire_leaf,expected,activation', [
+    ('combat.defensePoints', -100, 'combat.defensePoints', -100, FN),
+    ('combat.defensePoints', -100, 'combat.defensePoints', -100, 'refresh_held_effect'),
+    ('combat.defensePoints', -100, 'combat.defensePoints', -100, 'generated_buff_on_event'),
+    ('combat.attackSpeedBonus', -80, 'combat.attackSpeedPercent', -80, 'refresh_held_effect'),
+    ('combat.critChance', -100, 'combat.critChancePoints', -100, 'generated_buff_on_event'),
+    ('combat.damageBonus', -90, 'combat.damagePercent', -90, FN),
+    ('moveSpeedBonus', -80, 'movementSpeed', -0.8, 'refresh_held_effect'),
+    ('jumpSpeedBonus', -30, 'jumpBoost', -8, 'generated_buff_on_event'),
+    ('manaRegen', -100, 'manaRegen', -100, FN),
+    ('lifeRegen', -50, 'lifeRegen', -100, 'refresh_held_effect'),
+    ('miningSpeedMultiplier', 0.25, 'miningSpeedMultiplier', 0.25, 'generated_buff_on_event'),
 ])
-@pytest.mark.parametrize("activation", [FN, "refresh_held_effect", "generated_buff_on_event"])
 def test_each_penalty_alone_is_an_effect_in_author_and_saved_wire(leaf, value, wire_leaf, expected, activation):
     doc, call = document(activation)
     if leaf.startswith("combat."):

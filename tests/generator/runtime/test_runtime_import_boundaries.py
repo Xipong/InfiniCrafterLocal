@@ -1,66 +1,14 @@
-"""Imports expose real owners without eagerly starting unrelated runtime layers."""
+"""The standalone VFX and provider contracts work without generation code."""
 from __future__ import annotations
-from suite_paths import GENERATOR_ROOT
-
 import json
 import subprocess
 import sys
 
-import pytest
-
-PACKAGE = "infini_local.core.runtime_authoring"
-
-
-def _imported_modules(*names: str) -> set[str]:
-    script = (
-        "import importlib,json,sys; "
-        "[importlib.import_module(name) for name in sys.argv[1:]]; "
-        "print(json.dumps(sorted(name for name in sys.modules if name.startswith('infini_local'))))"
-    )
-    from pathlib import Path
-    result = subprocess.run([sys.executable, "-c", script, *names], cwd=GENERATOR_ROOT,
-                            check=True, capture_output=True, text=True, timeout=20)
-    return set(json.loads(result.stdout))
-
-
-def test_registry_import_does_not_load_compilation_repair_or_transport() -> None:
-    loaded = _imported_modules(PACKAGE + ".capability_registry")
-    assert PACKAGE + ".capability_registry" in loaded
-    assert not loaded & {
-        PACKAGE + ".compiler", PACKAGE + ".validator", PACKAGE + ".wire_validator",
-        PACKAGE + ".repair.scope", PACKAGE + ".program_schema", PACKAGE + ".technical_lowering",
-        "infini_local.pipelines.transport.client", "infini_local.core.config_bootstrap",
-    }
-
-
-@pytest.mark.parametrize("owners", [
-    ("compiler", "repair.scope", "repair.filter", "repair.validation", "wire_validator", "program_schema", "validator"),
-    ("wire_validator", "validator", "program_schema", "repair.validation", "repair.filter", "repair.scope", "compiler"),
-    ("repair.scope", "repair.filter", "repair.validation", "program_schema", "compiler", "validator", "wire_validator"),
-])
-def test_runtime_owners_import_independently_of_barrel_order(owners: tuple[str, ...]) -> None:
-    names = {PACKAGE + "." + name for name in owners}
-    assert names <= _imported_modules(*(PACKAGE + "." + name for name in owners))
-
-
-@pytest.mark.parametrize("reader", [
-    PACKAGE + ".wire_views",
-    "infini_local.core.vfx.validation",
-    "infini_local.pipelines.visual.request",
-    "infini_local.pipelines.vfx.request",
-])
-def test_presentation_readers_do_not_import_gameplay_generation(reader: str) -> None:
-    loaded = _imported_modules(reader)
-    assert reader in loaded
-    assert not loaded & {
-        PACKAGE + ".compiler", PACKAGE + ".repair.scope",
-        "infini_local.pipelines.author.request", "infini_local.pipelines.author.stage",
-    }
+from suite_paths import GENERATOR_ROOT
 
 
 def test_vfx_contracts_execute_without_generation_packages() -> None:
     """VFX and provider contracts execute without a model-stage installation."""
-    from pathlib import Path
 
     from tests.generator.vfx_material_fixtures import _data
 
@@ -108,7 +56,6 @@ assert not validate_vfx_manifest_wire(data)['ok']
 
 def test_parameter_contract_executes_without_capability_inventory() -> None:
     """Parameter conversions need their declaration, not initialized mechanics."""
-    from pathlib import Path
 
     script = """
 import importlib.abc

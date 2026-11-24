@@ -12,7 +12,7 @@ from infini_local.core import llm_config as config
 from infini_local.core.http_io import remaining_seconds
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, instruction_segment_index, static_instruction_prefix_parts
-from infini_local.pipelines.transport import diagnostics, http, profiles, rejections
+from infini_local.pipelines.transport import diagnostics, http, negotiation, profiles, rejections
 from infini_local.pipelines.transport import provider_wire as wire
 from infini_local.pipelines.transport import replay as offline_replay
 from infini_local.services.combine_endpoint import update_generation_activity
@@ -95,6 +95,10 @@ _STRICT_SCHEMA_CAPABILITY: dict[str, bool] = {}
 
 
 
+def _profile_capability_key(context: dict[str, Any]) -> str:
+    return profiles._profile_id(context) + "|" + profiles._llm_context_key(context)
+
+
 def llm_auth_snapshot() -> dict[str, Any]:
     """Small UI/trace diagnostic for the currently selected LLM backend.
 
@@ -116,7 +120,7 @@ def llm_auth_snapshot() -> dict[str, Any]:
                 if context.get("provider") in {"openrouter", "openai_compat"}
                 else None
             ),
-            "responsesSupported": _RESPONSES_CAPABILITY.get(profiles._llm_context_key(context)),
+            "responsesSupported": _RESPONSES_CAPABILITY.get(_profile_capability_key(context)) if negotiation.reusable_in_memory() else None,
         }
         for context in profiles.configured_llm_pool()
     ]
@@ -321,6 +325,19 @@ def _record_llm_stage(payload: dict[str, Any]) -> str:
 
 
 
+def _chat_recovery_returned_json(result: dict[str, Any]) -> bool:
+    try:
+        choice = result["choices"][0]
+        message = choice["message"]
+        if (choice.get("finish_reason") not in (None, "stop")
+                or message.get("refusal") or message.get("tool_calls") or message.get("function_call")):
+            return False
+        parse_first_valid_llm_json(message["content"])
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError):
+        return False
+    return True
+
+
 def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
     stage = wire.llm_stage(payload)
     # Raw replay is an explicit offline seam.  Resolve it before choosing
@@ -379,12 +396,18 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
         return result
     mode = profiles._normalized_api_mode(context.get("api_mode"))
     effective_model = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
-    capability_key = profiles._llm_context_key({**context, "model": effective_model})
+    capability_key = _profile_capability_key({**context, "model": effective_model})
     lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     responses_allowed = mode in {"auto", "responses"}
     responses_to_chat_fallback = False
     had_working_chain = False
-    if _RESPONSES_CAPABILITY.get(capability_key) is False:
+    durable_endpoint = False
+    fallback_attempt = None
+    if responses_allowed and negotiation.confirmed("responses_to_chat", capability_key, context):
+        negotiation.reused("responses_to_chat", context, "profile")
+        responses_allowed = False
+    if (responses_allowed and negotiation.model_is_pinned(context) and negotiation.reusable_in_memory()
+            and _RESPONSES_CAPABILITY.get(capability_key) is False):
         responses_allowed = False
     if lease is not None and lease.context is context and lease.responses_disabled:
         responses_allowed = False
@@ -406,15 +429,31 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
                 lease.responses_disabled = True
                 lease.previous_response_id = ""
             responses_to_chat_fallback = True
+            durable_endpoint = (not had_working_chain and negotiation.model_is_pinned(context)
+                                and rejections._responses_endpoint_rejected(error))
+            fallback_attempt = negotiation.begin("responses_to_chat", context, "profile" if durable_endpoint else "attempt")
             diagnostics._attempt_reason("responses_to_chat_fallback")
             log_event("warn", "LLM Responses incompatible; retrying same stage through stateless Chat Completions", {
                 "stage": stage,
                 "profileId": context.get("profile_id"),
                 "provider": profiles.active_llm_provider(context),
                 "status": getattr(error, "code", None),
-                "error": repr(error),
             })
-    result = _llm_chat_json_single_context(payload, timeout, context)
+    try:
+        result = _llm_chat_json_single_context(payload, timeout, context)
+    except Exception:
+        if fallback_attempt is not None:
+            negotiation.finish(fallback_attempt, "recovery_failed")
+        raise
+    if fallback_attempt is not None:
+        if not _chat_recovery_returned_json(result):
+            negotiation.finish(fallback_attempt, "recovery_failed")
+        else:
+            saved = False
+            if durable_endpoint:
+                _RESPONSES_CAPABILITY[capability_key] = False
+                saved = negotiation.persist("responses_to_chat", capability_key, context)
+            negotiation.finish(fallback_attempt, "saved" if saved else "recovered_not_saved")
     if isinstance(result, dict):
         debug_raw = result.get("_debug")
         debug: dict[str, Any] = debug_raw if isinstance(debug_raw, dict) else {}
@@ -425,13 +464,6 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             **wire._usage_fields(result),
         }
         if responses_to_chat_fallback:
-            if not had_working_chain:
-                try:
-                    parse_first_valid_llm_json(result["choices"][0]["message"]["content"])
-                except (ValueError, TypeError, KeyError, IndexError):
-                    pass
-                else:
-                    _RESPONSES_CAPABILITY[capability_key] = False
             result = _with_transport_retry_debug(result, ["responses_to_chat_fallback"])
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
     return result
@@ -453,7 +485,7 @@ def _payload_without_strict_schema(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _strict_schema_capability_keys(payload: dict[str, Any], context: dict[str, Any]) -> tuple[str, str]:
     model = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
-    base = profiles._llm_context_key({**context, "model": model, "api_mode": "chat_completions"})
+    base = _profile_capability_key({**context, "model": model})
     schema_bytes = json.dumps(payload.get("response_format"), ensure_ascii=False,
                              sort_keys=True, separators=(",", ":")).encode("utf-8")
     return base, base + "|schema=" + hashlib.sha256(schema_bytes).hexdigest()
@@ -466,15 +498,17 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
     capability_key, schema_key = _strict_schema_capability_keys(payload, context)
     schema_downgraded = False
     # Only successful negotiations establish unsupported format or exact-schema scope.
-    if (
-        (_STRICT_SCHEMA_CAPABILITY.get(capability_key) is False
-         or _STRICT_SCHEMA_CAPABILITY.get(schema_key) is False)
-        and isinstance(prepared.get("response_format"), dict)
-        and str((prepared.get("response_format") or {}).get("type") or "") == "json_schema"
-    ):
-        prepared = _payload_without_strict_schema(prepared)
-        schema_downgraded = True
-        diagnostics._attempt_reason("schema_capability_cached")
+    if isinstance(prepared.get("response_format"), dict) and prepared["response_format"].get("type") == "json_schema":
+        saved_scope = next((scope for scope, key in (("profile", capability_key), ("schema", schema_key))
+                            if negotiation.confirmed("schema_to_object", key, context)), None)
+        if saved_scope:
+            negotiation.reused("schema_to_object", context, saved_scope)
+        if saved_scope or (negotiation.model_is_pinned(context) and negotiation.reusable_in_memory() and (
+            _STRICT_SCHEMA_CAPABILITY.get(capability_key) is False or _STRICT_SCHEMA_CAPABILITY.get(schema_key) is False
+        )):
+            prepared = _payload_without_strict_schema(prepared)
+            schema_downgraded = True
+            diagnostics._attempt_reason("schema_capability_cached")
     try:
         return _llm_chat_json_exact_context(
             prepared, timeout, context, schema_downgraded=schema_downgraded
@@ -486,6 +520,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
             raise
         diagnosis = getattr(error, "_infini_shape_diagnosis", None)
         scope = rejections._strict_schema_rejection_scope(error, prepared)
+        attempt = negotiation.begin("schema_to_object", context, scope)
         # The preceding diagnosis event already carries the full explanation, so
         # this one stays a short "what changed" line: three paragraphs of identical
         # prose in the server window would bury the fact that the craft recovered.
@@ -495,7 +530,7 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
             "provider": profiles.active_llm_provider(context),
             "model": str(context.get("model") or ""),
             "status": error.code,
-            "repairedFor": "this run only; config.env is not modified",
+            "repairedFor": "pending recovery; config.env is not modified",
             "was": "json_schema",
             "now": "json_object",
             "schemaChars": (diagnosis or {}).get("schemaChars"),
@@ -503,21 +538,28 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
             "detail": (
                 "Провайдер явно отклонил json_schema (HTTP 400). Тот же промпт повторяется с "
                 "response_format=json_object; успешное восстановление ещё не установлено. "
-                "INFINI_LLM_RESPONSE_FORMAT=json_object — кандидат, не доказанная конфигурация. "
-                "Cache меняется только после валидного ответа; config.env код не меняет."
+                "Адаптация сохраняется только после корректного JSON; config.env не меняется."
             ),
         })
         diagnostics._attempt_reason("json_schema_to_json_object_fallback")
-        result = _llm_chat_json_exact_context(
-            _payload_without_strict_schema(prepared), timeout, context, schema_downgraded=True
-        )
+        try:
+            result = _llm_chat_json_exact_context(
+                _payload_without_strict_schema(prepared), timeout, context, schema_downgraded=True
+            )
+        except Exception:
+            negotiation.finish(attempt, "recovery_failed")
+            raise
         result = _with_transport_retry_debug(result, ["json_schema_to_json_object_fallback"])
         # A 2xx envelope with malformed authored JSON is not a valid recovery.
-        try:
-            parse_first_valid_llm_json(result["choices"][0]["message"]["content"])
-        except (ValueError, TypeError, KeyError, IndexError):
+        if not _chat_recovery_returned_json(result):
+            negotiation.finish(attempt, "recovery_failed")
             return result
-        _STRICT_SCHEMA_CAPABILITY[schema_key if scope == "schema" else capability_key] = False
+        key = schema_key if scope == "schema" else capability_key
+        saved = False
+        if negotiation.model_is_pinned(context):
+            _STRICT_SCHEMA_CAPABILITY[key] = False
+            saved = negotiation.persist("schema_to_object", key, context)
+        negotiation.finish(attempt, "saved" if saved else "recovered_not_saved")
         log_event("info", "LLM schema negotiation accepted", {
             "stage": wire.llm_stage(payload), "profileId": context.get("profile_id"),
             "schemaCapabilityScope": scope, "knownWorkingResponseFormat": "json_object",

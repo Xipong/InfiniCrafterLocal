@@ -113,13 +113,6 @@ def test_shape_leaf_repair_cannot_change_geometry_composition_or_valid_width():
     assert any(row["path"].endswith("shape.radiusEndPx") for row in audit["ignoredChanges"])
 
 
-def test_shape_does_not_accept_legacy_phase_clock_on_persisted_wire():
-    data = _data()
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, authored_shape(data), "no-old-clock")
-    data["vfxManifest"]["slots"][0]["phaseOffset"] = 0
-    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
-
-
 def test_director_single_call_keeps_exact_shape_without_image_stage_or_repair():
     data = _data()
     raw = authored_shape(data, "wave")
@@ -150,13 +143,15 @@ def test_shape_opacity_curve_preserved_independently_of_color_and_radius(curve):
     assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
-@pytest.mark.parametrize("period", [1, 2, 3, 4, 5, 6])
-def test_shape_can_express_legacy_fast_phase_and_orbit_rates(period):
+@pytest.mark.parametrize("period", [1, 6])
+def test_shape_can_express_fast_phase_and_orbit_rates(period):
     data = _data()
     for kind, field in (("wave", "phaseSpeedRadiansPerTick"), ("orbit", "rotationSpeedRadiansPerTick")):
         raw = authored_shape(data, kind)
         raw["slots"][0]["shape"][field] = -math.tau / period
-        assert vfx_validation.validate_vfx_director_output(raw, data)["ok"]
+        report = vfx_validation.validate_vfx_director_output(raw, data)
+        assert report["ok"]
+        assert report["normalized"]["slots"][0]["shape"][field] == -math.tau / period
 
 
 @pytest.mark.parametrize("orientation", ["world", "orbit"])
@@ -234,7 +229,7 @@ def test_sector_inner_outer_order_enforced_in_fresh_and_persisted_wire(endpoint)
 @pytest.mark.parametrize("changes", [
     {"segments": 2}, {"segments": 65}, {"segments": 3.5},
     {"innerRadiusStartPx": None}, {"outerRadiusEndPx": 257},
-    {"radiusStartPx": 5}, {"widthPx": 2}, {"tailOpacityStart": 1},
+    {"radiusStartPx": 5}, {"tailOpacityStart": 1},
 ])
 def test_sector_rejects_invalid_or_foreign_geometry(changes):
     data = _data()

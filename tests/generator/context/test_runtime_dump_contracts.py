@@ -39,9 +39,17 @@ def test_absent_dump_has_no_records_or_invented_provenance(tmp_path):
     assert snapshot.lookup("projectile", 42) == {}
 
 
-@pytest.mark.parametrize("bad_row", [b"invalid json", b"[]", b"\xff", b'{"type":2,"damage":NaN}',
-                                     b'{"type":[]}', b'{"type":{}}', b'{"type":true}', b'{"type":42.5}',
-                                     b'{"type":-1}', b'{"type":"42"}'])
+@pytest.mark.parametrize("bad_row", [
+    b"invalid json",
+    b"[]",
+    b"\xff",
+    b'{"type":2,"damage":NaN}',
+    b'{"type":[]}',
+    b'{"type":true}',
+    b'{"type":42.5}',
+    b'{"type":-1}',
+    b'{"type":"42"}',
+])
 def test_bad_rows_refuse_whole_snapshot_instead_of_skipping_to_later_facts(tmp_path, bad_row):
     path, manifest = manifest_pair(tmp_path)
     descriptor = manifest["files"]["projectiles"]

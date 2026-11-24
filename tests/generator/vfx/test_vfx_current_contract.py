@@ -15,19 +15,12 @@ import infini_local.pipelines.vfx.stage as vfx_stage
 from tests.generator.vfx_material_fixtures import _data, _native
 
 
-RETIRED_SLOT_FIELDS = (
-    "backend", "particleRole", "jitter", "fadeIn", "fadeOut", "budgetWeight",
-    "signatureWeight", "visualCost", "channel", "lane", "emissionMode",
-)
-
-
 def current_input(data):
     return _native(data)
 
 
-@pytest.mark.parametrize("renderer,admitted", [("historyTrail", True),
-                                               ("projectileAfterimage", False), ("actorAfterimage", False)])
-def test_texture_history_has_one_current_renderer_without_alias_translation(renderer, admitted):
+@pytest.mark.parametrize("renderer,admitted", [("historyTrail", True), ("unsupportedRenderer", False)])
+def test_renderer_is_not_reinterpreted_across_director_repair_and_wire(renderer, admitted):
     from infini_local.core.schema_validation import strict_schema_errors
     from tests.generator.vfx.test_vfx_dependency_delivery_contracts import visual_data, authored_vfx
 
@@ -115,8 +108,6 @@ def test_current_rgb_survives_director_compile_and_persisted_gate():
     assert set(manifest) == {"schema", "recipeId", "budget", "slots"}
     assert set(manifest["budget"]) == {"maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls"}
     assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
-    for field in RETIRED_SLOT_FIELDS:
-        assert field not in manifest["slots"][0]
 
 
 @pytest.mark.parametrize("value", ["cyan", "effect", {"r": True, "g": 1, "b": 2},
@@ -129,19 +120,14 @@ def test_color_rejects_tokens_noninteger_and_alpha(value):
     assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
 
 
-def test_persisted_gate_rejects_retired_fields_for_simple_renderers():
+@pytest.mark.parametrize("location", ["manifest", "slot"])
+def test_persisted_gate_rejects_extra_fields(location):
     data = _data()
-    raw = current_input(data)
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "strict-current")
+    manifest = data["vfxManifest"] = vfx_projection._compile_manifest(data, current_input(data), "strict-current")
     assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
-    for field in (*RETIRED_SLOT_FIELDS, "bakedCommands", "effectName", "eventGroup", "stage", "source"):
-        mutation = copy.deepcopy(data)
-        mutation["vfxManifest"]["slots"][0][field] = [] if field == "bakedCommands" else "retired"
-        assert not vfx_validation.validate_vfx_manifest_wire(mutation)["ok"], field
-    for field in ("motif", "effectMagnitude", "visualBudgetClass", "debug", "playbackMode"):
-        mutation = copy.deepcopy(data)
-        mutation["vfxManifest"][field] = "retired"
-        assert not vfx_validation.validate_vfx_manifest_wire(mutation)["ok"], field
+    owner = manifest if location == "manifest" else manifest["slots"][0]
+    owner["unsupportedField"] = True
+    assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]
 
 
 @pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath", "libraryParticle", "screenShakeCue", "soundCue"])
@@ -206,37 +192,19 @@ def test_every_simple_visible_renderer_requires_explicit_rgb(renderer):
 
 
 
-@pytest.mark.parametrize("retired,current,repair", [
-    ("infini.vfx-director.runtime-events.v2", vfx_contract.VFX_DIRECTOR_SCHEMA, False),
-    ("infini.vfx-repair-patch.runtime-events.v1", vfx_contract.VFX_REPAIR_PATCH_SCHEMA, True),
+@pytest.mark.parametrize("current,repair", [
+    (vfx_contract.VFX_DIRECTOR_SCHEMA, False),
+    (vfx_contract.VFX_REPAIR_PATCH_SCHEMA, True),
 ])
-def test_only_current_director_and_repair_schema_ids_are_admitted(retired, current, repair):
+def test_only_current_director_and_repair_schema_ids_are_admitted(current, repair):
     from infini_local.core.schema_validation import strict_schema_errors
 
     data = _data()
     raw = {"schema": current, "note": "no edits"} if repair else current_input(data)
     schema = vfx_repair.vfx_repair_schema(data) if repair else vfx_schema.vfx_director_schema(data)
     assert not strict_schema_errors(raw, schema)
-    raw["schema"] = retired
+    raw["schema"] = "unsupported_schema"
     assert strict_schema_errors(raw, schema)
-
-
-@pytest.mark.parametrize("renderer", [
-    "spriteStampTrail", "historyRibbon", "tipTrail", "ghostArc", "wavyStrip", "beamLine",
-    "fieldPulse", "orbitingMotes", "impactRing", "impactSprite", "childMotes", "lightCue",
-])
-def test_retired_renderers_are_refused_without_translation_at_both_boundaries(renderer):
-    data = _data()
-    raw = current_input(data)
-    raw["slots"][0]["rendererKind"] = renderer
-    before = copy.deepcopy(raw)
-    assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "retired-renderer")
-    wire = copy.deepcopy(data["vfxManifest"])
-    report = vfx_validation.validate_vfx_manifest_wire(data)
-    assert not report["ok"]
-    assert any(error["path"] == "$.vfxManifest.slots[0].rendererKind" for error in report["errors"])
-    assert raw == before and data["vfxManifest"] == wire
 
 
 @pytest.mark.parametrize("renderer,path", [
@@ -272,11 +240,11 @@ def test_current_required_payload_choices_are_also_required_in_saved_wire(render
 
 
 @pytest.mark.parametrize("renderer,payload", [("spriteElement", "element"), ("texturedPath", "path"), ("historyTrail", "trail")])
-def test_retired_impact_texture_source_is_refused_even_with_an_image_path(renderer, payload):
+def test_unknown_texture_source_refuses_authored_and_saved_material(renderer, payload):
     from tests.generator.vfx.test_vfx_material_admission_contracts import _renderer_material
     data = _data()
     raw = _renderer_material(data, renderer)
-    raw["slots"][0][payload]["texture"].update(source="impact", assetId="")
+    raw["slots"][0][payload]["texture"].update(source="unsupported_source", assetId="")
     assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "retired-texture")
+    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "unsupported-texture")
     assert not vfx_validation.validate_vfx_manifest_wire(data)["ok"]

@@ -55,7 +55,6 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert dossier_text(request) == serialized
     packet = json.loads(serialized)
     spec = CAPABILITY_REGISTRY["projectile_lifetime"].params["lifetimeSeconds"]
-    assert (spec.minimum, spec.maximum) == (spec.minimum, spec.maximum)
     bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
     assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"] == bounds
     card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
@@ -520,58 +519,41 @@ def test_damage_class_provider_gap_cannot_admit_reserved_or_unknown_local_values
         assert validate_runtime_program(restored)['ok'] is valid
 
 
-@pytest.mark.parametrize("source_kind,reverse", [
-    ("plain", False), ("short_source", False), ("short_source", True),
-    ("restored_child", False), ("restored_child", True), ("long_source", False),
+@pytest.mark.parametrize("source_kind,label", [
+    ("short_source", "A"),
+    ("short_source", "B"),
+    ("restored_child", "A"),
+    ("long_source", "A"),
 ])
-def test_author_reuses_compacted_dossier_without_changing_selection(monkeypatch, source_kind, reverse):
-    """Selection delivers the exact compared bytes, without reprocessing its winner."""
+def test_author_delivers_whole_source_when_smaller_or_keeps_graph_evidence(source_kind, label):
     import hashlib
-    from infini_local.pipelines.context.cards import raw_parent_card_for_llm
-    from infini_local.pipelines.context.parent_stage import parent_context_for_stage
-    from infini_local.pipelines.context.whole_method_author import prepare_whole_method_author
     from tests.generator.context.test_author_mechanics_policy import whole_method_parent
 
-    parent = {"name": "Plain source", "damage": 7, "useTime": 20}
-    if source_kind != "plain":
-        parent = whole_method_parent()
-        if source_kind == "long_source":
-            source = parent["directProjectileRaw"]["attackReference"]["nativeCSharpSource"]["records"][0]
-            source["code"] = "/* " + "additional literal source detail " * 1500 + " */\n" + source["code"]
-            source["codeSha256"] = hashlib.sha256(source["code"].encode()).hexdigest()
-        elif source_kind == "restored_child":
-            child = parent["directProjectileRaw"]["referencedProjectiles"]["references"][0]["profile"]
-            child["motionReference"] = {"futureSourceFact": "literal unknown detail " * 1000}
-    inputs = ({}, parent) if reverse else (parent, {})
+    parent = whole_method_parent()
+    source = parent["directProjectileRaw"]["attackReference"]["nativeCSharpSource"]["records"][0]
+    if source_kind == "long_source":
+        source["code"] = "/* " + "additional literal source detail " * 1500 + " */\n" + source["code"]
+        source["codeSha256"] = hashlib.sha256(source["code"].encode()).hexdigest()
+    elif source_kind == "restored_child":
+        child = parent["directProjectileRaw"]["referencedProjectiles"]["references"][0]["profile"]
+        child["motionReference"] = {"futureSourceFact": "literal unknown detail " * 1000}
+
+    inputs = (parent, {}) if label == "A" else ({}, parent)
     before = copy.deepcopy(inputs)
-    packets = {label: {"packet": raw_parent_card_for_llm(value)} for label, value in zip(("A", "B"), inputs)}
-    compact = prompt.compact_author_parent_context
-    encode = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-    baseline = compact(parent_context_for_stage(packets, stage="author"))
-    prepared = [prepare_whole_method_author(value) for value in inputs]
-    expected = baseline
-    has_candidate = any(choices for _, choices in prepared)
-    assert has_candidate is (source_kind in {"short_source", "restored_child"})
-    if has_candidate:
-        alternatives = {label: {"packet": raw_parent_card_for_llm(value)}
-                        for label, (value, _) in zip(("A", "B"), prepared)}
-        choices = {label: selected for label, (_, selected) in zip(("A", "B"), prepared)}
-        candidate = compact(parent_context_for_stage(alternatives, stage="author", whole_sources=choices))
-        candidate_wins = len(encode(candidate)) < len(encode(baseline))
-        assert candidate_wins is (source_kind == "short_source")
-        expected = candidate if candidate_wins else baseline
-
-    processed = []
-
-    def observed_compaction(value):
-        processed.append(encode(value))
-        return compact(value)
-
-    monkeypatch.setattr(prompt, "compact_author_parent_context", observed_compaction)
     _, dossier, _ = author.build_initial_author_request(*inputs, "compaction-selection", model_name="offline")
-    packet = json.loads(dossier)
-    actual = {key: packet[key] for key in expected}
-    assert encode(actual) == encode(expected)
+    raw = json.loads(dossier)["parents"][label]["packet"]["raw"]
+    graph_node = raw["item"]["parentSourceGraph"]["nodes"][0]
+    captured_node = parent["parentSourceGraph"]["nodes"][0]
+    assert graph_node["sha256"] == captured_node["sha256"]
+    assert graph_node["unresolved"] == captured_node["unresolved"]
+
+    if source_kind == "short_source":
+        index = graph_node["bodySource"]["mechanicsSourceIndex"]
+        source_record = raw["mechanics"]["source"][index]
+        assert source_record["code"] == source["code"]
+        assert source_record["coverage"] == "whole_method"
+    else:
+        assert "bodySource" not in graph_node
+        assert graph_node["values"] == captured_node["values"]
+        assert graph_node["statements"] == captured_node["statements"]
     assert inputs == before
-    # A deterministic work budget, not a host-load-sensitive timing threshold.
-    assert len(processed) == (2 if has_candidate else 1)

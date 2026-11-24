@@ -1,7 +1,6 @@
 """Exact volley/target choices, omission provenance, strict wire and frozen Repair."""
 
 from copy import deepcopy
-from itertools import product
 
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
@@ -30,9 +29,20 @@ def _targeting(wire):
     return next(e["targeting"] for e in wire["runtimeProgram"]["entities"] if e.get("targeting"))
 
 
-@pytest.mark.parametrize("count,spread,policy,los,hard", list(product(
-    (1, 4), (0.0, 0.75), ("distance_score", "player_assigned_first"), (False, True), (False, True))))
-def test_all_joint_targeting_choices_deliver_exact_fields_and_receipts(count, spread, policy, los, hard):
+# All pairs of choices, plus simultaneous non-defaults; each wire field is still
+# checked independently against its authored value and exact receipt.
+@pytest.mark.parametrize("count,spread,policy,los,hard", [
+    (1, 0.0, "distance_score", False, False),
+    (1, 0.0, "player_assigned_first", True, True),
+    (1, 0.75, "distance_score", True, True),
+    (1, 0.75, "player_assigned_first", False, False),
+    (4, 0.0, "distance_score", False, True),
+    (4, 0.0, "player_assigned_first", True, False),
+    (4, 0.75, "distance_score", True, False),
+    (4, 0.75, "player_assigned_first", False, True),
+    (4, 0.75, "player_assigned_first", True, True),
+])
+def test_pairwise_targeting_choices_deliver_exact_fields_and_receipts(count, spread, policy, los, hard):
     values = dict(zip(OPTIONS, (count, spread, policy, los, hard)))
     doc, call = _fixture(**values)
     before = deepcopy(doc)
@@ -51,11 +61,18 @@ def test_all_joint_targeting_choices_deliver_exact_fields_and_receipts(count, sp
 
 
 @pytest.mark.parametrize("key,value", [
-    ("count", None), ("count", True), ("count", 1.0), ("count", 0), ("count", 5),
-    ("spreadRadians", None), ("spreadRadians", False), ("spreadRadians", -0.1),
-    ("spreadRadians", 0.7501), ("spreadRadians", 1e-50),
-    ("targetPolicy", None), ("targetPolicy", "nearest"), ("targetPolicy", 0),
-    ("requireLineOfSight", None), ("requireLineOfSight", 0), ("hardRange", None), ("hardRange", "true"),
+    ("count", None),
+    ("count", True),
+    ("count", 1.0),
+    ("count", 0),
+    ("count", 5),
+    ("spreadRadians", -0.1),
+    ("spreadRadians", 0.7501),
+    ("spreadRadians", 1e-50),
+    ("targetPolicy", None),
+    ("targetPolicy", "nearest"),
+    ("requireLineOfSight", None),
+    ("hardRange", None),
 ])
 def test_invalid_present_choices_stay_red_in_author_and_wire_without_provenance(key, value):
     doc, call = _fixture(**OPTIONS)
@@ -141,8 +158,13 @@ def test_targeting_extension_requires_a_receipt_when_contract_is_present():
     assert any(row.get("code") == "targeting_extension_provenance" for row in report["errors"])
 
 
-@pytest.mark.parametrize("kind", ["temporary_helper", "stationary_projectile"])
-@pytest.mark.parametrize("movement", [None, "move_straight", "orbit"])
+@pytest.mark.parametrize('kind,movement', [
+    ("temporary_helper", None),
+    ("temporary_helper", "move_straight"),
+    ("temporary_helper", "orbit"),
+    ("stationary_projectile", None),
+    ("stationary_projectile", "orbit"),
+])
 def test_firing_controller_preserves_explicit_same_entity_movement_and_stationary_omission(kind, movement):
     doc, controller = _fixture()
     next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = kind

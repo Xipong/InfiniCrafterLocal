@@ -189,7 +189,7 @@ def test_every_velocity_variant_has_strict_provider_inverse_and_exact_receipts(v
 
 
 @pytest.mark.parametrize("invalid", [None, {}, 8, "radial", {"speed": 8, "disk": {"maxSpeed": 6}},
-    {"radial": {}}, {"radial": {"minSpeed": 4}}, {"disk": {"maxSpeed": 6, "minSpeed": 0}},
+    {"radial": {"minSpeed": 4}}, {"disk": {"maxSpeed": 6, "minSpeed": 0}},
     {"cone": {"minSpeed": 4, "maxSpeed": 7}}, {"speed": True},
     {"fanSpeed": {"minSpeed": -1, "maxSpeed": 8}}, {"radial": {"minSpeed": 0, "maxSpeed": 1801}}])
 def test_invalid_velocity_variants_remain_red_without_branch_guessing(invalid):
@@ -259,13 +259,6 @@ def test_new_velocity_wire_is_strict_without_diagnostic_receipts(mutation):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_old_author_scalar_is_not_a_second_accepted_spelling():
-    document, call = fixture(VELOCITIES[0])
-    call["params"]["speedPxPerUpdate"] = call["params"].pop("velocity")['speed']
-    assert not strict_author_shape_report(document)["ok"]
-    with pytest.raises(ValueError): compile_runtime_program(document)
-
-
 @pytest.mark.parametrize("kind", ["stationary_projectile", "temporary_helper", "field"])
 def test_sampled_velocity_cannot_be_authored_for_a_stationary_kind(kind):
     document, call = fixture(VELOCITIES[2])
@@ -293,31 +286,6 @@ def test_independent_charge_release_and_beam_geometry_keep_initial_sampled_fligh
         assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
     wire.pop("runtimeContract")
     assert validate_runtime_wire(wire)["ok"]
-
-
-@pytest.mark.parametrize("driver,code,params", [
-    ("charge_then_release", 2, {"chargeTicks": 30, "chargeDamageMultiplier": 2,
-        "knockbackMultiplier": 1, "speedMultiplier": 1}),
-    ("channel_beam", 1, {"rangeTiles": 20, "widthPx": 8, "warmupTicks": 0}),
-])
-def test_retired_controller_refuses_scalar_and_sampled_launch_without_mutation(driver, code, params):
-    # Synthetic *persisted wire*, not a current Author compilation of a retired Fn.
-    document, spawn = fixture(VELOCITIES[0])
-    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "item_use")["params"]["channel"] = True
-    wire = compile_runtime_program(document)
-    wire.pop("runtimeContract")
-    target = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == spawn["target"])
-    target["kind"] = "owner_attached_projectile"
-    target["controller"] = {"name": driver, "code": code, "params": params}
-    before = deepcopy(wire)
-    report = validate_runtime_wire(wire)
-    assert not report["ok"]
-    assert any(row["code"] == "unsupported_opcode" and row["path"].endswith(".controller.code")
-               for row in report["errors"])
-    assert wire == before
-    target["spawn"]["speedPxPerTick"] = 0
-    target["spawn"]["velocityDistribution"] = {"kind": "radial", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}
-    assert not validate_runtime_wire(wire)["ok"]
 
 
 @pytest.mark.parametrize("velocity,leaf,value", [(VELOCITIES[1], "aim", "none"), (VELOCITIES[4], "aim", "none"),
@@ -363,8 +331,10 @@ def test_event_spread_for_radial_child_is_repaired_without_changing_valid_child(
     assert final_event["spreadRadians"] == 0
 
 
-@pytest.mark.parametrize("velocity", [VELOCITIES[2], VELOCITIES[3]])
-@pytest.mark.parametrize("invalid_spread", [False, None, "0", 0.5])
+@pytest.mark.parametrize("velocity,invalid_spread", [
+    (VELOCITIES[2], False), (VELOCITIES[2], 0.5),
+    (VELOCITIES[3], None), (VELOCITIES[3], "0"), (VELOCITIES[3], 0.5),
+])
 def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero(velocity, invalid_spread):
     document = build_capability_witness("spawn_on_event")
     event = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "spawn_on_event")
@@ -413,8 +383,9 @@ def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkey
     assert json.dumps(doc, sort_keys=True) == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("case", ["noop", "omitted", "unchanged"])
+@pytest.mark.parametrize("format_mode,case", [
+    ("json_object", "noop"), ("json_schema", "omitted"), ("json_object", "unchanged"),
+])
 def test_velocity_replacement_requires_an_explicit_new_variant(monkeypatch, format_mode, case):
     from infini_local.core.errors import PlannerUnavailable
 

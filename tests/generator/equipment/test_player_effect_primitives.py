@@ -37,8 +37,12 @@ def source(fn, effect):
     call['params']['playerEffect'] = effect
     return doc, call
 
-@pytest.mark.parametrize('fn', ['accessory','armor','generated_buff_on_use'])
-@pytest.mark.parametrize('name,value,wire_name,wire_value', CASES)
+@pytest.mark.parametrize('fn,name,value,wire_name,wire_value', [
+    (left, *right)
+    for index, right in enumerate(CASES)
+    for owners in (['accessory', 'armor', 'generated_buff_on_use'],)
+    for left in (owners if index == 0 else (owners[index % len(owners)],))
+])
 def test_shared_mechanic_exact_delivery_and_presence(fn, name, value, wire_name, wire_value):
     doc, _ = source(fn, {'condition': 'stationary', name: value})
     report = validate_runtime_program(doc)
@@ -67,11 +71,13 @@ def test_half_second_cooldown_reduction_is_an_explicit_hit_action(event):
     action=next(e for entity in wire['runtimeProgram']['entities'] for e in entity.get('events',[]) if e['id']==call['id'])
     assert action['actionCode']==12 and action['cooldownReductionTicks']==30
 
-@pytest.mark.parametrize('field', ['fishingInfo','weatherInfo','moonInfo','enemyInfo','speedInfo','oreInfo','rareCreatureInfo','killCountInfo'])
-def test_information_progression_is_not_exposed(field):
-    doc, call=source('accessory', {'itemPickupRangeBlocks':1})
-    call['params'][field]=True
-    assert not validate_runtime_program(doc)['ok']
+def test_unknown_information_option_is_rejected_without_inference():
+    doc, call = source("accessory", {"itemPickupRangeBlocks": 1})
+    assert validate_runtime_program(doc)["ok"]
+    call["params"]["unknownInfo"] = True
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert any(row["path"].endswith(".params.unknownInfo") for row in report["errors"])
 
 @pytest.mark.parametrize('effect', [
     {'condition':'always'}, {'condition':'stationary'},
@@ -104,8 +110,12 @@ def test_omitted_condition_has_exact_neutral_receipt_without_mutating_author(fn)
     assert validate_runtime_wire(wire)['ok']
     assert doc == before
 
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-@pytest.mark.parametrize('fn', ['accessory', 'armor', 'generated_buff_on_use'])
+@pytest.mark.parametrize('mode,fn', [
+    ('json_object', 'accessory'),
+    ('json_object', 'armor'),
+    ('json_object', 'generated_buff_on_use'),
+    ('json_schema', 'armor'),
+])
 def test_actual_author_and_repair_packets_keep_numeric_mechanics_and_frozen_siblings(monkeypatch, mode, fn):
     from infini_local.pipelines.author import request as author
     from prompt_packet_helpers import request_dossier

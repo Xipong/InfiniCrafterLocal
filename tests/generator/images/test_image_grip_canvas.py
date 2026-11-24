@@ -133,7 +133,10 @@ def test_frame_retry_targets_square_canvas_without_leaving_active_error(tmp_path
     path, status = _generate(data, 'held_body')
     assert path and status in {'generated', 'generated_warn_invalid'}
     assert len(bad_calls) == len(good_calls) == 1
-    assert 'square raw canvas' in good_calls[0][0]
+    with Image.open(path) as delivered:
+        assert delivered.size == (32, 32)
+        assert any((x - .2 * delivered.width) ** 2 + (y - .8 * delivered.height) ** 2 < 1.5 ** 2
+                   for x, y in _blue_pixels(delivered.convert('RGBA')))
     attempts = json.loads(data['debug']['runtime:held_bodySpriteValidation'])
     assert attempts[0]['validation']['reasons'] == ['authored_grip_requires_square_frame']
     assert 'runtime:held_bodySpriteError' not in data['debug']

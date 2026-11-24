@@ -501,8 +501,5 @@ public sealed partial class GeneratorClient
             } while (previousUnbound != chosen.Count && chosen.Count < NodeLimit);
             return PlanExport(chosen, exportBudget, measurements).Materialize();
         }
-
-        private JsonObject BuildExport(Dictionary<int, JsonObject> chosen, int characterBudget = CharacterLimit - CatalogCoverageReserve)
-            => PlanExport(chosen, characterBudget, new ExportMeasurements()).Materialize();
     }
 }

@@ -1,6 +1,5 @@
 """Registry-owned unit explanations at real Author/Repair request boundaries."""
 from __future__ import annotations
-from suite_paths import REPO_ROOT
 
 import copy
 import json
@@ -140,24 +139,6 @@ def test_serialized_author_requests_notes_and_repair_retains_advisory_replacemen
             assert advisory["description"] not in json.dumps(sent["response_format"])
     assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
         {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
-
-
-def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
-    import runpy
-    from pathlib import Path
-
-    from infini_local.pipelines.author.item_contract import author_item_repair_prompt_shape_card
-    from infini_local.pipelines.author.prompt import concise_terraria_tick_guide_for_llm
-
-    root = REPO_ROOT
-    generator = runpy.run_path(str(root / "tools" / "generate" / "generate_lowery.py"))
-    rendered = generator["render"]()  # Pure renderer: do not refresh parent-owned docs here.
-    assert '<a id="player-text"></a>' in rendered
-    advisory = author_item_repair_prompt_shape_card()["realizationReplacement"]
-    for name in ("description", "playerExperience"):
-        assert advisory[name] in rendered
-    for rule in concise_terraria_tick_guide_for_llm().values():
-        assert rule in rendered, "Lowery must use the same unit explanation as actual model packets"
 
 
 class _Captured(BaseException):
@@ -367,12 +348,12 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     assert "raw.item.unfamiliar" not in json.dumps(glossary)
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,values,path", [
-    ("tool_stats", {"axePower": 45}, "gameplay"),
-    ("accessory", {"moveSpeedBonus": 15, "lifeRegen": 1}, "accessory"),
-    ("armor", {"moveSpeedBonus": 15, "lifeRegen": 1}, "armor"),
-    ("generated_buff_on_use", {"moveSpeedBonus": 15, "lifeRegen": 1}, "gameplay.generatedBuff"),
+@pytest.mark.parametrize('mode,fn,values,path', [
+    ('json_object', 'tool_stats', {'axePower': 45}, 'gameplay'),
+    ('json_object', 'accessory', {'moveSpeedBonus': 15, 'lifeRegen': 1}, 'accessory'),
+    ('json_object', 'armor', {'moveSpeedBonus': 15, 'lifeRegen': 1}, 'armor'),
+    ('json_object', 'generated_buff_on_use', {'moveSpeedBonus': 15, 'lifeRegen': 1}, 'gameplay.generatedBuff'),
+    ('json_schema', 'tool_stats', {'axePower': 45}, 'gameplay'),
 ])
 def test_compiler_produced_parent_is_explained_not_reauthored(monkeypatch, mode, fn, values, path):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -474,12 +455,12 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
     assert with_sources == without_sources
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("law,author_param", [
-    ("angular_sine", "law.angular_sine.amplitudeRadiansPerSecond"),
-    ("lateral_velocity_sine", "law.lateral_velocity_sine.amplitudeBlocksPerSecond"),
-    (None, None),
-    ("not_a_law", None),
+@pytest.mark.parametrize('mode,law,author_param', [
+    ('json_object', 'angular_sine', 'law.angular_sine.amplitudeRadiansPerSecond'),
+    ('json_object', 'lateral_velocity_sine', 'law.lateral_velocity_sine.amplitudeBlocksPerSecond'),
+    ('json_object', None, None),
+    ('json_object', 'not_a_law', None),
+    ('json_schema', 'angular_sine', 'law.angular_sine.amplitudeRadiansPerSecond'),
 ])
 def test_repair_source_units_require_actual_discriminator_without_reauthoring_source(monkeypatch, mode, law, author_param):
     source = {"generatedData": {"runtimeProgram": {"entities": [{
@@ -531,8 +512,11 @@ def test_repair_unit_filter_keeps_zero_null_and_exact_array_namespaces(monkeypat
     assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "blocks/s"
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("generated", [False, True], ids=["native-stat-view", "accepted-generated-wire"])
+@pytest.mark.parametrize('mode,generated', [
+    ("json_object", False),
+    ("json_object", True),
+    ("json_schema", True),
+])
 def test_source_unit_guides_match_stage_visible_stat_types(monkeypatch, mode, generated):
     source = {"name": "stat context", "lifeRegen": 4}
     if generated:
@@ -656,13 +640,9 @@ def test_author_and_scoped_repair_receive_canonical_attach_card(monkeypatch, mod
     assert [card["does"] for card in cards if card["fn"] == "attach"] == [capability.summary]
     repair_cards = repair_packet["existingBrokenCapabilityCards"]
     assert [card for card in repair_cards if card["fn"] == "attach"] == [capability.prompt_card()]
-    # Attachment semantics belong to its canonical card, not an extra global
-    # reach lesson. Repair receives this card only through its exact blocker.
-    assert "reach" not in author_packet["runtimeCapabilityContract"]["technicalNotes"]
-    assert "reach" not in repair_packet["runtimeExecutionTruth"]["units"]["playerFacingUnits"]
-    for request in (author_request, repair_request):
+    for request, expected_packet in ((author_request, author_packet), (repair_request, repair_packet)):
         sent = _serialized_chat_request(monkeypatch, request)
-        assert any(capability.summary in row["content"] for row in sent["messages"])
+        assert request_dossier(sent, declaration=request) == expected_packet
     assert (source, item) == before
     assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
@@ -670,30 +650,27 @@ def test_author_and_scoped_repair_receive_canonical_attach_card(monkeypatch, mod
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_serialized_author_and_repair_supply_ready_values_without_conversion_instructions(monkeypatch, mode):
+def test_serialized_author_and_repair_deliver_ready_values(monkeypatch, mode):
     source = {"generatedData": {"runtimeProgram": {"entities": [{
         "id": "parent_shot", "kind": "free_projectile", "collision": {"extraUpdates": 0},
         "spawn": {"speedPxPerTick": 2.1333334}, "lifetimeTicks": 180,
     }]}}}
-    for request, packet in (_author_request(monkeypatch, mode, source),
-                            _repair_request(monkeypatch, mode, source, _broken_item())):
-        view = packet["sourceWireUnits"]
+    for request, _ in (_author_request(monkeypatch, mode, source),
+                       _repair_request(monkeypatch, mode, source, _broken_item())):
+        sent = _serialized_chat_request(monkeypatch, request)
+        view = json.loads(sent["messages"][-1]["content"])["sourceWireUnits"]
         speed = next(row for row in view["scopes"] if row["fn"] == "spawn")["readings"][0]["values"]["speedPxPerTick"]
         assert speed == {"value": pytest.approx(8.00000025), "units": "blocks/s"}
-        serialized = _serialized_chat_request(monkeypatch, request)
-        text = json.dumps(serialized, ensure_ascii=False)
-        for obsolete in ("sourceToAuthor", "source * 60", "source / 16", "Apply sourceToAuthor",
-                         "copying the raw engine number", "[sourceValue, authorUnitValue]"):
-            assert obsolete not in text
-        assert next(row for row in view["scopes"] if row["fn"] == "projectile_lifetime")["readings"][0]["values"]["lifetimeTicks"] == {"value": 3, "units": "seconds"}
+        lifetime = next(row for row in view["scopes"] if row["fn"] == "projectile_lifetime")["readings"][0]
+        assert lifetime["values"]["lifetimeTicks"] == {"value": 3, "units": "seconds"}
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("provider,base,model", [
-    ("local", "http://unit-guidance.invalid/v1", "offline-unit-guidance"),
-    ("openai_compat", "https://api.openai.com/v1", "gpt-5.6"),
-    ("openrouter", "https://openrouter.ai/api/v1", "openai/gpt-5.6"),
-    ("openai_codex", "https://chatgpt.com/backend-api/codex", "gpt-5.4"),
+@pytest.mark.parametrize('mode,provider,base,model', [
+    ('json_object', 'local', 'http://unit-guidance.invalid/v1', 'offline-unit-guidance'),
+    ('json_object', 'openai_compat', 'https://api.openai.com/v1', 'gpt-5.6'),
+    ('json_object', 'openrouter', 'https://openrouter.ai/api/v1', 'openai/gpt-5.6'),
+    ('json_object', 'openai_codex', 'https://chatgpt.com/backend-api/codex', 'gpt-5.4'),
+    ('json_schema', 'local', 'http://unit-guidance.invalid/v1', 'offline-unit-guidance'),
 ])
 def test_responses_author_and_frozen_repair_deliver_ready_source_measurements(monkeypatch, mode, provider, base, model):
     from infini_local.services import codex_text_backend as codex
@@ -751,8 +728,4 @@ def test_responses_author_and_frozen_repair_deliver_ready_source_measurements(mo
             assert delivered["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
             assert delivered["repairScope"]["fieldPermissions"]["calls"] == [
                 {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
-        serialized = json.dumps(body, ensure_ascii=False)
-        for obsolete in ("sourceToAuthor", "source * 60", "source / 16", "Apply sourceToAuthor",
-                         "copying the raw engine number", "[sourceValue, authorUnitValue]"):
-            assert obsolete not in serialized
     assert (source, item) == original

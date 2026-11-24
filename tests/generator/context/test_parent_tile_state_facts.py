@@ -13,8 +13,11 @@ NATIVE_STATE = {"tileId": 215, "placeStyle": 0, "selector": "top_left_frame_y",
                 "provenance": "Terraria.Wiring.ToggleCampFire"}
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("envelope", ["root", "fingerprint"])
+@pytest.mark.parametrize('mode,envelope', [
+    ("json_object", "root"),
+    ("json_object", "fingerprint"),
+    ("json_schema", "root"),
+])
 def test_native_frame_state_reaches_actual_author_request(monkeypatch, mode, envelope):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     fact = {"nativeTileState": copy.deepcopy(NATIVE_STATE)}

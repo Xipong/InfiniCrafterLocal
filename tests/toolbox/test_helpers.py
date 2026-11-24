@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -16,19 +17,20 @@ def test_doctor_reads_manifest_without_runtime_bootstrap(monkeypatch, capsys):
     report = json.loads(output.out)
     assert report['ok']
     assert report['native']['executed'] is False
-    assert report['native']['command'] == json.loads((ROOT / '.agent/manifest.json').read_text())['checks']['native_checks']
-    assert report['replayOwner'].endswith('replay_generation_case.py')
 
 
-def test_verify_executes_existing_owner_with_exact_args_and_exit_status(monkeypatch, capsys):
-    observed = []
-    def process(command, **kwargs):
-        observed.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 4)
-    monkeypatch.setattr(subprocess, 'run', process)
-    code, _ = cli(monkeypatch, capsys, 'verify', '--path', 'toolbox/cli.py', '--plan')
-    assert code == 4
-    assert observed == [([sys.executable, str(ROOT / 'tools/agentctl.py'), 'verify', '--path', 'toolbox/cli.py', '--plan'], {'cwd': ROOT})]
+def test_verify_plans_the_requested_test_from_an_external_directory(tmp_path):
+    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    command = [sys.executable, "-m", "toolbox", "verify", "--path", "tests/toolbox/test_helpers.py", "--plan"]
+    plan = subprocess.run(command, cwd=tmp_path, env=env, capture_output=True, text=True, timeout=15)
+    assert plan.returncode == 0, plan.stderr
+    report = json.loads(plan.stdout)
+    assert report["scope"] == "paths"
+    assert report["tests"] == ["tests/toolbox/test_helpers.py"]
+    failure = subprocess.run([*command, "--changed"], cwd=tmp_path, env=env,
+                             capture_output=True, text=True, timeout=15)
+    assert failure.returncode == 2
+    assert json.loads(failure.stderr)["ok"] is False
 
 
 def test_replay_calls_real_saved_wire_validator_not_inference(monkeypatch, capsys, tmp_path):

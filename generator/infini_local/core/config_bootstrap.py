@@ -17,7 +17,7 @@ from infini_local import APP_VERSION
 
 DATA_DIR = ROOT / "data"
 
-load_env_file(CONFIG_PATH)
+CONFIG_LOADED_SHA256 = load_env_file(CONFIG_PATH)
 reject_retired_config(os.environ)
 
 RECIPE_IDENTITY_VERSION = env_str("INFINI_RECIPE_IDENTITY_VERSION", "recipe_v4_25_no_item_family_routing")

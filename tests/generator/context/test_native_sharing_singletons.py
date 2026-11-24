@@ -5,6 +5,7 @@ import json
 import pytest
 
 from infini_local.pipelines.context.parent_stage import share_exact_native_parent_facts
+from tests.generator.context.native_sharing_oracle import expanded_native_parents
 
 
 def test_shared_parent_inlines_its_single_use_descendants_without_replication():
@@ -13,9 +14,12 @@ def test_shared_parent_inlines_its_single_use_descendants_without_replication():
     parents = {"A": {"packet": {"raw": {"one": body, "two": copy.deepcopy(body)}}}}
     before = copy.deepcopy(parents)
     actual = share_exact_native_parent_facts(parents)
-    assert actual["nativeSourceFacts"] == [body]
-    assert actual["parents"]["A"]["packet"]["raw"] == {
-        "one": {"sourceSameAs": 0}, "two": {"sourceSameAs": 0}}
+    assert json.dumps(expanded_native_parents(actual), sort_keys=True) == json.dumps(before, sort_keys=True)
+    raw = actual["parents"]["A"]["packet"]["raw"]
+    # The two large bodies should point to the same shared data, regardless
+    # of how the encoder assigns indices or arranges nested pool entries.
+    assert raw["one"] == raw["two"] and set(raw["one"]) == {"sourceSameAs"}
+    assert len(json.dumps(actual, separators=(",", ":"))) < len(json.dumps({"parents": before}, separators=(",", ":")))
     assert parents == before
 
 
@@ -26,7 +30,6 @@ def _context(pool, raw=None):
 
 def test_nested_singletons_preserve_shared_descendants_and_dense_indices():
     from infini_local.pipelines.context.parent_stage import _inline_single_use_native_facts
-    from tests.generator.context.native_sharing_oracle import expanded_native_parents
     context = _context([
         {"first": {"sourceSameAs": 1}, "second": {"sourceSameAs": 1}, "once": {"sourceSameAs": 2}},
         {"value": [True, 1, 1.0, -0.0, "unfamiliar", "unfamiliar"]},

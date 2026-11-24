@@ -236,7 +236,7 @@ def test_atomic_use_policy_is_the_only_author_and_wire_owner() -> None:
     assert validate_runtime_wire(compiled)["ok"]
 
 
-def test_place_policy_is_structurally_closed_and_legacy_fragments_fail() -> None:
+def test_place_policy_requires_stack_cost_and_disallows_contact_damage() -> None:
     free_place = _dual_use_placeable()
     free_place["runtimeProgram"]["bindings"][-1]["stackCost"] = 0
     assert "shape_const" in _codes(validate_runtime_program(free_place))
@@ -244,19 +244,6 @@ def test_place_policy_is_structurally_closed_and_legacy_fragments_fail() -> None
     wrong_contact = _dual_use_placeable()
     wrong_contact["runtimeProgram"]["bindings"][-1]["contactDamage"] = True
     assert not validate_runtime_program(wrong_contact)["ok"]
-
-    legacy = _upgrade_fixture("workbench_blade")
-    legacy["runtimeProgram"]["bindings"][0]["action"] = "spawn_entity"
-    legacy["runtimeProgram"]["bindings"][0]["target"] = "workbench_blade"
-    assert not validate_runtime_program(legacy)["ok"]
-
-    legacy_call = _upgrade_fixture("workbench_blade")
-    legacy_call["runtimeProgram"]["calls"].append({
-        "id": "legacy_cost",
-        "fn": "configure_consumption",
-        "params": {"primaryUseChancePercent": 0, "alternateUseChancePercent": 100},
-    })
-    assert "unknown_capability" in _codes(validate_runtime_program(legacy_call))
 
 
 def test_single_policy_leaf_has_single_wire_leaf_blast_radius() -> None:

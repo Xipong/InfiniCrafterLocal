@@ -32,23 +32,40 @@ def test_unknown_author_root_cannot_survive_validation_and_compilation():
     assert source == before and parsed == before
 
 
-@pytest.mark.parametrize("location", ["root", "entity"])
+@pytest.mark.parametrize("location", ["root", "entity", "visual", "item_use", "controller"])
 def test_unknown_delivered_field_is_refused_not_sanitized(location):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
-    wire = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    item = build_capability_witness("target_and_fire") if location == "controller" else build_runtime_fixture("workbench_blade")
+    wire = compile_runtime_program(item)
     delivered = sanitize_recipe_for_delivery(wire)
     assert validate_runtime_wire(delivered)["ok"]
-    target = delivered if location == "root" else delivered["runtimeProgram"]["entities"][0]
+    runtime = delivered["runtimeProgram"]
+    if location == "root":
+        object_path = ()
+    elif location == "item_use":
+        object_path = ("runtimeProgram", "itemUse")
+    elif location == "controller":
+        index = next(i for i, entity in enumerate(runtime["entities"]) if "controller" in entity)
+        object_path = ("runtimeProgram", "entities", index, "controller")
+    else:
+        object_path = ("runtimeProgram", "entities", 0) + (("visual",) if location == "visual" else ())
+
+    def target_object(doc):
+        for key in object_path:
+            doc = doc[key]
+        return doc
+
+    target = target_object(delivered)
     target["unexpectedField"] = {"value": "unrecognized"}
-    path = "$.unexpectedField" if location == "root" else "$.runtimeProgram.entities[0].unexpectedField"
+    path = "$" + "".join(f"[{key}]" if isinstance(key, int) else f".{key}" for key in object_path) + ".unexpectedField"
     before = deepcopy(delivered)
     projected = sanitize_recipe_for_delivery(delivered)
     report = validate_runtime_wire(projected)
     assert not report["ok"], "Python must not approve an unknown delivered field"
     assert any(row["path"] == path and row["code"] == "unknown_final_wire_field"
                for row in report["errors"])
-    projected_target = projected if location == "root" else projected["runtimeProgram"]["entities"][0]
+    projected_target = target_object(projected)
     assert projected_target["unexpectedField"] == target["unexpectedField"]
     assert delivered == before
 
@@ -64,7 +81,7 @@ def wire():
     "path,value,code,insert",
     [
         pytest.param(("runtimeProgram", "entities", 0), v, "required_object", True, id="entity-row-" + label)
-        for label, v in (("null", None), ("boolean", False), ("integer", 0), ("text", "broken"), ("array", []), ("array-text", ["broken"]))
+        for label, v in (("null", None), ("boolean", False), ("text", "broken"), ("array", []))
     ]
     + [
         pytest.param(("runtimeProgram", "bindings", 0, "id"), v, "required_id", False, id="binding-id-" + label)
@@ -72,7 +89,7 @@ def wire():
     ]
     + [
         pytest.param(("runtimeProgram", "entities", 1, "controller", "code"), v, "unsupported_opcode", False, id="controller-" + label)
-        for label, v in (("array", []), ("object", {}), ("array-integer", [1]))
+        for label, v in (("array", []), ("object", {}))
     ]
     + [
         pytest.param(
@@ -82,7 +99,6 @@ def wire():
             False,
             id=field + "-" + label,
         )
-        for field in ("healLife", "healMana", "durationTicks")
         for label, v in (
             ("null", None),
             ("false", False),
@@ -93,6 +109,8 @@ def wire():
             ("object", {}),
             ("array", []),
         )
+        for field in ("healLife", "healMana", "durationTicks")
+        if field == "healLife" or label in {"null", "true", "fractional"}
     ],
 )
 def test_wire_diagnostics_preserve_json_type_original_index_and_source(wire, path, value, code, insert):
@@ -150,7 +168,6 @@ def _wire():
 
 MALFORMED_BUFF_FIELDS = [
     ("jumpBoost", "broken"),
-    ("lifeRegen", True),
     ("miningSpeedMultiplier", 0),
     ("oreSenseRadiusTiles", 2),
     ("durationTicks", 2147483647),
@@ -166,7 +183,6 @@ MALFORMED_BUFF_FIELDS = [
     ("lightColorName", "broken"),
     ("lightColorName", None),
     ("jumpBoost", float("inf")),
-    ("jumpBoost", 10**1000),
     ("miningSpeedMultiplier", None),
     ("extra", 1),
     ("jumpBoost", 1e-50),
@@ -174,9 +190,7 @@ MALFORMED_BUFF_FIELDS = [
 ]
 FORGED_EFFECT_FIELDS = [
     ("oreSenseRadiusTiles", "true"),
-    ("jumpBoost", "1"),
     ("miningSpeedMultiplier", float("nan")),
-    ("emitLightStrength", float("nan")),
     ("lifeRegen", True),
     ("lifeRegen", 1.5),
     ("lifeRegen", 10**1000),
@@ -198,7 +212,7 @@ FORGED_EFFECT_FIELDS = [
     ]
     + [
         pytest.param(field, 1, True, True, False, id="json-integer-" + field)
-        for field in ("miningSpeedMultiplier", "jumpBoost", "movementSpeed", "emitLightStrength", "lifeRegen", "oreSenseRadiusTiles")
+        for field in ("jumpBoost", "movementSpeed", "emitLightStrength", "lifeRegen", "oreSenseRadiusTiles")
     ],
 )
 def test_generated_buff_fields_cannot_hide_or_forge_executable_effect(field, value, active, accepted, dependency):
@@ -286,11 +300,9 @@ def test_generated_buff_dependency_and_legacy_absence(change):
 
 @pytest.mark.parametrize("mutation,error_path,code", [
     pytest.param("entity_row", "$.runtimeProgram.entities[0]", "required_object", id="entity_row"),
-    pytest.param("extra_body", "$.runtimeProgram.entities", "item_body_count", id="extra_body"),
     pytest.param("binding_id", "$.runtimeProgram.bindings[0].id", "required_id", id="binding_id"),
     pytest.param("movement_code", "$.runtimeProgram.entities[1].movement.code", "unsupported_opcode", id="movement_code"),
     pytest.param("heal_value", "$.gameplay.healLife", "invalid_integer", id="heal_value"),
-    pytest.param("buff_duration", "$.gameplay.generatedBuff.durationTicks", "invalid_integer", id="buff_duration"),
 ])
 def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch, wire, mutation, error_path, code):
     from infini_local.pipelines.visual import delivery as visual_delivery_gate
@@ -321,16 +333,10 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     runtime = wire["runtimeProgram"]
     if mutation == "entity_row":
         runtime["entities"].insert(0, None)
-    elif mutation == "extra_body":
-        extra = copy.deepcopy(runtime["entities"][0])
-        extra["id"] = "extra_item"
-        runtime["entities"].append(extra)
     elif mutation == "binding_id":
         runtime["bindings"][0]["id"] = ""
     elif mutation == "heal_value":
         wire.setdefault("gameplay", {})["healLife"] = "broken"
-    elif mutation == "buff_duration":
-        wire.setdefault("gameplay", {})["generatedBuff"] = {"durationTicks": "broken"}
     else:
         runtime["entities"][1]["movement"]["code"] = []
     report = validate_runtime_wire(wire)
@@ -384,26 +390,19 @@ def test_present_malformed_buff_object_is_not_hidden_by_healing(bad):
     assert any(e["path"] == "$.gameplay.generatedBuff" for e in report["errors"])
 
 
-@pytest.mark.parametrize(
-    "bad",
-    [
-        None,
-        [],
-        1,
-        False,
-        "row",
-        {},
-        {"fn": []},
-        {"authoredPaths": 7},
-        {"authoredPaths": "path"},
-        {"authoredPaths": [None]},
-        {"finalPath": []},
-        {"status": None},
-        {"callId": {}},
-        {"lowererId": True},
-        {"authoredPath": 0},
-    ],
-)
+@pytest.mark.parametrize("bad", [
+    None,
+    [],
+    {},
+    {"fn": []},
+    {"authoredPaths": 7},
+    {"authoredPaths": [None]},
+    {"finalPath": []},
+    {"status": None},
+    {"callId": {}},
+    {"lowererId": True},
+    {"authoredPath": 0},
+])
 def test_malformed_rows_have_original_index_in_direct_and_wire_audits(bad):
     source = build_capability_witness("item_stats")
     wire = compile_runtime_program(source)

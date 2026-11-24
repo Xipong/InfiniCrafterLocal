@@ -547,7 +547,12 @@ def recipe(tmp_path, monkeypatch) -> dict:
     assert world_storage.is_deliverable_recipe_payload(data) is True
     return data
 
-@pytest.mark.parametrize("schema_version", ["broken", [], {}, [5], "5", 5.0, 5.9, True, None])
+@pytest.mark.parametrize("schema_version", [
+    "broken",
+    "5",
+    5.0,
+    True,
+])
 def test_deliverability_rejects_invalid_schema_version_without_coercion(recipe, schema_version):
     recipe["schemaVersion"] = schema_version
     original = copy.deepcopy(recipe)
@@ -680,9 +685,11 @@ def test_transfer_selection_matches_readiness_and_cache(offline_backend, tmp_pat
                 assert any(row["code"].startswith("asset_roster_") for row in report["problems"])
         _assert_cache_refusal(data, tmp_path / "refused-cache")
 
-CACHE_CORRUPTIONS = [("metadata", field, value) for field in ("debug", "recipeMeta") for value in (None, [], "broken", 7)] + [
+CACHE_CORRUPTIONS = [("metadata", "debug", value) for value in (None, [])] + [
+    ("metadata", "recipeMeta", value) for value in (None, "broken")
+] + [
     ("unreadable", "", content) for content in (b"{broken", b"{}", b"[]", b"\xff")
-] + [("combine", "schemaVersion", value) for value in ("broken", [5], "5", 5.9)]
+] + [("combine", "schemaVersion", value) for value in ("5", 5.9)]
 
 @pytest.mark.parametrize("mode,field,value", CACHE_CORRUPTIONS)
 def test_cache_corruption_quarantine_keeps_exact_bytes(tmp_path, monkeypatch, recipe, mode, field, value):

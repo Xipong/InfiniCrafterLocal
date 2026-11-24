@@ -61,9 +61,8 @@ def _literal(node: ast.AST | None, source: str) -> Any:
 
 def _python_sources() -> list[Path]:
     roots = [LOCAL / "infini_local", ROOT / "tools"]
-    direct = [LOCAL / "server.py", LOCAL / "settings_gui.py"]
     rows = [path for root in roots for path in root.rglob("*.py")]
-    rows.extend(path for path in direct if path.exists())
+    rows.append(LOCAL / "server.py")
     return sorted({p for p in rows if "__pycache__" not in p.parts})
 
 

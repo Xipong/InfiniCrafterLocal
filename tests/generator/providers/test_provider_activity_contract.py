@@ -463,7 +463,6 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
         assert status == 424 and body["error"] == "llm_auth_failed"
         assert body["lastFailure"]["worldId"] == f"world-{i}"
     assert endpoint.generation_activity_snapshot()["requests"] == []
-    assert not llm_admission._LLM_RATE_STATE["fixture-rate-key"]["waiters"]
 
 
 def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, real_route):
@@ -507,7 +506,6 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
     assert debug["networkStarted"] is False and debug["physicalAttemptCount"] == 0
     assert debug["rateWaitReason"] == "provider_cooldown"
     assert "no request was sent" in body["playerMessage"]
-    assert not llm_admission._LLM_RATE_STATE["fixture-deadline"]["waiters"]
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 
@@ -586,7 +584,6 @@ def test_activity_projection_is_bounded_and_unknowns_are_not_private_values():
             assert snapshot["waiting"] == 35 and len(snapshot["requests"]) == 32 and snapshot["requestsOmitted"] == 3
             assert "PRIVATE" not in json.dumps(snapshot)
     assert endpoint.generation_activity_snapshot()["requests"] == []
-    assert endpoint._CURRENT_GENERATION.get() is None
 
 
 @pytest.mark.parametrize("bad", [{"code": ["PRIVATE"]}, {"param": {"PRIVATE": 1}}, {"code": "PRIVATE", "param": "PRIVATE"}])

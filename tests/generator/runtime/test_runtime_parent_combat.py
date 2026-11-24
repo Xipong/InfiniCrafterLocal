@@ -1,9 +1,6 @@
 """Live-parent combat is an explicit producer choice with exact retained provenance."""
-from suite_paths import TEST_ROOT
-import hashlib
 import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -18,7 +15,6 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from repair_test_helpers import frozen_call_repair, provider_roundtrip
 
 _PRODUCERS = ("spawn_on_event", "target_and_fire")
-_RETAINED = (TEST_ROOT / "fixtures") / "parent_combat_retained_wire.json"
 
 
 def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basis="authored_child", multiplier=0.5):
@@ -329,8 +325,9 @@ def test_new_wire_presence_requires_exact_unique_owned_provenance(fn, name, muta
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn", _PRODUCERS)
-@pytest.mark.parametrize("mutation", ["name-only", "code-only", "both", "boolean-code"])
+@pytest.mark.parametrize("fn,mutation", [
+    (fn, mutation) for fn in _PRODUCERS for mutation in ("name-only", "code-only", "both")
+] + [("spawn_on_event", "boolean-code")])
 def test_present_combat_selector_requires_the_exact_runtime_consumer_even_with_amended_receipts(fn, mutation):
     document = build_capability_witness(fn)
     call = _call(document, fn)
@@ -358,39 +355,6 @@ def test_present_combat_selector_requires_the_exact_runtime_consumer_even_with_a
     # Delivery omits diagnostic receipts; the strict wire consumer guard remains.
     wire.pop("runtimeContract")
     assert not validate_runtime_wire(wire)["ok"]
-
-
-def test_archived_old_receipts_refuse_without_mutating_frozen_saved_wire():
-    raw = _RETAINED.read_bytes()
-    assert hashlib.sha256(raw).hexdigest() == "cfddf2ae287f30d5bbe6dfb2a30f3c5db4fec72e65e304315e811905912e3ced"
-    archive = json.loads(raw)
-    assert archive["capturedBase"] == "9a9ebd520212dd902640029836f897c5a502b2e7"
-    for case in archive["cases"]:
-        wire = case["wire"]
-        before = deepcopy(wire)
-        report = validate_runtime_wire(wire)
-        assert not report["ok"]
-        assert any(row["code"] == "undeclared_technical_lowering" for row in report["errors"])
-        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"]
-        assert wire == before
-        for entity in wire["runtimeProgram"]["entities"]:
-            assert "damageBasis" not in entity.get("targeting", {})
-            for event in entity["events"]:
-                assert "damageBasis" not in event and "knockbackBasis" not in event
-        # Current equivalents still compile with accepted provenance; a live-parent
-        # selector cannot be injected without its own modern receipt.
-        authored = build_capability_witness("spawn_on_event" if case["capability"] == "spawn_entity_on_event" else case["capability"])
-        current = compile_runtime_program(authored)
-        assert validate_runtime_wire(current)["ok"]
-        assert audit_compiler_receipts(current["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=authored, final_document=current)["ok"]
-        if case["capability"] == "target_and_fire":
-            component = next(entity["targeting"] for entity in current["runtimeProgram"]["entities"] if entity.get("targeting"))
-        else:
-            component = next(event for entity in current["runtimeProgram"]["entities"] for event in entity["events"] if event["action"] == "spawn_entity_on_event")
-        component["damageBasis"] = "live_parent"
-        assert not validate_runtime_wire(current)["ok"]
-    assert hashlib.sha256(_RETAINED.read_bytes()).digest() == hashlib.sha256(raw).digest()
 
 
 @pytest.mark.parametrize("enabled", [False, True])

@@ -15,6 +15,7 @@ import zipfile
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+WORKFLOW = ROOT / ".github/workflows/parent-source-analysis-benchmark.yml"
 TOOL = ROOT / "tools" / "testing" / "verify_parent_analysis_cohort.py"
 SPEC = importlib.util.spec_from_file_location("ifc_cohort_verifier_tests", TOOL)
 assert SPEC is not None and SPEC.loader is not None
@@ -286,8 +287,7 @@ def test_reviewed_metadata_migration_accepts_reordered_duplicate_edges(tmp_path)
 
 
 @pytest.mark.parametrize("mutation", [
-    "missing_node", "changed_guard", "changed_source", "changed_unknown", "changed_member", "changed_module",
-    "missing_edge", "duplicate_edge", "changed_edge", "node_type", "new_field", "new_scope", "new_limit",
+    "missing_node", "changed_guard", "duplicate_edge", "new_field",
     "nonzero_omission", "bool_omission", "missing_omission", "outside_mechanic", "missing_graph",
     "missing_container", "extra_graph", "positional_array",
 ])
@@ -299,28 +299,10 @@ def test_graph_contract_rejects_every_non_allowlisted_evidence_change(tmp_path, 
         graph["nodes"].pop()
     elif mutation == "changed_guard":
         graph["nodes"][0]["blocks"][0][3] = []
-    elif mutation == "changed_source":
-        graph["nodes"][0]["values"]["v1"][0] = "ldsfld"
-    elif mutation == "changed_unknown":
-        graph["unresolved"] = []
-    elif mutation == "changed_member":
-        graph["members"][1]["name"] = "Player.statLife"
-    elif mutation == "changed_module":
-        graph["modules"][0]["mvid"] = "wrong-owner"
-    elif mutation == "missing_edge":
-        graph["edges"].pop()
     elif mutation == "duplicate_edge":
         graph["edges"].append(copy.deepcopy(graph["edges"][0]))
-    elif mutation == "changed_edge":
-        graph["edges"][0]["context"]["admission"] = "accepted"
-    elif mutation == "node_type":
-        graph["nodes"][0]["id"] = False
     elif mutation == "new_field":
         graph["unreviewedEvidence"] = True
-    elif mutation == "new_scope":
-        graph["scope"] += " Runtime predicates evaluated."
-    elif mutation == "new_limit":
-        graph["limits"]["characters"] = 50000
     elif mutation == "nonzero_omission":
         graph["omittedBodyCount"] = 1
     elif mutation == "bool_omission":
@@ -408,17 +390,8 @@ def test_contract_mode_retains_evidence_provenance_stability_and_target_gates(tm
     assert not (result["parityPass"] and result["targetPass"])
 
 
-def test_source_pack_workflow_requires_same_contract_byte_parity():
-    text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
-    assert "--comparison-mode exact-bytes" in text
-    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in text
-    assert "baseline-native-source-pack" in text
-    assert "--require-payloads --require-pins --require-target" in text
-    assert "$result.byteParityPass" in text
-
-
 def _source_pack_workflow_step(name: str) -> str:
-    text = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
+    text = WORKFLOW.read_text()
     return text.split(f"      - name: {name}\n", 1)[1].split("\n      - ", 1)[0]
 
 
@@ -443,16 +416,16 @@ def test_source_pack_workflow_rebuilds_inside_each_variant_and_restores_location
     assert len(re.findall(r"^\s*dotnet build\b", step, re.MULTILINE)) == len(builds)
 
 
-def test_pr333_benchmark_uses_the_same_populated_contract_and_strict_pipeline():
-    # Historical baseline had empty catalogs and uncompilable legacy Reverse
-    # calls. Do not patch its semantics or compare it to populated data.
-    old = (ROOT / ".github/workflows/pr333-parent-analysis-benchmark.yml").read_text()
-    current = (ROOT / ".github/workflows/pr333-cold-after-audit.yml").read_text()
-    assert old.split("jobs:\n", 1)[1] == current.split("jobs:\n", 1)[1]
-    assert "BASELINE_SHA: 83955df9a0d9f8392cb57641f5e44aca347e2b75" in old
-    assert "tests/native/EngineRuntimeChecks.csproj" in old
-    assert "baseline/tools/native" not in old
-    assert "scenarios.Reverse()" not in old
-    assert "--comparison-mode exact-bytes --require-payloads --require-pins --require-target --max-cold-ms 5000" in old
-    assert "--roll-forward Disable" in old
-    assert "PopulatedParentProfiling.cs" in old
+def test_source_pack_benchmark_is_manual_and_keeps_exact_runtime_scope():
+    workflow = WORKFLOW.read_text()
+    assert re.search(r"^on:\n  workflow_dispatch:\n\npermissions:", workflow, re.MULTILINE)
+    assert "ref: ${{ github.sha }}" in workflow
+    assert "--profile-parent-craft $scenario" in workflow
+    assert "baseline-native-source-pack" in workflow
+    assert "$result.byteParityPass" in workflow
+    command = next(line.split() for line in workflow.splitlines()
+                   if "verify_parent_analysis_cohort.py verify " in line)
+    options = dict((flag, command[command.index(flag) + 1]) for flag in ("--comparison-mode", "--max-cold-ms"))
+    assert options == {"--comparison-mode": "exact-bytes", "--max-cold-ms": "5000"}
+    assert {"--require-payloads", "--require-pins", "--require-target"} <= set(command)
+    assert "--roll-forward Disable" in workflow

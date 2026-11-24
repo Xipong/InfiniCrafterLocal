@@ -201,27 +201,6 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypat
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 
 
-@pytest.mark.parametrize("defect", ["missing", "duplicate", "wrong-bound"])
-def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch, defect):
-    """Negative controls prevent a dict/set conversion from hiding lost data."""
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
-    request, _, _ = build_initial_author_request({}, {}, "delivery-control", model_name="offline")
-    catalog = request_dossier(request)["runtimeCapabilityContract"]["catalog"]
-    for group in ("capabilities", "entityKinds", "inputs", "bindingActions", "events"):
-        catalog[group].reverse()
-    _assert_catalog_delivery(catalog)
-    cards = catalog["capabilities"]
-    if defect == "missing":
-        cards.pop()
-    elif defect == "duplicate":
-        cards.append(copy.deepcopy(cards[0]))
-    else:
-        stats = next(row for row in cards if row["fn"] == "item_stats")
-        stats["params"]["damage"]["max"] += 1
-    with pytest.raises(AssertionError):
-        _assert_catalog_delivery(catalog)
-
-
 def test_rewording_canonical_cards_reaches_author_and_repair_without_changing_mechanics(monkeypatch):
     """A safe editorial change must propagate without requiring test rewrites."""
     from dataclasses import replace

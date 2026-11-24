@@ -42,8 +42,13 @@ public sealed partial class InfiniCraftPlayer
         foreach (TagCompound claim in _dormantRemoteStationClaims) yield return claim;
     }
 
+    private static bool HasPersistedStationOrigin(TagCompound tag)
+        => tag.ContainsKey(StationOriginScopeSaveKey) && tag[StationOriginScopeSaveKey] is string scope
+            && Common.Systems.GeneratedStationEscrowStateSystem.ValidAuthorityScope(scope);
+
     private void RetainDormantRemoteStationClaim(TagCompound claim)
     {
+        if (!HasPersistedStationOrigin(claim)) return;
         if (_readOnlyRemoteStationClaim is null) _readOnlyRemoteStationClaim = claim;
         else _dormantRemoteStationClaims.Add(claim);
     }
@@ -59,7 +64,7 @@ public sealed partial class InfiniCraftPlayer
             ParkRemoteStationClaim();
         if (!_stationEscrowUsesRemoteAuthority)
         {
-            // Foreign/unscoped history stays raw and cannot confer authority, but
+            // Foreign scoped history stays raw and cannot confer authority, but
             // it must not disable unrelated fresh inventory work on this world.
             TagCompound[] matching = DormantRemoteStationClaims().Where(claim =>
                 claim.ContainsKey(StationOriginScopeSaveKey) && claim[StationOriginScopeSaveKey] is string scope
@@ -321,15 +326,15 @@ public sealed partial class InfiniCraftPlayer
                 }
                 catch (Exception) { }
             }
-            string clientId = tag.ContainsKey("infiniStationEscrowClientId")
-                ? tag.GetString("infiniStationEscrowClientId")
-                : "";
+            bool remoteClaim = tag.GetBool("infiniStationEscrowRemoteAuthority")
+                || tag.ContainsKey("infiniStationEscrowMirror") || tag.ContainsKey("infiniPendingStationEscrow")
+                || tag.ContainsKey("infiniPendingRemoteCrafts") || tag.ContainsKey(ActiveRemoteStationClaimSaveKey);
+            bool scopedRemoteClaim = remoteClaim && HasPersistedStationOrigin(tag);
+            // An unscoped remote save cannot provide an owner credential.
+            string clientId = !remoteClaim || scopedRemoteClaim ? tag.GetString("infiniStationEscrowClientId") : "";
             _stationEscrowClientId = Common.Systems.GeneratedStationEscrowStateSystem.NormalizeClientId(clientId);
             if (_stationEscrowClientId.Length == 0)
                 _stationEscrowClientId = Guid.NewGuid().ToString("N");
-            bool remoteClaim = (tag.ContainsKey("infiniStationEscrowRemoteAuthority") && tag.GetBool("infiniStationEscrowRemoteAuthority"))
-                || tag.ContainsKey("infiniStationEscrowMirror") || tag.ContainsKey("infiniPendingStationEscrow")
-                || tag.GetList<TagCompound>("infiniPendingRemoteCrafts").Count > 0;
             _stationEscrowUsesRemoteAuthority = false;
             _stationEscrowOriginScope = "";
             _readOnlyRemoteStationClaim = null;
@@ -339,7 +344,7 @@ public sealed partial class InfiniCraftPlayer
                 RetainDormantRemoteStationClaim((TagCompound)tag.GetCompound(ReadOnlyRemoteStationClaimSaveKey).Clone());
             foreach (TagCompound claim in tag.GetList<TagCompound>(DormantRemoteStationClaimsSaveKey))
                 RetainDormantRemoteStationClaim((TagCompound)claim.Clone());
-            if (remoteClaim)
+            if (scopedRemoteClaim)
             {
                 TagCompound rootClaim = (TagCompound)tag.Clone();
                 TagCompound liveClaim = rootClaim.ContainsKey(ActiveRemoteStationClaimSaveKey)
@@ -359,8 +364,7 @@ public sealed partial class InfiniCraftPlayer
                 liveClaim.Remove(DormantRemoteStationClaimsSaveKey);
                 RetainDormantRemoteStationClaim(liveClaim);
             }
-            // Unknown old origin is retained literally, never assigned to the
-            // currently opened world and never hydrated into material slots.
+            // Refusal must not turn remote material into a local refund.
             if (remoteClaim)
                 return;
             foreach (var itemTag in tag.GetList<TagCompound>("infiniPendingCraftRefunds"))

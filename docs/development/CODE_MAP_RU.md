@@ -33,7 +33,7 @@
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.
 5. Для historical audit не называй builder messages exact HTTP wire; пустой physical-attempt list с unobserved owner — unknown, не «0 retries». Debug/manifest previews отдельно от полного сохранённого trace.
 
-Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Import isolation/order проверяет `test_runtime_import_boundaries.py`; это не замена behavioral tests.
+Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Запуск самостоятельных VFX и parameter contracts без генерационного слоя проверяет `test_runtime_import_boundaries.py`.
 
 <a id="tree"></a>
 ## Родительский граф: общие эффекты игрока
@@ -83,7 +83,7 @@ docs/                           user / development / reference / archive
 .agent/ + .github/               impact metadata и CI, не игровой runtime
 ```
 
-`OPEN_INFINICRAFT.bat` — пользовательский launcher. `generator/scripts/bootstrap.py` владеет setup/gui/server/doctor; `generator/server.py` и `settings_gui.py` не используются как import barrels. Cache, `.venv`, `bin`/`obj`, build logs и workspace indexes не являются canonical source. Для поиска неизвестного symbol ограничь roots: `rg -n --glob "*.py" "<symbol>" generator/infini_local` или `rg -n --glob "*.cs" --glob "!*.g.cs" "<symbol>" mod/InfiniCrafterLocal`. `.aiignore`/`.cursorignore` исключают локальные artifacts и caches из индекса, но не заменяют scope команды `rg`. Generated contract ищи через producer в [GENERATED](../reference/GENERATED_RU.md), а не правь его копию вручную.
+`OPEN_INFINICRAFT.bat` — пользовательский launcher. `generator/scripts/bootstrap.py` владеет setup/gui/server/doctor; `generator/server.py` — точка запуска генератора, не import barrel. Cache, `.venv`, `bin`/`obj`, build logs и workspace indexes не являются canonical source. Для поиска неизвестного symbol ограничь roots: `rg -n --glob "*.py" "<symbol>" generator/infini_local` или `rg -n --glob "*.cs" --glob "!*.g.cs" "<symbol>" mod/InfiniCrafterLocal`. `.aiignore`/`.cursorignore` исключают локальные artifacts и caches из индекса, но не заменяют scope команды `rg`. Generated contract ищи через producer в [GENERATED](../reference/GENERATED_RU.md), а не правь его копию вручную.
 
 <a id="python"></a>
 ## Python

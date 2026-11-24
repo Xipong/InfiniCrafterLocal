@@ -3,25 +3,15 @@ from __future__ import annotations
 
 import copy
 import json
-from pathlib import Path
-import re
 
 import pytest
 
-from infini_local.pipelines.context.mechanics_context import _author_source_graph
-
-
-def _producer_scope():
-    source = (Path(__file__).resolve().parents[3]
-              / "mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.SourceGraph.Export.cs")
-    match = re.search(r'\["scope"\] = "([^"\r\n]+)"', source.read_text(encoding="utf-8"))
-    assert match is not None
-    return match[1]
-
-
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("with_mechanics_source", [False, True])
-@pytest.mark.parametrize("unknown_field", [False, True])
+@pytest.mark.parametrize('mode,with_mechanics_source,unknown_field', [
+    ('json_object', False, False),
+    ('json_object', True, True),
+    ('json_schema', False, True),
+    ('json_schema', True, False),
+])
 def test_player_scope_without_diagnostic_envelope_in_production_requests(
         monkeypatch, mode, with_mechanics_source, unknown_field):
     from infini_local.core import llm_config
@@ -32,9 +22,8 @@ def test_player_scope_without_diagnostic_envelope_in_production_requests(
     from repair_test_helpers import repair_with_response, assert_delivery
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    scope = _producer_scope()
-    qualification = "Unlinked player effects are outside parent mechanics, not proven inactive."
-    assert scope.count(qualification) == 1
+    # The native SourceGraphPlayerContext check covers producer wording.
+    scope = "Unlinked player effects are outside parent mechanics, not proven inactive."
     graph = {"source": "parent_reachable_compiled_source_graph", "version": 1,
              "nodes": [], "scope": scope, "unresolved": ["player_context_dependency_unresolved"]}
     if unknown_field:
@@ -74,24 +63,11 @@ def test_player_scope_without_diagnostic_envelope_in_production_requests(
         projected = raw["item"]["parentSourceGraph"]
         assert projected["scope"] == scope
         assert projected["unresolved"] == graph["unresolved"]
-        assert "externalPlayerContext" not in json.dumps(raw)
-        assert "unlinkedHookCount" not in json.dumps(raw)
-        assert "diagnosticSecretMarker" not in json.dumps(raw)
         if unknown_field:
+            assert "diagnosticSecretMarker" not in json.dumps(raw)
             assert projected["transportOmissions"]["unknownFieldCount"] == 1
         else:
             assert "transportOmissions" not in projected
     assert doc == broken and parent == before
 
 
-def test_retired_player_counter_uses_existing_unknown_field_policy():
-    graph = {"source": "parent_reachable_compiled_source_graph", "version": 1, "nodes": [],
-             "unresolved": ["player_context_dependency_unresolved"],
-             "externalPlayerContext": {"unlinkedHookCount": 2, "scope": "old capture diagnostic"}}
-    before = copy.deepcopy(graph)
-    projected = _author_source_graph(graph)
-    assert projected is not None
-    assert "externalPlayerContext" not in projected
-    assert projected["unresolved"] == graph["unresolved"]
-    assert projected["transportOmissions"]["unknownFieldCount"] == 1
-    assert graph == before

@@ -6,17 +6,6 @@ import sys
 import pytest
 
 from infini_local.services import codex_auth
-from infini_local.desktop import settings_schema as schema
-from infini_local.desktop.studio_operations import StudioOperations
-
-
-def test_subscription_settings_and_login_controls_are_available():
-    for key in ("INFINI_CODEX_IMAGE_MODEL", "INFINI_CODEX_IMAGE_QUALITY", "INFINI_CODEX_IMAGE_SIZE", "INFINI_CODEX_IMAGE_TIMEOUT"):
-        assert key in schema.FIELD_ORDER
-        assert key in schema.DEFAULTS
-    assert "openai_codex" in schema.OPTION_HELP["INFINI_IMAGE_BACKEND"]
-    assert callable(getattr(StudioOperations, "codex_login", None))
-    assert callable(getattr(StudioOperations, "codex_status", None))
 
 
 @pytest.mark.parametrize("command,expected_calls", [

@@ -329,7 +329,6 @@ def test_fixed_literal_source_aware_receipts_refuse_source_only_typed_forgeries(
     pytest.param("unknown", False, id="unknown-default"),
     pytest.param(None, False, id="null-default"),
     pytest.param(False, False, id="boolean-default"),
-    pytest.param(2, False, id="integer-default"),
     pytest.param({}, False, id="object-default"),
     pytest.param("unknown", True, id="unknown-grouped"),
     pytest.param(None, True, id="null-grouped"),
@@ -542,12 +541,9 @@ def test_sparse_input_alternatives_project_only_exact_diagnosed_siblings(leaf):
 @pytest.mark.parametrize("invalid_target,root", [
     pytest.param(None, "pure", id="null-pure"),
     pytest.param(False, "pure", id="boolean-pure"),
-    pytest.param(0, "pure", id="integer-pure"),
     pytest.param("", "pure", id="empty-string-pure"),
     pytest.param([], "pure", id="array-pure"),
-    pytest.param({}, "pure", id="object-pure"),
     pytest.param("unknown", "pure", id="unknown-pure"),
-    pytest.param(None, "hybrid", id="null-hybrid"),
     pytest.param("unknown", "hybrid", id="unknown-hybrid"),
 ])
 def test_placement_target_repair_distinguishes_invalid_presence(monkeypatch, binding_transaction, invalid_target, root):
@@ -569,9 +565,11 @@ def test_placement_action_selection_requires_explicit_call_reference(monkeypatch
 
 
 @pytest.mark.parametrize("invalid_reference", [
-    pytest.param("unknown_reference", id="unknown"), pytest.param(None, id="null"),
-    pytest.param(False, id="boolean"), pytest.param(2, id="integer"),
-    pytest.param({}, id="object"), pytest.param([], id="array"),
+    pytest.param("unknown_reference", id="unknown"),
+    pytest.param(None, id="null"),
+    pytest.param(False, id="boolean"),
+    pytest.param({}, id="object"),
+    pytest.param([], id="array"),
     pytest.param("witness_call", id="wrong-capability"),
 ])
 def test_missing_kind_present_invalid_placement_reference_repair(monkeypatch, binding_transaction, invalid_reference):

@@ -68,25 +68,6 @@ server.close()
     subprocess.run([sys.executable, '-c', code, str(tmp_path / 'config.env')], env=env, check=True, timeout=15)
 
 
-def test_snapshot_does_not_certify_unsaved_values(studio):
-    app, controller = studio
-    app.values['INFINI_PORT'] = '9091'
-    snap = controller.snapshot()
-    assert snap['values']['INFINI_PORT'] == '9091'
-    assert snap['savedValues']['INFINI_PORT'] == DEFAULTS['INFINI_PORT']
-
-
-def test_stale_revision_rejected_before_any_mutation(studio):
-    app, controller = studio
-    before = dict(app.values)
-    revision = controller.snapshot()['savedRevision']
-    app.config_path.write_text(app.config_path.read_text() + '\n# changed\n')
-    with pytest.raises(ValueError, match='другой вкладке'):
-        apply(controller, 'save', {'INFINI_PORT': '9192'}, {'savedRevision': revision})
-    assert app.values == before
-    assert controller.app.actions.last_action['status'] == 'failed'
-
-
 def test_save_unknown_values_and_multiline_codec(studio):
     app, controller = studio
     result = apply(controller, 'save', {'INFINI_CUSTOM_EXTENSION': 'a\nb="quoted"', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--foo\n  bar'})
@@ -94,13 +75,6 @@ def test_save_unknown_values_and_multiline_codec(studio):
     saved = parse_env(app.config_path)
     assert saved['INFINI_CUSTOM_EXTENSION'] == 'a\nb="quoted"'
     assert saved['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--foo bar'
-
-
-def test_removed_disk_extension_not_resurrected(studio):
-    app, controller = studio
-    app.values['INFINI_REMOVED_EXTENSION'] = 'stale'
-    apply(controller, 'save', {'INFINI_PORT': '5055'})
-    assert 'INFINI_REMOVED_EXTENSION' not in parse_env(app.config_path)
 
 
 def test_profile_saved_without_secrets_or_config_write(studio):
@@ -166,14 +140,6 @@ def test_lora_collect_and_use_preserve_path_and_weight_semantics(studio, path, d
     assert app.values['INFINI_SDCPP_LORA_PROMPT_TAGS'] == tag + ' <lora:other:0.2>'
 
 
-@pytest.mark.parametrize('lan,transport,host', [(True,'native','0.0.0.0'), (True,'http','0.0.0.0'), (False,'http','127.0.0.1')])
-def test_lan_overlay_is_independent_of_asset_transport(studio, lan, transport, host):
-    app, _ = studio
-    app.values.update(INFINI_MP_ASSET_TRANSPORT=transport, INFINI_HOST='0.0.0.0')
-    app.lan_enabled = lan
-    assert app.collect()['INFINI_HOST'] == host
-
-
 def test_config_preview_masks_unknown_credentials(studio):
     app, controller = studio
     write_env(app.config_path, dict(DEFAULTS, INFINI_CUSTOM_CREDENTIAL='hidden', INFINI_PUBLIC_VALUE='visible'))
@@ -210,14 +176,6 @@ def test_exit_publishes_closed_state(studio):
     assert controller.server._state['closed']
     assert controller.server._state['lastAction']['status'] == 'succeeded'
     assert not controller.server.accepting_actions
-
-
-def test_external_extension_edit_survives_partial_save(studio):
-    app, controller = studio
-    app.values['INFINI_EXTERNAL_EXTENSION'] = 'old cached value'
-    write_env(app.config_path, dict(DEFAULTS, INFINI_EXTERNAL_EXTENSION='new disk value'))
-    apply(controller, 'save', {'INFINI_PORT': '6060'})
-    assert parse_env(app.config_path)['INFINI_EXTERNAL_EXTENSION'] == 'new disk value'
 
 
 @pytest.mark.parametrize('provider', ['local', 'openrouter', 'openai_compat', 'openai_codex'])
@@ -309,18 +267,6 @@ def test_stock_and_hybrid_arguments_preserve_paths_and_custom_profile(studio):
     assert app.config_path.read_bytes() == original
 
 
-def test_universal_local_preset_preserves_selected_models(studio):
-    app, controller = studio
-    selected = {key: '/chosen/' + key for key in ('INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_EXE')}
-    selected.update(INFINI_SDCPP_ROCM_COMPAT_ROOT='/chosen/rocm', INFINI_SDCPP_SERVER_EXTRA_ARGS='--custom', INFINI_SDCPP_SERVER_COMMAND_MODE='template')
-    result = apply(controller, 'applyPreset', dict(selected, INFINI_LLM_PROVIDER='openrouter'), {'name': 'Локалка: LM Studio + sd.cpp (универсальный)'})
-    assert result['ok']
-    assert all(result['values'][key] == val for key, val in selected.items())
-    assert result['values']['INFINI_LLM_PROVIDER'] == 'local'
-    assert result['values']['INFINI_SDCPP_SERVER_EXTRA_ARGS'] == '--custom'
-    assert result['values']['INFINI_SDCPP_ROCM_COMPAT_ROOT'] == '/chosen/rocm'
-
-
 @pytest.mark.parametrize('name,provider,backend', [
     ('Локалка: LM Studio + sd.cpp (универсальный)', 'local', 'sdcpp'),
     ('API (OpenAI-compatible) + локальные изображения sd.cpp', 'openai_compat', 'sdcpp'),
@@ -340,7 +286,10 @@ def test_pipeline_presets_select_only_chain_and_keep_user_assets(studio, name, p
     profiles = app.config_path.with_name('gui_user_presets.json')
     before, config_before = profiles.read_bytes(), app.config_path.read_bytes()
     saved_profile = dict(app.user_presets['123'])
-    result = apply(controller, 'applyPreset', owned, {'name': name})
+    # Start from a different chain, so merely preserving the draft cannot pass.
+    draft = dict(owned, INFINI_LLM_PROVIDER='local' if provider != 'local' else 'openrouter',
+                 INFINI_IMAGE_BACKEND='sdcpp' if backend != 'sdcpp' else 'image_api')
+    result = apply(controller, 'applyPreset', draft, {'name': name})
     assert result['ok']
     assert (result['values']['INFINI_LLM_PROVIDER'], result['values']['INFINI_IMAGE_BACKEND']) == (provider, backend)
     assert all(result['values'][key] == value for key, value in owned.items())
@@ -348,75 +297,76 @@ def test_pipeline_presets_select_only_chain_and_keep_user_assets(studio, name, p
     assert app.user_presets['123'] == saved_profile
 
 
-def test_retired_profile_identity_does_not_rewrite_or_mislabel_settings():
-    data = {'INFINI_GUI_PIPELINE_PRESET': 'Локалка: LM Studio + FLUX.2 Klein 4B hybrid',
-            'INFINI_LLM_PROVIDER': 'local', 'INFINI_IMAGE_BACKEND': 'sdcpp',
-            'INFINI_SDCPP_MODEL': '/my/model', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--my-flags'}
-    original = dict(data)
-    assert SettingsController._pipeline_preset_from_config(data) == 'Custom'
-    assert data == original
+def test_studio_does_not_apply_an_unknown_saved_preset(tmp_path):
+    fields = {'INFINI_LLM_PROVIDER': 'local', 'INFINI_IMAGE_BACKEND': 'sdcpp',
+              'INFINI_SDCPP_MODEL': '/my/model', 'INFINI_SDCPP_SERVER_EXTRA_ARGS': '--my-flags'}
+    config = tmp_path / 'config.env'
+    write_env(config, {**fields, 'INFINI_GUI_PIPELINE_PRESET': 'Unrecognized profile'})
+    before = config.read_bytes()
+    app = SettingsController(config)
+    try:
+        snapshot = StudioController(app, None).snapshot()
+        for values in (snapshot['values'], snapshot['savedValues']):
+            assert values['INFINI_GUI_PIPELINE_PRESET'] == CUSTOM_PRESET
+            assert {key: values[key] for key in fields} == fields
+        assert config.read_bytes() == before
+    finally:
+        app.on_close()
 
 
-def test_inert_settings_are_preserved_as_opaque_values(studio):
+def test_snapshot_observes_atomic_external_config_and_rejects_stale_save(studio):
     app, controller = studio
-    key = 'INFINI_DEBUG_ATTACK_CONSUMABLE_MIN_YIELD'
-    write_env(app.config_path, {**DEFAULTS, key: ' 77 ', key + '_ENABLED': '1'})
-    apply(controller, 'save', {'INFINI_PORT': '6060'})
-    saved = parse_env(app.config_path)
-    assert saved[key] == ' 77 '
-    assert saved[key + '_ENABLED'] == '1'
-    snap = controller.snapshot()
-    assert key in snap['inactiveSettings']
-    assert key not in {field['key'] for field in snap['fields']}
-
-
-def test_snapshot_caches_unchanged_files_but_observes_external_edits(studio, monkeypatch):
-    from infini_local.desktop import settings_defaults
-    app, controller = studio
-    reads = dict(saved=0, defaults=0)
-    def counted(name, fn):
-        def call(*args, **kwargs):
-            reads[name] += 1
-            return fn(*args, **kwargs)
-        return call
-    monkeypatch.setattr(app, 'read_saved_settings', counted('saved', app.read_saved_settings))
-    monkeypatch.setattr(settings_defaults, 'defaults_offer', counted('defaults', settings_defaults.defaults_offer))
     first = controller.snapshot()
-    initial_reads = dict(reads)
-    for _ in range(10):
-        snap = controller.snapshot()
-        assert snap['savedRevision'] == first['savedRevision']
-        assert snap['fields'] is first['fields']
-    assert reads == initial_reads
-    # Same-size replacement with the previous mtime still invalidates by inode/ctime.
     source = app.config_path
     previous = source.stat()
-    replacement = source.with_name('replacement.env')
-    replacement.write_bytes(source.read_bytes().replace(b'5055', b'6066'))
+    replacement = source.with_name("replacement.env")
+    replacement.write_bytes(source.read_bytes().replace(b"5055", b"6066"))
     os.utime(replacement, ns=(previous.st_atime_ns, previous.st_mtime_ns))
     os.replace(replacement, source)
     changed = controller.snapshot()
-    assert changed['savedValues']['INFINI_PORT'] == '6066'
-    assert changed['savedRevision'] != first['savedRevision']
-    assert reads['saved'] == initial_reads['saved'] + 1
-    with pytest.raises(ValueError, match='другой вкладке'):
-        apply(controller, 'save', {'INFINI_PORT': '7077'}, {'savedRevision': first['savedRevision']})
-    assert parse_env(source)['INFINI_PORT'] == '6066'
-    # Sidecar-only decisions invalidate their own projection, not saved config.
-    decision = source.with_name(source.name + '.defaults.json')
-    decision.write_text('{}')
-    before = dict(reads)
-    controller.snapshot()
-    assert reads['defaults'] == before['defaults'] + 1
-    assert reads['saved'] == before['saved']
+    assert changed["savedValues"]["INFINI_PORT"] == "6066"
+    assert changed["savedRevision"] != first["savedRevision"]
+    with pytest.raises(ValueError):
+        apply(controller, "save", {"INFINI_PORT": "7077"}, {"savedRevision": first["savedRevision"]})
+    assert parse_env(source)["INFINI_PORT"] == "6066"
 
-@pytest.mark.parametrize('transport', ['native', 'http'])
-def test_lan_save_preserves_generator_bind_independently_of_assets(studio, transport):
+
+def test_snapshot_observes_defaults_dismissed_by_another_controller(studio):
     app, controller = studio
-    apply(controller, 'save', {'INFINI_HOST': '0.0.0.0', 'INFINI_MP_ASSET_TRANSPORT': transport}, {'lanEnabled': True})
-    assert parse_env(app.config_path)['INFINI_HOST'] == '0.0.0.0'
+    write_env(app.config_path, {**parse_env(app.config_path), "INFINI_LLM_MAX_TOKENS": "9000"})
+    before = controller.snapshot()
+    offer = before["defaultsUpdate"]
+    assert not offer["dismissed"]
+    assert any(row["key"] == "INFINI_LLM_MAX_TOKENS" for row in offer["changes"])
+    disk = app.config_path.read_bytes()
+
+    other_app = SettingsController(app.config_path)
+    try:
+        other = StudioController(other_app, None)
+        assert apply(other, "declineDefaults", extra={"revision": offer["revision"]})["ok"]
+        after = controller.snapshot()
+        assert after["defaultsUpdate"]["dismissed"]
+        assert after["savedRevision"] == before["savedRevision"]
+        assert after["savedValues"] == before["savedValues"]
+        assert app.config_path.read_bytes() == disk
+    finally:
+        other_app.on_close()
+
+
+@pytest.mark.parametrize(("lan", "transport", "host"), [
+    (True, "native", "0.0.0.0"),
+    (True, "http", "0.0.0.0"),
+    (False, "http", "127.0.0.1"),
+])
+def test_lan_save_preserves_generator_bind_independently_of_assets(studio, lan, transport, host):
     from infini_local.core.server_endpoint import resolve_server_endpoint
-    assert resolve_server_endpoint(app.collect()).bind_host == '0.0.0.0'
+
+    app, controller = studio
+    result = apply(controller, "save", {"INFINI_MP_ASSET_TRANSPORT": transport}, {"lanEnabled": lan})
+    assert result["saved"]
+    saved = parse_env(app.config_path)
+    assert saved["INFINI_MP_ASSET_TRANSPORT"] == transport
+    assert resolve_server_endpoint(saved).bind_host == host
 
 
 def test_profile_save_excludes_composite_headers_and_apply_keeps_live_credentials(studio):

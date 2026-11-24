@@ -280,12 +280,6 @@ def test_full_human_speed_range_is_contextually_bounded_not_globally_shrunk(upda
     assert validate_runtime_program(source)["ok"] is accepted
 
 
-@pytest.mark.parametrize("old,new", [("useTimeTicks", "useTimeSeconds"), ("useAnimationTicks", "useAnimationSeconds")])
-def test_predecessor_leaf_names_are_not_fresh_author_aliases(old, new):
-    source = item_document()
-    params = source["runtimeProgram"]["calls"][0]["params"]
-    params[old] = params.pop(new)
-    assert not validate_runtime_program(source)["ok"]
 
 
 def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():

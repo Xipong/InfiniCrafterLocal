@@ -1,11 +1,13 @@
 """Replay/runner safety checks. Synthetic telemetry is never native evidence."""
 import importlib.util
+from collections import Counter
 import json
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from xml.etree import ElementTree as ET
 
 import workbench as w
 
@@ -17,8 +19,6 @@ def trace():
 
 def test_history_preview_and_export_use_the_same_bounded_recorded_samples(tmp_path: Path):
     import copy
-    from collections import Counter
-    import xml.etree.ElementTree as ET
     import pytest
     playwright = pytest.importorskip("playwright.sync_api")
     data: dict = trace()
@@ -62,6 +62,19 @@ def test_history_preview_and_export_use_the_same_bounded_recorded_samples(tmp_pa
             assert page.locator("#trace").evaluate("element => JSON.parse(element.textContent).input.literal") == data["input"]["literal"]
         finally:
             browser.close()
+
+
+SVG = "{http://www.w3.org/2000/svg}"
+
+
+def svg_shapes(source, kind, fields):
+    return Counter(tuple(float(shape.attrib[field]) for field in fields)
+                   for shape in ET.fromstring(source).iter(SVG + kind)
+                   if all(field in shape.attrib for field in fields))
+
+
+def svg_labels(source):
+    return [" ".join("".join(label.itertext()).split()) for label in ET.fromstring(source).iter(SVG + "text")]
 
 
 class WorkbenchTests(unittest.TestCase):
@@ -424,11 +437,15 @@ class WorkbenchTests(unittest.TestCase):
         t=trace();t['execution']['clientGraphics']={'nativeClientBranch':True};t['snapshots'][0]['events']=[{'kind':'item_contact_query','x':123,'y':234,'width':45,'height':67}]
         t['snapshots'][0]['player']=dict(t['snapshots'][0]['player'],itemPose={'x':15,'y':25,'rotation':0})
         svg=w.frame_svg(w.validate_trace(t),0)
-        self.assertIn('x="123" y="234" width="45" height="67"',svg)
-        self.assertIn('native contact query (not hit)',svg)
-        self.assertIn('cx="15" cy="25"',svg)
+
+        self.assertIn((15, 25), svg_shapes(svg, "circle", ("cx", "cy")))
         t['snapshots'][0]['events']=[]
-        self.assertNotIn('native contact query (not hit)',w.frame_svg(w.validate_trace(t),0))
+        without_contact = w.frame_svg(w.validate_trace(t), 0)
+        rect = ("x", "y", "width", "height")
+        self.assertEqual(svg_shapes(svg, "rect", rect),
+                         svg_shapes(without_contact, "rect", rect) + Counter({(123, 234, 45, 67): 1}))
+        self.assertTrue(any("contact query" in label and "not hit" in label for label in svg_labels(svg)))
+        self.assertFalse(any("contact query" in label for label in svg_labels(without_contact)))
     def test_build_provenance_detects_copied_asset_changes(self):
         with tempfile.TemporaryDirectory() as d:
             dll=Path(d)/'unit-test-not-real.dll';dll.write_bytes(b'unit-fixture')
@@ -446,8 +463,10 @@ class WorkbenchTests(unittest.TestCase):
         t['snapshots'][0]['projectiles']=[dict(t['snapshots'][0]['projectiles'][0],id=i,entityId='child',damage=4,active=False) for i in range(5)]
         t['snapshots'][0]['events']=[{'kind':'item_hit','damageDone':17,'crit':False},{'kind':'hit','damageDone':10,'crit':True}]
         before=json.dumps(t);svg=w.frame_svg(w.validate_trace(t),0)
-        self.assertIn('Recorded projectiles',svg);self.assertIn('dmg 4',svg)
-        self.assertIn('native item damage 17 · projectile damage 10 · critical hits 1',svg)
+        labels = svg_labels(svg)
+        self.assertEqual(sum("dmg 4" in label for label in labels), 5)
+        for observed in ("item damage 17", "projectile damage 10", "critical hits 1"):
+            self.assertTrue(any(observed in label for label in labels), labels)
         self.assertEqual(before,json.dumps(t))
     def test_rejects_nonfinite_and_bad_dimensions(self):
         for bad in [float('inf'),float('nan'),'1',True]:
@@ -472,15 +491,19 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaises(ValueError):w.render(p,Path(d)/'review')
     def test_svg_uses_exact_recorded_position(self):
         svg=w.frame_svg(w.validate_trace(trace()),2)
-        self.assertIn('x="24"',svg)
-        self.assertIn('&lt;unsafe&gt;',svg)
+        self.assertIn((24, 20, 16, 32), svg_shapes(svg, "rect", ("x", "y", "width", "height")))
+        self.assertTrue(any("<unsafe>" in label for label in svg_labels(svg)))
     def test_native_nonfinite_failure_remains_inspectable_without_fake_coordinates(self):
         t=trace();t['status']='failed';p=t['snapshots'][-1]['projectiles'][0]
         p.update(x=None,y=None,vx=None,vy=None,nonFinite=True)
         w.validate_trace(t)
         svg=w.frame_svg(t,2)
         self.assertIn('NATIVE INVALID STATE',svg)
-        self.assertNotIn('x="None"',svg)
+        rectangles = svg_shapes(svg, "rect", ("x", "y", "width", "height"))
+        original = w.frame_svg(w.validate_trace(trace()), 2)
+        expected = svg_shapes(original, "rect", ("x", "y", "width", "height"))
+        expected.subtract({(24, 20, 16, 32): 1})
+        self.assertEqual(rectangles, +expected)
         self.assertIsNone(t['snapshots'][-1]['projectiles'][0]['x'])
         t['status']='passed'
         with self.assertRaises(ValueError):w.validate_trace(t)
@@ -488,8 +511,7 @@ class WorkbenchTests(unittest.TestCase):
         t=trace();t['snapshots'][-1]['player']=dict(t['snapshots'][-1]['player'],x=None,y=None,nonFinite=True,aimX=100,aimY=200)
         w.validate_trace(t);svg=w.frame_svg(t,2)
         self.assertIn('NATIVE INVALID STATE',svg)
-        self.assertNotIn('x1="None"',svg)
-        self.assertNotIn('stroke-dasharray',svg)
+        self.assertNotIn((100, 200), svg_shapes(svg, "line", ("x2", "y2")))
     def test_valid_json_truncation_cannot_keep_pass_status(self):
         t=trace();t['status']='passed';t['assertions'][0]['status']='passed'
         w.validate_trace(t)

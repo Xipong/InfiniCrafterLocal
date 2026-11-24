@@ -4,7 +4,7 @@
 Отдельный `--real-images` не меняет старые панели и не использует synthetic PNG.
 
 Для native capture без провайдера используйте отдельный
-[`live10 --offline` / `live40 --offline`](../README.md#детерминированный-native-capture). Он снимает raw Prepare,
+[`live10/live20/live40 --offline`](../README.md#детерминированный-native-capture). Он снимает raw Prepare,
 а не запускает описанную здесь генерационную кампанию.
 
 ## Сначала preflight
@@ -14,10 +14,10 @@
 ```bash
 python -m toolbox live10 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox panels
-python -m toolbox live20 --expected-case-count 20
+python -m toolbox live20 --runtime-dump /path/to/current-parents.jsonl --expected-case-count 20
 python -m toolbox live40 --runtime-dump /path/to/current-parents.jsonl
 python -m toolbox live10 --help
-python -m toolbox live20 --config /path/outside/repo/private.env --preflight-only
+python -m toolbox live20 --runtime-dump /path/to/current-parents.jsonl --config /path/outside/repo/private.env --preflight-only
 ```
 
 `--preflight-only` — явный синоним безопасного режима по умолчанию, не разрешение
@@ -41,8 +41,9 @@ Environment имеет приоритет; используется канони
 Star Cannon + Meteor Staff на Nebula Blaze + Last Prism. Live40 — новый набор
 аудита 2026-11-06, не историческая GIF-галерея. [Списки и provenance](../fixtures/README.md).
 
-Live10 и Live40 требуют явный актуальный `--runtime-dump`; частные native packets
-не входят в репозиторий. Classic20 сохраняет исходный fixture. Никакой профиль
+Все панели и собственный `--cases-file` требуют явный актуальный `--runtime-dump`.
+Classic20 сохраняет исходные пары, а не старые данные родителей; частные native packets
+не входят в репозиторий. Никакой профиль
 модели не выбирается автоматически. Custom `--cases-file` и выбор `--cases`
 остаются доступными, без смешивания различных snapshots по `internalName`.
 
@@ -61,7 +62,7 @@ Live10 и Live40 требуют явный актуальный `--runtime-dump`
 # QA_CONFIG / QA_OUT — приватные пути; остальные QA_* — уже выбранные вами значения.
 # На этом шаге всё ещё НЕТ inference. QA_OUT не создаётся.
 python -m toolbox live20 \
-  --config "$QA_CONFIG" --output "$QA_OUT" \
+  --config "$QA_CONFIG" --runtime-dump "$QA_DUMP" --output "$QA_OUT" \
   --expected-head "$QA_HEAD" --expected-case-count 20 \
   --expected-provider openai_compat --expected-model "$QA_MODEL" \
   --expected-base-url "$QA_BASE_URL" --expected-api-mode "$QA_API_MODE" \
@@ -148,10 +149,8 @@ Codex не отправляет logical temperature/output-token budget в wire:
 
 Каждая попытка имеет input, admission, logical requests, physical metadata,
 final DTO (если получен) и terminal receipt. Существующий output не перезаписывается.
-Pipeline PASS не является art/native gameplay PASS. Exact image reuse и VFX-only
-replay пока не восстановлены: соответствующие flags явно отклоняются, а не молча
-подменяются новой полной генерацией. Старые тестовые результаты не относятся
-автоматически к этой реконструкции.
+Pipeline PASS не является art/native gameplay PASS. Старые тестовые результаты
+не относятся автоматически к этой реконструкции.
 
 Effective projected text model/effort/format также проверяются перед canonical SSE send;
 Visual reasoning override не может незаметно поменять выбранный effort.

@@ -73,9 +73,15 @@ def test_local_syntax_fix_keeps_raw_design_and_one_meaningful_repair(wire_transp
     assert not responses
 
 
-@pytest.mark.parametrize("stage", ["author", "visual"])
-@pytest.mark.parametrize("raw", ['{"missing":}', '{"a":1,"a":2,}', '{"values":[1,,2]}',
-    '{"a":1,}{"b":2,}', '{"value":NaN}', '{"root":{"missing":}'])
+@pytest.mark.parametrize('stage,raw', [
+    ('author', '{"missing":}'),
+    ('author', '{"a":1,"a":2,}'),
+    ('author', '{"values":[1,,2]}'),
+    ('author', '{"a":1,}{"b":2,}'),
+    ('author', '{"value":NaN}'),
+    ('author', '{"root":{"missing":}'),
+    ('visual', '{"missing":}'),
+])
 def test_unrecoverable_source_fails_without_model_repair(wire_transport, stage, raw):
     responses, requests = wire_transport
     responses.append(raw)

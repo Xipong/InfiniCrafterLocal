@@ -97,8 +97,12 @@ def test_author_and_scoped_repair_deliver_physical_facts_without_reauthoring(mon
 
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("composition", ["mounted-path", "displaced-hand-png", "rigid-hand-png"])
+@pytest.mark.parametrize('mode,composition', [
+    ("json_object", "mounted-path"),
+    ("json_object", "displaced-hand-png"),
+    ("json_object", "rigid-hand-png"),
+    ("json_schema", "mounted-path"),
+])
 def test_visual_and_repair_do_not_promise_contact_for_every_grip(wire_transport, monkeypatch, mode, composition):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     if composition == "rigid-hand-png":

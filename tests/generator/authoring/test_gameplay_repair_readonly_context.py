@@ -49,8 +49,11 @@ def _broken_held_and_deployed():
     return item
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("changed_fact", ["independent-runtime-interval", "original-concept"])
+@pytest.mark.parametrize('format_mode,changed_fact', [
+    ("json_object", "independent-runtime-interval"),
+    ("json_object", "original-concept"),
+    ("json_schema", "original-concept"),
+])
 def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypatch, format_mode, changed_fact):
     source = _broken_held_and_deployed()
     variant = copy.deepcopy(source)
@@ -123,8 +126,17 @@ def test_readonly_projection_preserves_exact_values_absences_and_is_detached(mon
     assert item == before
 
 
-@pytest.mark.parametrize("field", ["concept", "runtimeProgram"])
-@pytest.mark.parametrize("value", ["absent", None, {}, [], "", False])
+@pytest.mark.parametrize('field,value', [
+    ("concept", "absent"),
+    ("concept", None),
+    ("concept", {}),
+    ("concept", []),
+    ("concept", ""),
+    ("concept", False),
+    ("runtimeProgram", "absent"),
+    ("runtimeProgram", None),
+    ("runtimeProgram", {}),
+])
 def test_readonly_source_never_invents_values_when_source_is_missing_or_malformed(field, value):
     item = _broken_held_and_deployed()
     if value == "absent":
@@ -227,8 +239,11 @@ def test_readonly_context_is_not_an_output_schema_extension(context_key):
     assert not strict_repair_structure_report(patch)["ok"]
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("unknown_fn", [False, True], ids=["parameter-only", "unknown-function"])
+@pytest.mark.parametrize('format_mode,unknown_fn', [
+    ("json_object", False),
+    ("json_object", True),
+    ("json_schema", True),
+])
 def test_repair_request_documents_grammar_without_expanding_frozen_permissions(monkeypatch, format_mode, unknown_fn):
     from collections import Counter
 

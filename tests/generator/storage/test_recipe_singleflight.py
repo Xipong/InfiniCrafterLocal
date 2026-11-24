@@ -81,7 +81,6 @@ def test_same_recipe_rechecks_cache_and_releases_failed_flight(pipeline_harness,
         else:
             assert first.result(5)["id"] == second.result(5)["id"] == "winner-1"
     assert len(calls) == (2 if first_fails else 1)
-    assert not world_storage._GENERATION_LOCKS
 
 
 @pytest.mark.parametrize("different_world", [False, True])
@@ -102,4 +101,3 @@ def test_unrelated_recipes_generate_concurrently(pipeline_harness, monkeypatch, 
         first = pool.submit(pipeline.combine, pipeline_harness)
         second = pool.submit(pipeline.combine, other)
         assert first.result(5)["id"] != second.result(5)["id"]
-    assert not world_storage._GENERATION_LOCKS

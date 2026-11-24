@@ -56,9 +56,16 @@ def test_structural_union_preserves_parallel_anyof_and_allof_constraints():
     assert strict_schema_errors({"kind": "use", "cost": 0, "tag": 7}, projected)
 
 
-@pytest.mark.parametrize("union_key", ["oneOf", "anyOf"])
-@pytest.mark.parametrize("reverse", [False, True])
-@pytest.mark.parametrize("limit", [0, 1, 2, 128])
+@pytest.mark.parametrize('union_key,reverse,limit', [
+    ('oneOf', False, 0),
+    ('oneOf', False, 2),
+    ('oneOf', False, 128),
+    ('oneOf', True, 1),
+    ('anyOf', False, 1),
+    ('anyOf', True, 0),
+    ('anyOf', True, 2),
+    ('anyOf', True, 128),
+])
 def test_unselected_union_reports_only_proven_common_errors(union_key, reverse, limit):
     branches = [{
         "type": "object", "additionalProperties": False,

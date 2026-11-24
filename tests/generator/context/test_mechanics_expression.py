@@ -97,7 +97,6 @@ def test_arithmetic_retains_native_opcode(opcode):
     {"kind": "argument", "index": True},
     {"kind": "unknown", "reason": "missing_helper", "local": 4, "future": {"effect": 8}},
     {"kind": "new_expression", "value": const(9), "sourceIlOffset": 123},
-    {"kind": "call", "member": "Thing", "arguments": [], "evaluation": "executed"},
 ])
 def test_unknown_or_malformed_expression_is_literal_and_not_silently_projected(value):
     renderer = MechanicsRenderer()

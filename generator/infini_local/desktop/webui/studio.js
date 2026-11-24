@@ -522,9 +522,26 @@
       ['03',t('Обработка спрайта'),sprite.name,sprite.detail,value('INFINI_IMAGE_BACKEND') === 'off' ? t('Настройки сохранены'):t("Фон: {0}", t(optionNames.INFINI_BG_COLOR[value('INFINI_BG_COLOR')]) || chosen('INFINI_BG_COLOR')),'sprites','pixel']
     ].map(([number,title,name,detail,meta,route,glyph]) => `<li><a class="pipeline-step flow-card" href="#${route}" data-flow-card><div class="flow-card-top"><span class="flow-index">${number}</span><span class="flow-title">${icon(glyph)}${title}</span><span class="step-arrow">${icon('arrow')}</span></div><h3>${esc(name)}</h3><p class="flow-detail">${esc(detail)}</p><div class="flow-card-meta">${esc(meta)}</div></a></li>`).join('')}</ol>`;
   }
+  function negotiationNotices() {
+    const rows=state.remote?.runtime?.llm_negotiation;
+    if (!Array.isArray(rows) || !rows.length) return '';
+    const messages={
+      rejected:t('Первый запрос отклонён. Проверяю альтернативу.'),
+      recovery_failed:t('Первый запрос отклонён. Альтернатива не вернула пригодный JSON. Не сохранено.'),
+      recovered_not_saved:t('Первый запрос отклонён. Альтернатива вернула JSON, но переключение не сохранено.'),
+      saved:t('Первый запрос отклонён. Альтернатива вернула JSON. Переключение сохранено для текущей конфигурации.'),
+      saved_reused:t('Используется подтверждённое переключение для текущей конфигурации.'),
+      saved_inactive:t('Переключение сохранено для предыдущей конфигурации и больше не применяется.')
+    };
+    return rows.map(row=>{
+      const mode=row.kind === 'responses_to_chat' ? 'Responses → Chat Completions':'json_schema → json_object';
+      const scope=row.scope === 'schema' ? t('только эта схема'):row.scope === 'attempt' ? t('только этот запрос'):t('профиль');
+      return `<p class="readout-note"><strong>${esc(row.profile)} · ${esc(mode)} · ${esc(scope)}</strong><br>${esc(messages[row.state] || '')} ${t('Это статус запроса, не результат генерации предмета.')}</p>`;
+    }).join('');
+  }
   function homeActivity() {
     const health=healthSummary();
-    return `<div class="server-readout">${[[t('Активных крафтов'),health.active],[t('В очереди'),health.waiting],[t('Приём запросов'),health.accepting]].map(([label,val])=>`<div><span>${label}</span><strong>${val}</strong></div>`).join('')}</div><p class="readout-note">${health.known ? t('Последний ответ генератора. Обновляется при проверке соединения.'):t('Состояние очереди появится после проверки соединения.')}</p>`;
+    return `<div class="server-readout">${[[t('Активных крафтов'),health.active],[t('В очереди'),health.waiting],[t('Приём запросов'),health.accepting]].map(([label,val])=>`<div><span>${label}</span><strong>${val}</strong></div>`).join('')}</div><p class="readout-note">${health.known ? t('Последний ответ генератора. Обновляется при проверке соединения.'):t('Состояние очереди появится после проверки соединения.')}</p>${negotiationNotices()}`;
   }
   function serviceConnections() {
     const provider=value('INFINI_LLM_PROVIDER','local'),backend=value('INFINI_IMAGE_BACKEND','sdcpp');

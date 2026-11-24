@@ -1,35 +1,13 @@
-name: PR339 source-pack cold analysis A-B
+name: Parent source analysis A-B benchmark
 
 on:
-  push:
-    branches:
-      - perf/pr333-cold-analysis-20261107
-  pull_request:
-    branches:
-      - feat/parent-source-compression-main-20261106
-    paths:
-      - 'mod/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient*.cs'
-      - 'mod/InfiniCrafterLocal/Common/Analysis/*.cs'
-      - 'mod/InfiniCrafterLocal/Common/Services/Generation/NativeSourcePackBuild.g.cs'
-      - 'tests/native/context/EngineRuntimeChecks.Source*.cs'
-      - 'tests/native/context/EngineRuntimeChecks.IndexedBitSet.cs'
-      - 'tests/native/context/EngineRuntimeChecks.NativeSourcePack*.cs'
-      - 'tools/generate/build_native_source_pack.py'
-      - 'tools/build/prepare_tml_runtime.ps1'
-      - 'tools/build/stage_tml_references.py'
-      - 'tools/testing/verify_parent_analysis_cohort.py'
-      - 'tests/native/context/EngineRuntimeChecks.ParentAnalysisProfiling.cs'
-      - 'tests/native/EngineRuntimeChecks.csproj'
-      - 'tests/native/EngineRuntimeChecks.cs'
-      - 'mod/InfiniCrafterLocal/InfiniCrafterLocal.csproj'
-      - '.github/workflows/pr333-cold-after-audit.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: pr333-post-audit-${{ github.head_ref || github.ref_name }}
+  group: parent-source-analysis-benchmark-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -48,7 +26,7 @@ jobs:
       - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           path: candidate
 
       - name: Checkout same-contract source-pack baseline

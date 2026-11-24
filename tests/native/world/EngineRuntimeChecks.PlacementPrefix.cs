@@ -109,7 +109,7 @@ internal static partial class EngineRuntimeChecks
         }));
     }
 
-    private static void PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed()
+    private static void PlacementPrefixRequiresExplicitIdentityAndPreservesQuarantine()
     {
         WithGeneratedPrefixScope(() => WithPersistenceTilemap((_, ledger) =>
         {
@@ -129,13 +129,13 @@ internal static partial class EngineRuntimeChecks
             Equal(false, saved.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2").Single().ContainsKey("nativePrefix"), "legacy absence stays literal");
             var unprefixed = GeneratedPrefixHost(data);
             unprefixed.Item.Prefix(PrefixID.Legendary);
-            Equal(true, unprefixed.RestorePlacementPrefix(GeneratedItem.ResolvePlacementPrefix(null)), "legacy means exact prefix zero");
-            Equal(0, (int)unprefixed.Item.prefix, "legacy restoration never rolls a replacement");
+            Equal(true, unprefixed.RestorePlacementPrefix(GeneratedItem.ResolvePlacementPrefix(PersistenceExplicitZeroPrefix())), "explicit prefix zero clears a prior prefix exactly");
+            Equal(0, (int)unprefixed.Item.prefix, "explicit zero never rolls a replacement");
             var incompatible = GeneratedPrefixHost(GeneratedItemData.Placeholder());
             Equal(false, incompatible.RestorePlacementPrefix(PrefixID.Legendary), "native refusal is observable, never a forced token or reroll");
             Equal(0, (int)incompatible.Item.prefix, "refused prefix remains unclaimed");
-            var bad = new object[] {
-                "literal-bad-prefix", new TagCompound(),
+            var bad = new object?[] {
+                null, "literal-bad-prefix", new TagCompound(),
                 new TagCompound { ["infiniNativePrefix"] = -1 },
                 new TagCompound { ["infiniNativePrefix"] = int.MaxValue },
                 new TagCompound { ["infiniNativePrefix"] = (int)PrefixID.Count },
@@ -143,10 +143,10 @@ internal static partial class EngineRuntimeChecks
                 new TagCompound { ["infiniNativePrefix"] = (int)PrefixID.Count, ["infiniNativePrefixMod"] = "MissingMod" },
                 new TagCompound { ["infiniNativePrefix"] = (int)PrefixID.Count, ["infiniNativePrefixMod"] = "MissingMod", ["infiniNativePrefixName"] = "Prefix" },
             };
-            foreach (object identity in bad)
+            foreach (object? identity in bad)
             {
                 TagCompound row = Row(identity);
-                string literal = PersistenceRawBytes(new TagCompound { ["nativePrefix"] = identity });
+                string literal = PersistenceRawBytes(identity is null ? new TagCompound() : new TagCompound { ["nativePrefix"] = identity });
                 ledger.LoadWorldData(PersistenceNbtRoundtrip(new TagCompound { ["infiniGeneratedPlacementLedgerV2"] = new List<TagCompound> { row } }));
                 Equal(true, GeneratedPlacementLedgerSystem.TryQueueReturn(GeneratedPlacementLayer.Wall, 40, 40), "invalid prefix still retains material ownership");
                 ledger.PostUpdateWorld();
@@ -155,7 +155,10 @@ internal static partial class EngineRuntimeChecks
                     var quarantine = new TagCompound(); ledger.SaveWorldData(quarantine);
                     TagCompound envelope = quarantine.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Single();
                     Equal("prefix_identity_invalid", envelope.GetString("cause"), "specific refusal, never silent downgrade");
-                    Equal(literal, PersistenceRawBytes(new TagCompound { ["nativePrefix"] = envelope.GetCompound("claim")["nativePrefix"] }), "malformed prefix retained literally");
+                    var claim = envelope.GetCompound("claim");
+                    Equal(identity is not null, claim.ContainsKey("nativePrefix"), "quarantine retains missing/present distinction");
+                    Equal(literal, PersistenceRawBytes(claim.ContainsKey("nativePrefix")
+                        ? new TagCompound { ["nativePrefix"] = claim["nativePrefix"] } : new TagCompound()), "missing or malformed prefix retained literally");
                     Equal(false, GeneratedPlacementLedgerSystem.TryRequeueQuarantinedReturn(new string('a', 32), json), "definition-only repair cannot replace invalid instance identity");
                     ledger.LoadWorldData(PersistenceNbtRoundtrip(quarantine));
                 }

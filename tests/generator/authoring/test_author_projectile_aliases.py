@@ -1,11 +1,8 @@
 """Fresh projectile Author choices preserve existing executor inputs and provenance."""
-from suite_paths import TEST_ROOT
-import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair.filter import filter_repair_patch_scope
@@ -61,12 +58,17 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
 
 
 @pytest.mark.parametrize("name,value", [
-    ("immunity", None), ("immunity", "local"), ("immunity", {}),
-    ("immunity", {"localCooldown": -1}), ("immunity", {"localCooldown": 601}),
-    ("immunity", {"localCooldown": True}), ("immunity", {"localCooldown": 1.5}),
+    ("immunity", None),
+    ("immunity", "local"),
+    ("immunity", {}),
+    ("immunity", {"localCooldown": -1}),
+    ("immunity", {"localCooldown": 601}),
+    ("immunity", {"localCooldown": True}),
     ("immunity", {"localCooldown": 2, "mode": "local"}),
     ("immunity", {"localCooldown": 10, "owner": True}),
-    ("updatesPerTick", 0), ("updatesPerTick", 7), ("updatesPerTick", True),
+    ("updatesPerTick", 0),
+    ("updatesPerTick", 7),
+    ("updatesPerTick", True),
     ("updatesPerTick", 1.5),
 ])
 def test_collision_rejects_ambiguous_choices_and_noninteger_updates(name, value):
@@ -118,6 +120,17 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
     document = build_capability_witness("spawn")
     selected(document)["params"]["position"] = position
     assert not validate_runtime_program(document)["ok"]
+
+
+def test_retired_spawn_placement_cannot_replace_authored_position():
+    document = build_capability_witness("spawn")
+    assert validate_runtime_program(document)["ok"]
+    params = selected(document)["params"]
+    del params["position"]
+    params["placement"] = "item_use_origin"
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert {row["path"].rsplit(".", 1)[-1] for row in report["errors"]} >= {"placement", "position"}
 
 
 @pytest.mark.parametrize("fn,name,wire_name,lo,hi", [
@@ -367,9 +380,9 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     assert validate_runtime_program(repaired)["ok"]
 
 
-@pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce", "move_gravity_arc", "move_orbit",
-                                  "move_boomerang", "move_proximity_missile", "channel_beam", "charge_then_release"])
-def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
+# An internal operation and an unknown one are both inadmissible to Author.
+@pytest.mark.parametrize("fn", ["spawn_over_target", "unknown_runtime_action"])
+def test_non_author_calls_are_refused_by_schema_prompt_and_repair(fn):
     from infini_local.core.runtime_authoring.registry_views import capability_provider_union, compact_capability_catalog
     from infini_local.pipelines.author.request import build_gameplay_repair_dossier
     if fn in CAPABILITY_REGISTRY:
@@ -386,53 +399,46 @@ def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
     dossier = build_gameplay_repair_dossier(document, {}, {}, failure_report=validate_runtime_program(document))
     for section in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards"):
         assert fn not in {row["fn"] for row in dossier[section]}
-    assert "move_bounce" not in MOVEMENT_OPCODE and "move_gravity_arc" not in MOVEMENT_OPCODE
 
 
-def test_frozen_retired_receipts_are_negative_evidence_without_rewriting_bytes():
-    path = (TEST_ROOT / "fixtures") / "projectile_retained_wire.json"
-    corpus = json.loads(path.read_text())
-    assert corpus["sourceHead"] == "a3d5950"
-    for row in corpus["cases"]:
-        wire = row["wire"]
-        before = json.dumps(wire, sort_keys=True)
-        receipts = wire["runtimeContract"]["finalWireReceipts"]
-        assert not validate_runtime_wire(wire)["ok"], row["fn"]
-        report = audit_compiler_receipts(receipts, final_document=wire)
-        assert not report["ok"], (row["fn"], report)
-        assert json.dumps(wire, sort_keys=True) == before
-        broken = deepcopy(receipts)
-        next(r for r in broken if r.get("callId") == "witness_call" and ".params." in r["authoredPath"])["authoredPath"] += "_unknown"
-        assert not audit_compiler_receipts(broken, final_document=wire)["ok"]
+@pytest.mark.parametrize("fn,retired,final_leaf,old_leaf", [
+    ("move_straight", "move_bounce", ".movement.name", "gravityVelocityPerUpdate"),
+    ("spawn", "spawn_over_target", ".spawn.overTarget.heightTiles", "delayTicks"),
+])
+def test_current_receipt_cannot_be_claimed_by_retired_projectile_operation(fn, retired, final_leaf, old_leaf):
+    source = build_capability_witness(fn)
+    call = selected(source)
+    if fn == "spawn":
+        call["params"]["position"] = {"above": "cursor", "heightTiles": 7, "activationDelay": 0.5}
+    wire, _ = compiled_entity(source, call)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    for context in (source, None):
+        assert audit_compiler_receipts(rows, authored_document=context, final_document=wire)["ok"]
+
+    receipt = next(row for row in rows if row.get("callId") == call["id"]
+                   and row["finalPath"].endswith(final_leaf))
+    receipt["fn"] = retired
+    receipt["authoredPath"] = f'runtimeProgram.calls[{source["runtimeProgram"]["calls"].index(call)}].params.{old_leaf}'
+    before = deepcopy(wire)
+    for context in (source, None):
+        report = audit_compiler_receipts(rows, authored_document=context, final_document=wire)
+        assert not report["ok"]
+        assert any(v.get("finalPath") == receipt["finalPath"] for v in report["violations"]), report
+    assert not validate_runtime_wire(wire)["ok"]
+    assert wire == before
 
 
-@pytest.mark.parametrize("fn", ["move_bounce", "spawn_over_target"])
-def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
-    corpus = json.loads(((TEST_ROOT / "fixtures") / "projectile_retained_wire.json").read_text())
-    saved = next(row["wire"] for row in corpus["cases"] if row["fn"] == fn)
-    parameters = [row for row in saved["runtimeContract"]["finalWireReceipts"]
-                  if row.get("callId") == "witness_call" and row.get("status") == "delivered"]
-    assert not audit_compiler_receipts(parameters)["ok"]
-    source_index = int(parameters[0]["authoredPath"].split("calls[")[1].split("]")[0])
-    params = {}
-    for row in parameters:
-        name = row["authoredPath"].split(".params.")[1]
-        params[name] = row["value"]
-    source_calls = [None] * source_index + [{"id": "witness_call", "fn": fn, "target": "old", "params": params}]
-    source = {"runtimeProgram": {"calls": source_calls}}
-    missing_schema = audit_compiler_receipts(parameters, authored_document=source)
-    assert not missing_schema["ok"]
-    assert missing_schema["violations"][0]["reason"] == "source provenance requires the sole current Author grammar"
-    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA
-    report = audit_compiler_receipts(parameters, authored_document={
-        "runtimeProgram": {"schema": RUNTIME_PROGRAM_SCHEMA, "calls": source_calls},
-    })
-    assert not report["ok"]
-    assert any(row["reason"] == "compiler receipt used an undeclared input or output field" for row in report["violations"])
-
-
-@pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "foreign-source", "spawn-domain"])
-@pytest.mark.parametrize("source_available", [False, True])
+@pytest.mark.parametrize('attack,source_available', [
+    ("cooldown-domain", False),
+    ("cooldown-domain", True),
+    ("hybrid-variant", False),
+    ("hybrid-variant", True),
+    ("missing-literal", False),
+    ("duplicate", False),
+    ("foreign-source", False),
+    ("foreign-source", True),
+    ("spawn-domain", False),
+])
 def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attack, source_available):
     fn = "spawn" if attack == "spawn-domain" else "projectile_collision"
     document = build_capability_witness(fn)
@@ -464,19 +470,6 @@ def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attac
                                        final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("missing", [False, True])
-def test_retired_spawn_receipt_owner_is_refused_even_with_complete_outputs(missing):
-    corpus = json.loads(((TEST_ROOT / "fixtures") / "projectile_retained_wire.json").read_text())
-    wire = deepcopy(next(row["wire"] for row in corpus["cases"] if row["fn"] == "spawn_over_target"))
-    receipts = wire["runtimeContract"]["finalWireReceipts"]
-    if missing:
-        receipts[:] = [r for r in receipts if not (r.get("fn") == "spawn_over_target"
-                                                   and r["finalPath"].endswith(".overTarget.heightTiles"))]
-    before = deepcopy(wire)
-    assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
-    assert wire == before
-
-
 @pytest.mark.parametrize("delay", [0, 2])
 def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     document = build_capability_witness("pull_on_event")
@@ -490,19 +483,18 @@ def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
                                    authored_document=document, final_document=wire)["ok"]
 
-@pytest.mark.parametrize("fn", ["configure_placeable", "move_bounce", "spawn_over_target", "chain_damage_on_event"])
-def test_retired_internal_capabilities_have_no_receipt_owner(fn):
-    assert fn not in CAPABILITY_REGISTRY
-
-
-def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
+def test_reserved_movement_code_is_refused_on_current_wire():
     document = build_capability_witness("move_straight")
     wire = compile_runtime_program(document)
     wire.pop("runtimeContract")
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
+    assert validate_runtime_wire(wire)["ok"]
     entity["movement"].update(code=6, name="")
-    assert not validate_runtime_wire(wire)["ok"]
-    assert dict(MOVEMENT_OPCODE) == {"move_straight": 0}
+    report = validate_runtime_wire(wire)
+    assert not report["ok"] and any(
+        error["path"].endswith(".movement.code") and error["code"] == "unsupported_opcode"
+        for error in report["errors"]
+    )
 
 
 @pytest.mark.parametrize("current,retired", [("place_tile", "configure_placeable"),
@@ -547,14 +539,12 @@ def test_independent_proximity_radius_uses_float_pixels_not_retired_integer_latt
     assert document == before
 
 
-@pytest.mark.parametrize("pixels", [4, 5, 512, 3, 513, 4.5, True])
-def test_retired_proximity_opcode_is_refused_regardless_of_old_parameter_domain(pixels):
-    # Explicit saved-wire control, not a compiler/importer for retired Author calls.
+def test_unsupported_movement_opcode_is_refused_even_with_valid_old_parameters():
     wire = compile_runtime_program(build_capability_witness("move_straight"))
     wire.pop("runtimeContract")
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
     entity["movement"] = {"name": "move_proximity_missile", "code": 13,
-                          "params": {"rangeTiles": 20, "homingStrength": 0.1, "proximityRadiusPx": pixels}}
+                          "params": {"rangeTiles": 20, "homingStrength": 0.1, "proximityRadiusPx": 5}}
     before = deepcopy(wire)
     report = validate_runtime_wire(wire)
     assert not report["ok"]

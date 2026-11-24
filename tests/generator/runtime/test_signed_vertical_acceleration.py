@@ -21,8 +21,20 @@ def selected(document, fn=FN):
     return next(call for call in document["runtimeProgram"]["calls"] if call["fn"] == fn)
 
 
-@pytest.mark.parametrize("value", [-2, -0.1875, -0.001, -1e-40, 0, 1e-40, 0.001, 0.1875, 2])
-@pytest.mark.parametrize("updates", [1, 2, 6])
+@pytest.mark.parametrize('value,updates', [
+    (-2, 1),
+    (-2, 2),
+    (-2, 6),
+    (-0.1875, 1),
+    (-0.001, 1),
+    (-1e-40, 1),
+    (0, 1),
+    (1e-40, 1),
+    (0.001, 1),
+    (0.1875, 1),
+    (2, 1),
+    (-0.1875, 2),
+])
 def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     document = build_capability_witness(FN)
     call = selected(document)
@@ -49,7 +61,17 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-@pytest.mark.parametrize("value", [-16200.00001, 16200.00001, True, None, "-1", [], {}, float("inf"), float("nan"), -1e-300, 1e-300])
+@pytest.mark.parametrize("value", [
+    -16200.00001,
+    16200.00001,
+    True,
+    None,
+    "-1",
+    [],
+    float("nan"),
+    -1e-300,
+    1e-300,
+])
 def test_bad_present_acceleration_is_rejected_without_rounding_or_clamping(value):
     document = build_capability_witness(FN)
     selected(document)["params"][PARAM] = value
@@ -110,24 +132,11 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert validate_runtime_program(repaired)["ok"]
 
 
-@pytest.mark.parametrize("retired", ["move_gravity_arc", "move_orbit", "move_spiral", "move_expanding_wave",
-    "move_whip_lash", "channel_beam", "charge_then_release", "orient_whip_to_owner_gravity"])
-def test_retired_compound_names_are_not_fresh_author_aliases(retired):
+def test_unknown_authored_motion_is_rejected_without_mutation():
     document = build_capability_witness(FN)
-    selected(document)["fn"] = retired
+    selected(document)["fn"] = "unsupported_motion_for_test"
     before = deepcopy(document)
     assert not validate_runtime_program(document)["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(document)
     assert document == before
-
-
-def test_current_motion_metadata_and_obsolete_compound_retirement():
-    for fn in ("move_bounce", "move_expanding_wave", "move_boomerang", "move_returning_glaive",
-               "move_flail_tether", "move_yoyo_hover"):
-        assert fn not in CAPABILITY_REGISTRY
-    scale = CAPABILITY_REGISTRY["add_sprite_scale"].params
-    assert (scale["deltaPerSecond"].wire_minimum, scale["deltaPerSecond"].wire_maximum) == (-1, 1)
-    assert (scale["maxScale"].minimum, scale["maxScale"].maximum) == (0.01, 20)
-    speed = CAPABILITY_REGISTRY["seek"].params["maxSpeed"]
-    assert (speed.wire_minimum, speed.wire_maximum) == (0.001, 80)

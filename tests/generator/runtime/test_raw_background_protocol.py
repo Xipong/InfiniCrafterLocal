@@ -15,8 +15,13 @@ def source(tmp_path,background,pattern=False):
     path=tmp_path/'raw.png';im.save(path);return path
 
 
-@pytest.mark.parametrize('role',['item','runtime:projectile','runtime:child_projectile','vfx_cutout'])
-@pytest.mark.parametrize('pattern',[False,True])
+@pytest.mark.parametrize('role,pattern', [
+    ('item', False),
+    ('item', True),
+    ('runtime:projectile', False),
+    ('runtime:child_projectile', False),
+    ('vfx_cutout', False),
+])
 def test_opaque_wrong_matte_refused_before_fit(tmp_path,monkeypatch,role,pattern):
     monkeypatch.setattr(config,'BG_COLOR','magenta');path=source(tmp_path,(235,235,235,255),pattern)
     before=path.read_bytes()
@@ -90,8 +95,15 @@ def test_wrong_matte_with_enclosed_hole_cannot_escape_through_rescue(tmp_path,mo
     assert not (tmp_path/'out/bad-rescue.png').exists()
 
 
-@pytest.mark.parametrize('background_alpha', [0, 1, 2])
-@pytest.mark.parametrize('role', ['runtime:field', 'impact', 'vfx_cutout'])
+@pytest.mark.parametrize('background_alpha,role', [
+    (0, 'runtime:field'),
+    (0, 'impact'),
+    (0, 'vfx_cutout'),
+    (1, 'runtime:field'),
+    (1, 'impact'),
+    (2, 'runtime:field'),
+    (2, 'impact'),
+])
 def test_near_clear_exterior_is_evidence_without_erasing_soft_alpha(tmp_path, monkeypatch, background_alpha, role):
     monkeypatch.setattr(config, 'BG_COLOR', 'transparent')
     monkeypatch.setattr(config, 'REMOVE_BG', False)

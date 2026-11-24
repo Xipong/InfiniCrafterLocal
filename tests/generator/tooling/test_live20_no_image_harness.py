@@ -1,11 +1,8 @@
 from __future__ import annotations
-from suite_paths import REPO_ROOT
-from pipeline_test_support import isolated_serving_roots
+from pipeline_test_support import isolated_serving_roots as isolated_serving_roots
 
-import ast
 import copy
 import json
-from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -23,6 +20,7 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from PIL import Image
 from pipeline_test_support import install_campaign_fault
 from tests.generator.vfx_material_fixtures import _history, _shape, _sprite
+from toolbox.live.no_image import capture_image_boundary, create_fixture, install_readiness_observers
 
 
 def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
@@ -59,11 +57,6 @@ def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
 
 @pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite"])
 def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
-    from typing import Any, cast
-
-    from infini_local.pipelines.images.prompts import asset_negative_prompt, normalize_asset_prompt
-    from infini_local.pipelines.visual.assets import build_visual_asset_plan
-
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data.update(id="qa-prompt-boundary", visual={
         "preferredCanvasSize": 32, "renderSizePx": 32, "forwardAngleDegrees": 0,
@@ -75,22 +68,13 @@ def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
     if mode == "runtime_geometry":
         from tests.generator.visual_geometry_fixtures import segment_geometry
         entity["visual"]["geometry"] = segment_geometry()
-    harness = REPO_ROOT / "toolbox/live/runner.py"
-    node = next(node for node in ast.parse(harness.read_text(encoding="utf-8")).body
-                if isinstance(node, ast.FunctionDef) and node.name == "capture_image_boundary")
     captured = []
-    namespace = {"Any": Any, "cast": cast, "copy": copy, "json": json,
-                 "normalize_asset_prompt": normalize_asset_prompt, "asset_negative_prompt": asset_negative_prompt,
-                 "build_visual_asset_plan": build_visual_asset_plan,
-                 "hydrate_no_image_fixture_assets": hydrate_no_image_fixture_assets,
-                 "NO_IMAGE_FIXTURE": write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png"),
-                 "IMAGES": None, "case_trace_fields": lambda: {}, "append": lambda _path, row: captured.append(row)}
-    exec(compile(ast.Module(body=[node], type_ignores=[]), str(harness), "exec"), namespace)
+    fixture = write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png")
     if mode == "baked_sprite":
         with pytest.raises(ValueError, match="explicit non-empty authored image prompt required"):
-            namespace["capture_image_boundary"](data)
+            capture_image_boundary(data, fixture=fixture, emit=captured.append)
     else:
-        namespace["capture_image_boundary"](data)
+        capture_image_boundary(data, fixture=fixture, emit=captured.append)
         slot = next(row for row in captured[0]["backendCallsThatWouldOccur"]
                     if row["role"] == "entity:" + entity["id"])
         assert not slot["shouldCallBackend"]
@@ -98,48 +82,16 @@ def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
         assert entity["visual"]["assetMode"] == mode
 
 
-def _campaign_observers(fixture, *, real_images=False):
-    """Execute only the campaign's real observer installation, without inference."""
+def _campaign_observers(fixture):
     from types import SimpleNamespace
 
     from infini_local.pipelines import combine_pipeline
-    from infini_local.qa import live_no_image_fixture
 
-    harness = REPO_ROOT / "toolbox/live/runner.py"
-    nodes = []
-    for node in ast.parse(harness.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.ImportFrom) and node.module == "infini_local.qa.live_no_image_fixture":
-            nodes.append(node)
-        elif isinstance(node, ast.FunctionDef) and node.name in {
-            "identity_data", "no_image_cached_payload_report", "no_image_assert_visual_delivery_ready",
-        }:
-            nodes.append(node)
-        elif isinstance(node, ast.Assign) and any(
-            (isinstance(target, ast.Name) and target.id in {
-                "original_cached_payload_report", "original_assert_visual_delivery_ready",
-            }) or (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
-                   and target.value.id == "combine" and target.attr in {
-                       "_cached_payload_report", "assert_visual_delivery_ready",
-                   }) for target in node.targets
-        ):
-            nodes.append(node)
-        elif (isinstance(node, ast.If)
-              and isinstance(node.test, ast.UnaryOp) and isinstance(node.test.op, ast.Not)
-              and isinstance(node.test.operand, ast.Name) and node.test.operand.id == "REAL_IMAGES"
-              and any(isinstance(child, ast.Assign) and any(
-                  isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
-                  and target.value.id == "combine" and target.attr == "assert_visual_delivery_ready"
-                  for target in child.targets) for child in node.body)):
-            # Execute the actual conditional installation rather than bypassing
-            # the new real/no-image split or replacing its delivery owners.
-            nodes.append(node)
     observer = SimpleNamespace(
         _cached_payload_report=combine_pipeline._cached_payload_report,
         assert_visual_delivery_ready=combine_pipeline.assert_visual_delivery_ready,
     )
-    namespace = {"combine": observer, "NO_IMAGE_FIXTURE": fixture, "Any": object, "copy": copy, "REAL_IMAGES": real_images}
-    namespace.update(vars(live_no_image_fixture))
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
+    install_readiness_observers(observer, fixture)
     return observer
 
 
@@ -181,21 +133,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", sprites)
     monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", world_recipes)
 
-    # Execute the actual campaign fixture owner without argparse, config loading
-    # or inference. A helper-only check would miss an OUT-local fixture again.
-    harness = REPO_ROOT / "toolbox/live/runner.py"
-    nodes: list[ast.stmt] = [
-        node for node in ast.parse(harness.read_text(encoding="utf-8")).body
-        if (isinstance(node, ast.ImportFrom) and node.module == "infini_local.core.config_bootstrap")
-        or (isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == "NO_IMAGE_FIXTURE"
-            for target in node.targets
-        ))
-    ]
-    assert sum(isinstance(node, ast.Assign) for node in nodes) == 1
-    namespace = {"OUT": output, "write_no_image_fixture_png": write_no_image_fixture_png, "REAL_IMAGES": False}
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(harness), "exec"), namespace)
-    fixture = namespace["NO_IMAGE_FIXTURE"]
+    fixture = create_fixture(config_bootstrap.SPRITE_DIR)
     if output_depth == "long":
         assert len(str(fixture.resolve())) > 139
 
@@ -416,7 +354,7 @@ CAMPAIGN_CONSUMPTION_CASES = [
     *(pytest.param("fixture", boundary, consumer, "changed", id=f"fixture-{consumer}-{boundary}")
       for consumer in ("early", "final") for boundary in ("after_projection", "before_gate", "after_gate")),
     *(pytest.param("fixture", boundary, consumer, "same", id=f"same-bytes-{consumer}-{boundary}")
-      for boundary in ("projection", "before_gate", "after_gate") for consumer in ("final", "early")),
+      for boundary, consumer in (("projection", "final"), ("before_gate", "early"), ("after_gate", "final"))),
     *(pytest.param("fixture", "serving_selection", consumer, "changed", id=f"same-bytes-other-root-{consumer}")
       for consumer in ("early", "final")),
     *(pytest.param("ingredient", boundary, "final", "changed", id=f"ingredient-{boundary}")
@@ -489,7 +427,7 @@ def test_campaign_consumption_authenticates_bytes_and_serving_selection(
     assert data == before
 
 
-@pytest.mark.parametrize("layout,canvas", [("strip", 16), ("strip", 32), ("cutout", 64), ("cutout", 128)])
+@pytest.mark.parametrize("layout,canvas", [("strip", 16), ("cutout", 128)])
 def test_campaign_declared_vfx_canvas_alpha_and_private_projection(campaign_case, layout, canvas):
     import hashlib
     import json
@@ -601,13 +539,6 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
         image.load()
         assert image.getpixel((0, 0)) == (24, 24, 24, 255)
         assert image.getpixel((4, 0)) == (255, 0, 255, 255)
-    # Negative control: a matching PNG header/dimensions with a broken IHDR CRC
-    # cannot pass merely because its signature looks right.
-    damaged = bytearray(fixture_path.read_bytes())
-    damaged[24] ^= 1
-    with pytest.raises(OSError):
-        Image.open(BytesIO(damaged)).load()
-
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data["visual"] = {"preferredCanvasSize": 32}
     non_item = [

@@ -31,7 +31,7 @@ public sealed partial class InfiniDumpCommand : ModCommand
         bool textures = option == "textures";
         string dir = Path.Combine(Main.SavePath, "InfiniCrafterLocal");
         // Capture identity metadata now, but hash files only on the writer thread.
-        JsonObject environment = CaptureDumpEnvironmentCore(includeFileHash: false);
+        JsonObject environment = CaptureDumpEnvironmentMetadata();
         activeExport = new RuntimeDumpExport(dir, ItemLoader.ItemCount, ProjectileLoader.ProjectileCount,
             type =>
             {
@@ -50,19 +50,6 @@ public sealed partial class InfiniDumpCommand : ModCommand
         // Export that definition at its own ID only; aliases are not additional
         // items and must not create duplicate identity rows in the verified pair.
         return item.type == requestedType && !item.IsAir && !string.IsNullOrWhiteSpace(item.Name);
-    }
-
-    internal static void WriteSnapshot(TextWriter writer, int type, Func<JsonObject?> capture, JsonSerializerOptions options)
-    {
-        JsonObject? snapshot;
-        try { snapshot = capture(); }
-        catch (Exception error)
-        {
-            // Absence of a row must not masquerade as absence of mechanics.
-            // I/O errors remain terminal; only definition capture is isolated.
-            snapshot = new JsonObject { ["type"] = type, ["unavailable"] = true, ["captureError"] = error.GetType().Name };
-        }
-        if (snapshot is not null) writer.WriteLine(snapshot.ToJsonString(options));
     }
 
     // Dump rows are the same complete source observations used by live crafting.

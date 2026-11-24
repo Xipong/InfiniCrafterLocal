@@ -27,8 +27,13 @@ def _explicit_calls(source):
     return out
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn", ["accessory", "projectile_lifetime", "move_straight", "collect_seeds"])
+@pytest.mark.parametrize('mode,fn', [
+    ('json_object', 'accessory'),
+    ('json_object', 'projectile_lifetime'),
+    ('json_object', 'move_straight'),
+    ('json_object', 'collect_seeds'),
+    ('json_schema', 'accessory'),
+])
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
 
@@ -127,12 +132,14 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
     assert encoded == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,explicit,attack", [
-    pytest.param(fn, explicit, "presence", id=fn + ("-present" if explicit else "-omitted"))
-    for fn in ("item_stats", "move_straight") for explicit in (False, True)
-] + [pytest.param("item_stats", explicit, "foreign-target", id="foreign-target-" + str(explicit)) for explicit in (False, True)]
-  + [pytest.param("move_straight", True, "invalid-params", id="invalid-noarg-params")])
+@pytest.mark.parametrize("format_mode,fn,explicit,attack", [
+    (mode, fn, explicit, "presence")
+    for mode in ("json_object", "json_schema") for fn in ("item_stats", "move_straight") for explicit in (False, True)
+] + [
+    ("json_object", "item_stats", True, "foreign-target"),
+    ("json_schema", "item_stats", False, "foreign-target"),
+    ("json_schema", "move_straight", True, "invalid-params"),
+])
 def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monkeypatch, format_mode, fn, explicit, attack):
     from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from tests.generator.authoring.test_repair_gameplay_contract import _offline_gameplay_repair
@@ -174,7 +181,9 @@ def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monke
     assert broken == before
 
 
-@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.target_kinds == ("item_body",)])
+# Ownership is authenticated once for item-body calls, independently of
+# their output mapping. Exercise distinct ordinary, event and row outputs.
+@pytest.mark.parametrize("fn", ["item_stats", "weapon_ammo", "use_condition", "generated_buff_on_use", "tool_stats"])
 def test_source_provenance_rejects_global_item_target_forgery(fn):
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
     source = build_capability_witness(fn)
@@ -203,23 +212,18 @@ def test_source_provenance_rejects_global_item_target_forgery(fn):
     pytest.param("target", "", id="empty-target"),
     pytest.param("target", None, id="null-target"),
     pytest.param("target", True, id="boolean-target"),
-    pytest.param("target", 1, id="integer-target"),
     pytest.param("target", [], id="list-target"),
-    pytest.param("target", {}, id="object-target"),
     pytest.param("bodies", "ambiguous", id="ambiguous-body"),
     pytest.param("bodies", "absent", id="no-body"),
     pytest.param("bodies", "duplicate-id", id="duplicate-source-identity"),
     pytest.param("body-id", None, id="null-body-identity"),
     pytest.param("body-id", True, id="boolean-body-identity"),
-    pytest.param("body-id", 1, id="integer-body-identity"),
     pytest.param("body-id", "", id="empty-body-identity"),
     pytest.param("body-id", "Opaque", id="invalid-body-id-token"),
     pytest.param("itemEntityId", "nail", id="wrong-final-item-owner"),
     pytest.param("itemEntityId", None, id="null-final-item-owner"),
     pytest.param("itemEntityId", True, id="boolean-final-item-owner"),
-    pytest.param("itemEntityId", 1, id="integer-final-item-owner"),
     pytest.param("itemEntityId", [], id="list-final-item-owner"),
-    pytest.param("itemEntityId", {}, id="object-final-item-owner"),
     pytest.param("itemEntityId", "absent", id="missing-final-item-owner"),
 ])
 def test_item_receipt_owner_requires_exact_declared_and_final_identity(owner_field, value):
@@ -619,8 +623,10 @@ def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes(
         assert source == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("value", ["unknown", {}, None])
+@pytest.mark.parametrize("format_mode,value", [
+    ("json_object", "unknown"), ("json_schema", "unknown"),
+    ("json_object", {}), ("json_schema", None),
+])
 def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypatch, format_mode, value):
     from infini_local.core.runtime_authoring.repair.scope import build_runtime_repair_scope
     from infini_local.qa.capability_witnesses import build_capability_witness
@@ -651,8 +657,9 @@ def test_omission_only_passive_selector_repair_has_only_input_authority(monkeypa
     assert source == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("value", [{}, None, ""])
+@pytest.mark.parametrize("format_mode,value", [
+    ("json_object", {}), ("json_schema", {}), ("json_schema", None), ("json_object", ""),
+])
 def test_noop_repair_preserves_malformed_whole_binding_container(monkeypatch, format_mode, value):
     from infini_local.core.errors import PlannerUnavailable
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch

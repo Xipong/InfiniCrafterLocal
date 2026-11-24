@@ -245,7 +245,19 @@ def test_identity_refusal_diagnostics_preserve_selected_model_graph_and_remain_r
     assert source == before
 
 
-@pytest.mark.parametrize("mutation", ["missing_count", "missing_reads", "bool_count", "negative_count", "too_many", "unknown_field", "bad_offset", "bad_field", "unhashable_field", "bad_reason", "unhashable_reason", "empty_member"])
+@pytest.mark.parametrize("mutation", [
+    "missing_count",
+    "missing_reads",
+    "bool_count",
+    "negative_count",
+    "too_many",
+    "unknown_field",
+    "bad_offset",
+    "bad_field",
+    "unhashable_field",
+    "bad_reason",
+    "empty_member",
+])
 def test_unrecognized_identity_refusal_diagnostics_preserve_complete_raw_source(mutation):
     source = identity_selection_reference()
     receipt = source["motion"]["programs"][0]["identitySelected"]["identitySelection"]

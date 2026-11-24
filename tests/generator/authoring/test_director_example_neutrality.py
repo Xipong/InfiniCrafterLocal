@@ -15,8 +15,6 @@ import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.prompt as vfx_prompt
 import infini_local.pipelines.vfx.stage as vfx_stage
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-from infini_local.pipelines.author import request as author
-import infini_local.pipelines.visual.context as visual_context
 import infini_local.pipelines.visual.request as visual_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
@@ -45,15 +43,20 @@ def _capture_visual(monkeypatch, data, *, repair=False):
     return sent[0], request_dossier(sent[0])
 
 
-def test_visual_packet_explains_geometry_without_prescribing_terminal_sprite_path_build(monkeypatch):
+def _assert_visual_geometry_facts(data, rows):
+    lash_id = next(row["id"] for row in data["runtimeProgram"]["entities"] if "lashGeometry" in row)
+    matching = [row for row in rows if row["id"] == lash_id]
+    assert len(matching) == 1
+    assert matching[0]["bodyGeometrySourcesReadOnly"]["collision_path"] == "whip"
+
+
+def test_visual_packet_exposes_accepted_lash_geometry_without_a_movement_driver(monkeypatch):
     data = _accepted_data()
     frozen = deepcopy(data)
-    request, packet = _capture_visual(monkeypatch, data)
+    _, packet = _capture_visual(monkeypatch, data)
     assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
-    assert packet["runtimeEntities"] == visual_context._runtime_card(data)
-    assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
+    _assert_visual_geometry_facts(data, packet["runtimeEntities"])
     assert data == frozen
-
 
 
 def _capture_vfx(monkeypatch, data, *, repair=False):
@@ -109,63 +112,10 @@ def test_shared_geometry_guidance_remains_neutral_in_serialized_repair(monkeypat
     scope = packet["repairScope"]
     assert scope == {}  # Shared presentation facts do not expand permissions.
     if director == "visual":
-        assert packet["runtimeEntitiesReadOnly"] == visual_context._runtime_card(data)
-        assert packet["assetModeCatalog"] == visual_request.visual_asset_mode_catalog()
+        _assert_visual_geometry_facts(data, packet["runtimeEntitiesReadOnly"])
     else:
         assert packet["acceptedRuntimeProgramReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
 
-
-
-def test_author_packet_retains_full_grammar_without_counterexample_item_anecdotes(monkeypatch):
-    from infini_local.core.runtime_authoring.capability_registry import (
-        BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY,
-        INPUT_KIND_REGISTRY, CAPABILITY_REGISTRY,
-    )
-    from infini_local.pipelines.author.prompt import sharp_engine_fn_catalog_for_llm
-
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    parent = {"name": "Source object", "damage": 13, "useTime": 21,
-              "tooltipLines": ["Exact source fact, not a recipe example."]}
-    frozen = deepcopy(parent)
-    request, _, _ = author.build_initial_author_request(parent, {}, "neutrality", model_name="test-model")
-    packet = request_dossier(request)
-    catalog = packet["runtimeCapabilityContract"]["catalog"]
-    assert catalog == sharp_engine_fn_catalog_for_llm(include_source_units=False)
-    from prompt_packet_helpers import expand_catalog_targets
-    cards = {card["fn"]: card for card in expand_catalog_targets(catalog["capabilities"], catalog["fieldGuide"]["targetKindSets"])}
-    visible = {cap.name: cap for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
-    assert set(cards) == set(visible)
-    assert not set(cards).intersection(cap.name for cap in CAPABILITY_REGISTRY.values() if not cap.author_visible)
-    for cap in visible.values():
-        expected = cap.author_prompt_card()
-        for key, value in expected.items():
-            if key != "params":
-                assert cards[cap.name][key] == value
-        assert cards[cap.name]["params"].keys() == expected["params"].keys()
-        for name, value in expected["params"].items():
-            from tests.generator.authoring.test_author_request_compaction import _expand_constraint_references
-            actual = _expand_constraint_references(
-                cards[cap.name]["params"][name], catalog["fieldGuide"]["consumerConstraints"])
-            assert actual == value
-    for field, registry, identity in (
-        ("entityKinds", ENTITY_KIND_REGISTRY, "kind"),
-        ("inputs", INPUT_KIND_REGISTRY, "input"),
-        ("bindingActions", BINDING_ACTION_REGISTRY, "action"),
-        ("events", EVENT_KIND_REGISTRY, "event"),
-    ):
-        assert {row[identity] for row in catalog[field]} == set(registry)
-    # Typed envelope/discriminator examples remain useful; they are not recipes.
-    shape = packet["requiredJsonShape"]["runtimeProgram"]
-    assert shape["bindings"] and shape["calls"]
-    assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
-    # The complete executable capability fields were compared above. Their
-    # explanatory wording is not part of the packet contract.
-    assert isinstance(packet["requiredJsonShape"]["concept"], str)
-    assert parent == frozen
-    assert "Exact source fact" in json.dumps(packet["parents"])
-    instructions = " ".join(row["content"] for row in request["messages"][:2]).lower()
-    for anecdote in ("railgun", "wunderwaffe", "ichor-book", "ichor book"):
-        assert anecdote not in instructions
 
 
 def test_image_packet_preserves_literal_art_and_selected_facts_without_build_examples(monkeypatch):

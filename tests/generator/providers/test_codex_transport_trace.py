@@ -740,7 +740,6 @@ def test_effective_wire_and_actual_post_are_traced_without_headers(recording, mo
 @pytest.mark.parametrize("observer_raises", [False, True])
 def test_text_transport_preserves_enclosing_observer(recording, monkeypatch, diagnostics_enabled, observer_raises):
     from infini_local.pipelines.transport import client as llm
-    from infini_local.pipelines.transport import diagnostics
     monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
     monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     install_opener(monkeypatch, lambda req, **_: MemoryResponse(sse(
@@ -751,28 +750,27 @@ def test_text_transport_preserves_enclosing_observer(recording, monkeypatch, dia
         observed.append(dict(row))
         if observer_raises:
             raise OSError("fixture observer unavailable")
-    before = auth._GENERATION_OBSERVATIONS.get()
     with auth.generation_observations({"case": "fixture-case", "attemptId": "fixture-item-attempt", "stage": "outer-stage"}, observe):
-        enclosing = auth._GENERATION_OBSERVATIONS.get()
         payload = {"messages": [{"role": "user", "content": "fixture"}]}
-        if diagnostics_enabled:
-            result = llm.llm_chat_json(payload, timeout=3)
-            assert result["_debug"]["physicalAttemptCount"] == 1
-        else:
-            assert diagnostics._CURRENT_LLM_DIAGNOSTICS.get() is None
-            result = llm._llm_json_single_context(payload, 3, llm_profiles._primary_llm_context())
-        assert result["choices"][0]["message"]["content"] == "{}"
-        assert auth._GENERATION_OBSERVATIONS.get() == enclosing
-    assert auth._GENERATION_OBSERVATIONS.get() == before
-    assert len([r for r in observed if r["event"] == "post_start"]) == 1
-    assert len([r for r in observed if r["event"] == "call_end"]) == 1
-    assert len({r["transportCallId"] for r in observed}) == 1
+        def send():
+            if diagnostics_enabled:
+                result = llm.llm_chat_json(payload, timeout=3)
+                assert result["_debug"]["physicalAttemptCount"] == 1
+            else:
+                result = llm._llm_json_single_context(payload, 3, llm_profiles._primary_llm_context())
+            assert result["choices"][0]["message"]["content"] == "{}"
+        send()
+        send()
+    send()  # Observer must not leak beyond the caller's scope.
+    assert len([r for r in observed if r["event"] == "post_start"]) == 2
+    assert len([r for r in observed if r["event"] == "call_end"]) == 2
+    assert len({r["transportCallId"] for r in observed}) == 2
     assert all(r["case"] == "fixture-case" and r["attemptId"] == "fixture-item-attempt" for r in observed)
     if diagnostics_enabled:
         assert all(r["stage"] != "outer-stage" and "logicalCallId" in r for r in observed)
     else:
         assert all(r["stage"] == "outer-stage" for r in observed)
-    assert len([r for r in rows(recording) if r["event"] == "post_start"]) == 1
+    assert len([r for r in rows(recording) if r["event"] == "post_start"]) == 3
 
 
 def test_text_observer_context_restored_after_terminal_failure(recording, monkeypatch):
@@ -785,16 +783,16 @@ def test_text_observer_context_restored_after_terminal_failure(recording, monkey
         raise HTTPError(req.full_url, 400, "fixture rejection", Message(), MemoryResponse(b'{"error":{"message":"fixture shape"}}'))
     install_opener(monkeypatch, opened)
     observed = []
-    before = auth._GENERATION_OBSERVATIONS.get()
-    with auth.generation_observations({"case": "failed-fixture"}, observed.append):
-        enclosing = auth._GENERATION_OBSERVATIONS.get()
+    def send_failure():
         with pytest.raises(auth.CodexError):
             llm.llm_chat_json({"messages": [{"role": "user", "content": "fixture"}]}, timeout=3)
-        assert auth._GENERATION_OBSERVATIONS.get() == enclosing
-    assert auth._GENERATION_OBSERVATIONS.get() == before
-    assert len([r for r in observed if r["event"] == "post_start"]) == 1
+    with auth.generation_observations({"case": "failed-fixture"}, observed.append):
+        send_failure()
+        send_failure()  # A failing call must not detach the enclosing observer.
+    send_failure()
+    assert len([r for r in observed if r["event"] == "post_start"]) == 2
     ends = [r for r in observed if r["event"] == "call_end"]
-    assert len(ends) == 1 and ends[0]["outcome"] == "failure"
+    assert len(ends) == 2 and all(end["outcome"] == "failure" for end in ends)
     assert all(r["case"] == "failed-fixture" for r in observed)
 
 
@@ -812,11 +810,9 @@ def test_parallel_text_observers_keep_case_identity_and_exact_counts(recording, 
     install_opener(monkeypatch, opened)
     def worker(case):
         observed = []
-        before = auth._GENERATION_OBSERVATIONS.get()
         with auth.generation_observations({"case": case}, observed.append):
             result = llm._llm_json_single_context(
                 {"messages": [{"role": "user", "content": "fixture"}]}, 5, llm_profiles._primary_llm_context())
-        assert auth._GENERATION_OBSERVATIONS.get() == before
         assert result["choices"][0]["message"]["content"] == "{}"
         assert {r["case"] for r in observed} == {case}
         assert len([r for r in observed if r["event"] == "post_start"]) == 1

@@ -133,13 +133,3 @@ def test_tool_and_value_units_match_exact_terraria_fields() -> None:
     assert tool.params["axePower"].maximum == 500
     assert tool.params["axePower"].multiple_of == 5
     assert tool.params["axePower"].to_wire(45) == 9
-
-
-def test_held_sprite_visibility_has_one_literal_native_authority() -> None:
-    params = CAPABILITY_REGISTRY["item_use"].params
-    assert "customHeldSprite" not in params
-    assert "heldAlignment" not in params
-    visibility = params["hideUseGraphic"]
-    assert visibility.required
-    assert visibility.to_wire(True) is True
-    assert visibility.to_wire(False) is False

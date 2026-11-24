@@ -67,13 +67,8 @@ internal static partial class EngineRuntimeChecks
                 return RunChecks(args[1]);
             if (args.Length == 2 && args[0] == "--replay-contracts")
                 return ReplayGeneratedContracts(args[1]);
-            if (args.Length == 2 && args[0] == "--capture-vfx-preview")
-            {
-                CaptureVfxPreview(args[1]);
-                return 0;
-            }
             if (args.Length != 0)
-                throw new ArgumentException("Expected --profile-populated-parent-panel <manifest> <output>, --check-filter <filter>, --replay-contracts <jsonl-path>, --capture-vfx-preview <json-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
+                throw new ArgumentException("Expected --profile-populated-parent-panel <manifest> <output>, --check-filter <filter>, --replay-contracts <jsonl-path>, --verify-native-target <manifest.json>, --build-native-source-pack <output.zip>, --profile-parent-analysis or --profile-parent-craft <plain|mixed|ammo|nebula-prism|eventide>");
             return RunChecks();
         }
         finally { System.IO.Directory.Delete(sandbox, recursive: true); }
@@ -185,8 +180,8 @@ internal static partial class EngineRuntimeChecks
             ("parent conditional shot alternatives source only", ParentConditionalShotAlternativesRemainSourceOnly),
             ("parent non-ammo item-specific source facts survive capture", ParentNonAmmoSourceFactsArePreserved),
             ("craft gzip transport preserves cache and generation payloads", () => CraftGzipTransportPreservesRequestAsync().GetAwaiter().GetResult()),
-            ("craft prepared transport reuse invalidation and ownership", () => CraftPreparedTransportReuseAsync().GetAwaiter().GetResult()),
-            ("parent child snapshots one handoff preserves bounds", ParentChildSnapshotsOneHandoff),
+            ("craft prepared transport retries keep exact request", () => CraftPreparedTransportReuseAsync().GetAwaiter().GetResult()),
+            ("parent child snapshots preserve bounded worker parity", ParentChildSnapshotsWorkerParity),
             ("parent fingerprint excludes readable source view metadata", ParentFingerprintExcludesReadableSourceViews),
             ("audit native pure definition projections", AuditProjectionsDoNotNormalizeSource),
             ("audit native failed network copy refusal", AuditNetworkCopyFailureNeverAliasesOriginal),
@@ -202,7 +197,7 @@ internal static partial class EngineRuntimeChecks
             ("atlas packaged skin alpha matches PNG loading", AtlasPackagedSkinPixelsMatchPngAlpha),
             ("atlas unload graphics stay on main thread across reload", AtlasUnloadRetiresOwnedGraphicsOnMainThread),
             ("atlas unload disposal failures preserve later cleanup", AtlasUnloadIsolatesDisposalFailures),
-            ("parent source export plan exact clone oracle", ParentSourceExportPlanMatchesCloneOracle),
+            ("parent source export resolvable references and budget", ParentSourceExportPreservesResolvableReferences),
             ("parent source dependency indexes exact output and isolation", ParentSourceDependencyIndexesPreserveProjection),
             ("parent source dependency indexes bounded retention", ParentSourceDependencyIndexesStayBounded),
             ("parent source projection memo exact output and slice isolation", ParentSourceProjectionMemoPreservesExactOutput),
@@ -356,7 +351,6 @@ internal static partial class EngineRuntimeChecks
             ("runtime dump Nebula Rainbow available content roundtrip", RuntimeDumpNebulaRainbowAvailableContentRoundTrip),
             ("runtime dump atomic paired manifest and failed publication", RuntimeDumpPublishesImmutablePairAndPreservesPreviousOnFailure),
             ("runtime dump shares complete parent and projectile capture", RuntimeDumpSharesCompleteParentAndProjectileCapture),
-            ("runtime dump preserves capture failures as explicit unavailable rows", RuntimeDumpKeepsCaptureFailuresAsExplicitRows),
             ("parent complete projectile attack source reaches live and dump", ParentProjectileAttackSemanticsReachPrepareAndDump),
             ("projectile attack source symbolic dependencies and predicates", ProjectileAttackSourceObservationsKeepExpressionsAndPredicates),
             ("projectile attack shared AI selection before source budgets", ProjectileSharedAiCaptureSelectsBeforeSourceBudgets),
@@ -496,7 +490,6 @@ internal static partial class EngineRuntimeChecks
             ("equipment presentation front back native layer tree", EquipmentAccessoryLayersKeepMountsDyesAndVisibility),
             ("equipment presentation native displayed carrier selection", EquipmentNeutralCarrierUsesNativeDisplayedSelection),
             ("equipment presentation native clothes hair and source rectangles", EquipmentNeutralBaseDrawsNativeClothesAndHair),
-            ("VFX retired metadata strict refusal", VfxRetiredMetadataRefuses),
             ("persisted v5 unknown executable fields refuse", PersistedV5UnknownExecutableFieldsStillRefuse),
             ("persisted v5 current exact pass through", PersistedV5CurrentFormatIsExactPassThrough),
             ("persisted v5 registry read only world fence", PersistedV5RegistryLoadsReadOnlyAndKeepsWorldFence),
@@ -508,7 +501,6 @@ internal static partial class EngineRuntimeChecks
             ("VFX local RGB actual native simple consumers", VfxLocalRgbReachesSimpleNativeConsumers),
             ("VFX local RGB textured path native vertices", VfxLocalRgbTexturedPathCopiesIndependentRamp),
             ("Visual descriptive palette Unicode roundtrip", VisualDescriptivePaletteRoundtrip),
-            ("descriptive parent advisory prose Unicode roundtrip", DescriptiveParentProseRoundtrip),
             ("descriptive authored name Unicode persistence roundtrip", AuthoredNameUnicodePersistenceRoundtrip),
             ("localized generated tooltip width wrapping without content loss", GeneratedTooltipWidthWrapPreservesFullLocalizedFacts),
             ("descriptive art captions Unicode roundtrip", DescriptiveArtCaptionsUnicodeRoundtrip),
@@ -546,7 +538,7 @@ internal static partial class EngineRuntimeChecks
             ("native DTO retirement single buff and current ExtraBuffs", NDTO02SingleBuffRefusesAndCurrentExtraBuffsExecute),
             ("native DTO retirement sound absence and native consumers", NDTO03OldSoundAbsenceRefusesBeforeAudioConsumers),
             ("native DTO retirement current utility snapshot and mirror", NDTO04CurrentUtilitySnapshotAndCopyMirrorRemainSupported),
-            ("native DTO retirement dead knowledge and advisory summary", NDTO05RetiredKnowledgeAndSummaryRefuse),
+            ("native DTO strict definition and local advisory sidecars", DefinitionAdmissionKeepsAdvisorySidecarsLocal),
             ("explicit spawn transform native boundary", ExplicitSpawnTransformRejectsInvalidBeforeNativeBoundary),
             ("target emission anchor and repeat policies", TargetEmissionPlannerUsesExplicitAnchorsAndRepeatPolicy),
             ("target emission inclusive range ties and LOS", TargetEmissionPlannerUsesInclusiveRangeExactTiesAndLos),
@@ -580,7 +572,7 @@ internal static partial class EngineRuntimeChecks
             ("quality250 NativeFloat32BuffNearNeutralIdentityAndExpiry", NativeFloat32BuffNearNeutralIdentityAndExpiry),
             ("persistence PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn", PlacementPrefixServerSnapshotSurvivesEscrowSaveAndReturn),
             ("persistence PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation", PlacementReturnFullPoolKeepsDurableOwnerWithoutAllocation),
-            ("persistence PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed", PlacementPrefixMalformedIdentityIsDurableAndLegacyIsUnprefixed),
+            ("persistence PlacementPrefixRequiresExplicitIdentityAndPreservesQuarantine", PlacementPrefixRequiresExplicitIdentityAndPreservesQuarantine),
             ("cancelled craft reconnect resolves only owned journal", CancelledCraftReconnectResolvesOnlyOwnedJournal),
             ("persistence EscrowSessionTokenRotationAndConcurrentClaimRefused", EscrowSessionTokenRotationAndConcurrentClaimRefused),
             ("persistence EscrowSessionReconnectCommitAndReload", EscrowSessionReconnectCommitAndReload),

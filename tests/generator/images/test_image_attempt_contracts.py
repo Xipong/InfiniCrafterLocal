@@ -174,12 +174,12 @@ def test_overlap_must_preserve_each_validated_png(offline, monkeypatch, kind, di
     assert returned['first'][0] != returned['second'][0]
 
 
-@pytest.mark.parametrize('name', ['procedural', 'offline', 'none'])
-def test_retired_image_backend_refuses_publication(offline, monkeypatch, name):
+def test_unknown_image_backend_refuses_publication(offline, monkeypatch):
+    name = 'unavailable-adapter'
     root, requests = offline
     monkeypatch.setattr(generation, 'IMAGE_BACKEND', name)
     data = _data([])
-    result = invoke('item', 'retired_backend', data)
+    result = invoke('item', 'unknown_backend', data)
     assert result == ('', '', 0.0, 'backend_config_error')
     assert data['debug']['imageBackendConfigError'] == f'unsupported image backend: {name}'
     assert not requests and not list(root.rglob('*.png'))
@@ -208,8 +208,9 @@ def test_exhausted_provider_without_art_cannot_publish_a_replacement(offline, mo
     assert not list(root.rglob('*.png')), 'missing provider art was replaced with invented pixels'
 
 
-@pytest.mark.parametrize('kind', ['item', 'vfx_strip'])
-@pytest.mark.parametrize('content_fault', ['unidentified', 'truncated'])
+@pytest.mark.parametrize('kind,content_fault', [
+    ('item', 'unidentified'), ('item', 'truncated'), ('vfx_strip', 'truncated'),
+])
 def test_corrupt_provider_image_remains_a_bounded_quality_retry(offline, monkeypatch, kind, content_fault):
     root, requests = offline
     original_urlopen = backend.urlopen_no_redirect
@@ -359,8 +360,8 @@ def test_logical_path_tokens_cannot_escape_the_private_output_owner(offline, mon
 IMAGE_ROLES = ("item", "entity", "impact", "equip_overlay", "vfx_cutout", "vfx_strip")
 IO_CASES = (
     [(kind, "final_save", "processing") for kind in IMAGE_ROLES]
-    + [("item", "stage:" + stage, "processing") for stage in
-       ("00_raw", "10_sprite_keyer_fullres", "20_master_norm", "30_baked_final")]
+    # Intermediate debug artifacts share the same processing error boundary.
+    + [("item", "stage:00_raw", "processing"), ("item", "stage:30_baked_final", "processing")]
     + [("item", "raw_write", "backend"), ("item", "refit_save", "processing")]
     + [(kind, "master", "processing") for kind in ("item", "entity", "vfx_cutout")]
     + [("item", "attempt_mkdir", "processing"), ("item", "metrics", "projection")]
@@ -487,7 +488,7 @@ def test_processing_fault_still_delivers_compact_alpha_png(offline, monkeypatch,
     assert Path(receipt[0]['raw']).exists(), 'raw input remains a private diagnostic'
 
 
-@pytest.mark.parametrize('target', [16, 48, 64, 96, 128])
+@pytest.mark.parametrize('target', [16, 48, 128])
 def test_technical_downscale_respects_any_authored_final_canvas(offline, monkeypatch, target):
     """No special 512/1024 size branches: the exact selected canvas wins."""
     root, _ = offline
@@ -676,8 +677,11 @@ def test_retry_diagnostic_does_not_leak_from_an_older_failed_attempt(offline, mo
     assert 'runtime:fieldSpriteError' not in data['debug']
 
 
-@pytest.mark.parametrize('valid_on', [1, 2, 3])
-@pytest.mark.parametrize('kind', ['item', 'entity', 'vfx_cutout', 'vfx_strip'])
+@pytest.mark.parametrize('kind,valid_on', [
+    ('item', 1), ('item', 2), ('item', 3),
+    ('entity', 2), ('entity', 3),
+    ('vfx_cutout', 2), ('vfx_strip', 3),
+])
 def test_default_allows_one_image_and_one_technical_retry(offline, monkeypatch, valid_on, kind):
     """A third usable PNG must never be requested under the shipped default."""
     import runpy

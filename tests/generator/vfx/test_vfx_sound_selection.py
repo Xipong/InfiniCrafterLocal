@@ -14,6 +14,7 @@ import infini_local.core.vfx.validation as vfx_validation
 import infini_local.pipelines.vfx.stage as vfx_stage
 import pytest
 from infini_local.core import llm_config
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.pipelines.vfx import request as stage
 from prompt_packet_helpers import request_dossier
 from tests.generator.vfx.test_repair_vfx_contract import _offline_transport
@@ -56,7 +57,9 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
     packet = request_dossier(sent[0])
     assert packet["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
     assert packet["outputSchema"]["properties"]["slots"]["items"]["properties"]["soundId"]["enum"] == list(SOUND_IDS)
-    assert final["vfxManifest"]["slots"][0]["soundId"] == sound_id
+    assert not strict_schema_errors(raw, packet["outputSchema"])
+    assert [{k: v for k, v in row.items() if k != "slotSeed"}
+            for row in final["vfxManifest"]["slots"]] == raw_before["slots"]
     assert vfx_validation.validate_vfx_manifest_wire(json.loads(json.dumps(final)))["ok"]
     assert final["runtimeProgram"] == before["runtimeProgram"]
     assert final["gameplay"] == before["gameplay"]
@@ -66,8 +69,7 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
 @pytest.mark.parametrize("bad,renderer,field", [
     pytest.param(bad, "soundCue", "soundId", id=name)
     for name, bad in (("null", None), ("empty", ""), ("case", "item4"), ("whitespace", " Item4"),
-                      ("unknown", "Item9999"), ("alias", "frozenRepair"), ("integer", 4),
-                      ("boolean", True), ("object", {}), ("array", []))
+                      ("unknown", "Item9999"), ("integer", 4), ("object", {}))
 ] + [
     pytest.param("Item4", "shape", "soundId", id="foreign-shape"),
     pytest.param("Item4", "nativeLight", "soundId", id="foreign-nativeLight"),

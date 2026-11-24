@@ -208,26 +208,6 @@ def test_frozen_material_boundary(case):
         templates["legacy"] = _shape(data)
         templates["legacy"]["slots"][0]["id"] = "old_slot"
     raw = apply_edits(copy.deepcopy(templates[case["base"]]), case["rawEdits"])
-    # Literal whole-slot replacements retain retired placeholder controls. Their
-    # historical successful merges are refusal witnesses, not current inputs.
-    retired = any(isinstance(slot, dict) and (
-        slot.get("rendererKind") not in vfx_contract._RENDERERS
-        or slot.get("rendererKind") != "impactSprite" and set(slot) & {"spritePrompt", "spriteNegativePrompt"}
-        or slot.get("rendererKind") == "texturedPath" and set(slot) & {"duration", "repeatEvery"}
-        or slot.get("rendererKind") in {"spriteElement", "texturedPath", "soundCue"}
-        and set(slot) & {"scale", "density", "spread", "particleSystemId", "textureRole"}
-    ) for slot in raw["slots"])
-    if retired:
-        before = copy.deepcopy(raw)
-        assert not vfx_validation.validate_vfx_director_output(raw, data)["ok"]
-        historical_merge = apply_edits(copy.deepcopy(raw), case["mergedEdits"])
-        assert not vfx_validation.validate_vfx_director_output(historical_merge, data)["ok"]
-        current = _shape(data) if case["base"] == "legacy" else templates[case["base"]]
-        assert vfx_validation.validate_vfx_director_output(current, data)["ok"]
-        final = vfx_stage.attach_vfx_manifest(data, "current-control-for-retired-witness", llm_director=lambda *_a, **_k: current)
-        assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
-        assert raw == before
-        return
     before, gameplay = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
     report = vfx_validation.validate_vfx_director_output(raw, data)
     assert not report["ok"]

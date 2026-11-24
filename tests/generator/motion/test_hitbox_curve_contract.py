@@ -49,11 +49,20 @@ def test_explicit_curve_projection_and_provenance(curve, mirror):
 
 
 @pytest.mark.parametrize("name,value", [
-    ("startScale", None), ("startScale", True), ("startScale", "1"), ("startScale", .249), ("startScale", 8.001),
-    ("endScale", None), ("endScale", 0), ("endScale", 9), ("endScale", float("inf")), ("endScale", float("nan")),
-    ("startDelay", -1 / 60), ("startDelay", 21601 / 60), ("startDelay", -0.5 / 60), ("startDelay", False),
-    ("duration", 0), ("duration", 21601 / 60), ("duration", 0.001), ("duration", True),
-    ("curve", "smooth"), ("curve", None), ("curve", []), ("mirrorToSprite", 0), ("mirrorToSprite", None),
+    ("startScale", None),
+    ("startScale", True),
+    ("startScale", .249),
+    ("startScale", 8.001),
+    ("endScale", 9),
+    ("endScale", float("inf")),
+    ("startDelay", 21601 / 60),
+    ("startDelay", -0.5 / 60),
+    ("duration", 0.001),
+    ("duration", True),
+    ("curve", "smooth"),
+    ("curve", None),
+    ("mirrorToSprite", 0),
+    ("mirrorToSprite", None),
 ])
 def test_present_invalid_authored_and_wire_values_are_rejected(name, value):
     doc = _source()

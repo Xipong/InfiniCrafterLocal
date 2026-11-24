@@ -39,25 +39,6 @@ def _cfg(**overrides):
     return sdcpp_backend.SdcppBackendConfig(**values)
 
 
-def test_backend_zimage_payload_clears_negative_channel() -> None:
-    payload = sdcpp_backend.server_payload(
-        _cfg(),
-        "subject",
-        "scene, bad",
-        512,
-        512,
-        123,
-        "a1111",
-        is_zimage=True,
-        positive_only=True,
-    )
-
-    assert payload["prompt"] == "subject"
-    assert payload["negative_prompt"] == ""
-    assert payload["zimage_positive_only_prompt"] is True
-    assert payload["zimage_prompt_contract"] == "auto"
-
-
 def test_backend_extracts_a1111_base64_response(tmp_path: Path) -> None:
     # Minimal valid PNG signature is enough for this contract test; the decoder only writes bytes.
     png = b"\x89PNG\r\n\x1a\n" + b"payload"

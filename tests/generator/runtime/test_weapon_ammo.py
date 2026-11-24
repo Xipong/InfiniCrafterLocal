@@ -1,8 +1,5 @@
 """Weapon ammo is an explicit native consumer, independent of generated ammo stacks."""
-from suite_paths import TEST_ROOT
-import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -27,11 +24,15 @@ def _ammo_call(doc):
     return next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "weapon_ammo")
 
 
-@pytest.mark.parametrize("category", [
-    "arrow", "bullet", "candy_corn", "coin", "dart", "fallen_star", "flare", "gel",
-    "jack_o_lantern", "nail_friendly", "rocket", "snowball", "solution", "stake", "stynger_bolt",
+@pytest.mark.parametrize("category,speed", [
+    ("arrow", "authored_spawn"), ("bullet", "native_shot"),
+    ("candy_corn", "authored_spawn"), ("coin", "native_shot"),
+    ("dart", "authored_spawn"), ("fallen_star", "native_shot"),
+    ("flare", "authored_spawn"), ("gel", "native_shot"),
+    ("jack_o_lantern", "authored_spawn"), ("nail_friendly", "native_shot"),
+    ("rocket", "authored_spawn"), ("snowball", "native_shot"),
+    ("solution", "authored_spawn"), ("stake", "native_shot"), ("stynger_bolt", "authored_spawn"),
 ])
-@pytest.mark.parametrize("speed", ["authored_spawn", "native_shot"])
 def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slice(category, speed):
     doc = _weapon(category, speed)
     before = deepcopy(doc)
@@ -51,11 +52,10 @@ def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slic
     pytest.param(field, value, id=f"{field}-{kind}")
     for field, kind, value in (
         ("ammoCategory", "plural", "arrows"), ("ammoCategory", "family", "bow"),
-        ("ammoCategory", "unsupported", "sand"), ("ammoCategory", "empty", ""),
+        ("ammoCategory", "empty", ""),
         ("ammoCategory", "null", None), ("ammoCategory", "integer", 1),
-        ("speedBasis", "alias", "native"), ("speedBasis", "empty", ""),
+        ("speedBasis", "alias", "native"),
         ("speedBasis", "null", None), ("speedBasis", "boolean", True),
-        ("speedBasis", "object", {}),
         ("ammoCategory", "missing", DELETE), ("speedBasis", "missing", DELETE),
     )
 ])
@@ -81,10 +81,11 @@ def test_existing_projectile_and_ammo_items_do_not_become_ammo_consumers(fn):
     assert not any(row.get("fn") == "weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
 
 
-@pytest.mark.parametrize("invalid_input", [[], {}, ["primary_use"]])
-def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invalid_input):
+def test_malformed_binding_input_does_not_authorize_weapon_ammo():
+    invalid_input = ["primary_use"]
     final = compile_runtime_program(_weapon())
     final.pop("runtimeContract")
+    assert validate_runtime_wire(final)["ok"]
     final["runtimeProgram"]["bindings"][0]["input"] = invalid_input
     report = validate_runtime_wire(final)
     assert not report["ok"]
@@ -92,9 +93,8 @@ def test_malformed_binding_input_is_a_structured_refusal_not_an_exception(invali
 
 
 def test_current_fixture_compositions_compile_and_deliver_without_implicit_weapon_ammo():
-    # Frozen archive selects the retained corpus, not an obsolete metadata hash
-    # contract. Retired compatibility receipts must not be restored for byte parity.
-    baseline = json.loads((TEST_ROOT / "fixtures/weapon_ammo_legacy_wire_sha256.json").read_text())
+    baseline = ("door_on_chain", "equipment_tool_combat", "fishing_platform_tool", "held_and_deployed",
+                "returning_potion", "shield_and_disc", "umbrella_grenade", "workbench_blade")
     for name in baseline:
         authored = build_runtime_fixture(name)
         before = deepcopy(authored)

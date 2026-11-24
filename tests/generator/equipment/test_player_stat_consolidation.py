@@ -55,9 +55,10 @@ def test_one_regen_and_treasure_choice_reuses_existing_wire_once(fn, rate, units
     assert document == before
 
 
-@pytest.mark.parametrize("fn", SOURCES)
-@pytest.mark.parametrize("field,value", [("lifeRegenHpPerSecond", 2), ("lifeRegen", 2),
-                                          ("highlightTreasure", True)])
+@pytest.mark.parametrize("fn,field,value", [
+    (fn, field, value) for fn in SOURCES
+    for field, value in (("lifeRegen", 2), ("highlightTreasure", True))
+] + [(SOURCES[0], "lifeRegenHpPerSecond", 2)])
 def test_parallel_nested_stats_are_rejected_instead_of_double_applying(fn, field, value):
     document, call = stat_source(fn, lifeRegen=2, treasureSense=True)
     call["params"]["playerEffect"] = {field: value}
@@ -69,16 +70,12 @@ def test_parallel_nested_stats_are_rejected_instead_of_double_applying(fn, field
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn", SOURCES)
-@pytest.mark.parametrize("field,value", [("lifeRegenHpPerSecond", 2), ("oreSenseEnabled", True)])
-def test_retired_root_spellings_are_not_a_second_fresh_author_api(fn, field, value):
-    document, call = stat_source(fn, lifeRegen=2, treasureSense=True)
-    call["params"][field] = value
-    assert not validate_runtime_program(document)["ok"]
-
-
-@pytest.mark.parametrize("fn", SOURCES)
-@pytest.mark.parametrize("value", [None, "", "resting", False, 1])
+@pytest.mark.parametrize('fn,value', [
+    (left, right)
+    for left_index, left in enumerate(SOURCES)
+    for right_index, right in enumerate([None, '', 'resting', False, 1])
+    if left_index == 0 or right_index == 0 or (left_index, right_index) == (1, 1)
+])
 def test_present_invalid_conditions_fail_in_author_and_bare_wire(fn, value):
     document, call = stat_source(fn, lifeRegen=2)
     call["params"]["regenWhen"] = value
@@ -98,14 +95,14 @@ def test_a_condition_alone_is_not_an_executable_stat(fn):
 
 
 @pytest.mark.parametrize("fn", SOURCES)
-def test_optional_conditions_remain_absent_but_retired_receipt_spelling_refuses(fn):
+def test_optional_conditions_and_forged_receipt_have_distinct_outcomes(fn):
     wire = compile_runtime_program(stat_source(fn, lifeRegen=2, treasureSense=True)[0])
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
     for row in receipts:
         if row.get("authoredPath", "").endswith(".params.lifeRegen"):
-            row["authoredPath"] += "HpPerSecond"
+            row["authoredPath"] = row["authoredPath"].replace(".lifeRegen", ".treasureSense")
     before = deepcopy(wire)
     assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]

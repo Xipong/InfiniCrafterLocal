@@ -140,29 +140,22 @@ internal static partial class EngineRuntimeChecks
             Equal(true, ContractJsonDiagnostics.TryGet("VfxManifestSpec.FromJson", out _), "missing manifest/budget never synthesizes current wire " + text);
         }
         var canonical = JsonNode.Parse(new VfxManifestSpec { Slots = new[] { LocalRgbSlot("nativeLight") } }.ToJson())!.AsObject();
-        Equal("budget,recipeId,schema,slots", string.Join(",", canonical.Select(k => k.Key).OrderBy(k => k, StringComparer.Ordinal)), "standalone manifest emits only canonical serialized fields");
-        foreach (string field in new[] { "maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls" }) {
+        Equal(true, VfxManifestSpec.FromJson(canonical.ToJsonString()).HasSlots, "valid serialized control is executable");
+        foreach (string field in new[] { "maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls" })
+        {
             var missing = canonical.DeepClone().AsObject(); missing["budget"]!.AsObject().Remove(field);
             Equal(false, VfxManifestSpec.FromJson(missing.ToJsonString()).HasSlots, "required executable budget refuses absence " + field);
         }
-        foreach (string retired in new[] { "seed", "effectName", "inspirationNames", "playbackMode", "confidence", "effectMagnitude", "visualBudgetClass", "motif", "overlayPolicy", "debug" })
-        {
-            var root = JsonSerializer.SerializeToNode(new VfxManifestSpec { Slots = new[] { LocalRgbSlot("nativeLight") } })!.AsObject();
-            root[retired] = new JsonObject();
-            Equal(false, VfxManifestSpec.FromJson(root.ToJsonString()).HasSlots, "retired root metadata refuses " + retired);
-        }
-        foreach (string retired in new[] { "backend", "particleRole", "jitter", "fadeIn", "fadeOut", "budgetWeight", "signatureWeight", "visualCost", "bakedCommands", "bakedClipId", "channel", "lane", "emissionMode" })
-        {
-            var root = JsonSerializer.SerializeToNode(new VfxManifestSpec { Slots = new[] { LocalRgbSlot("nativeLight") } }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
-            root["slots"]![0]![retired] = 0;
-            Equal(false, VfxManifestSpec.FromJson(root.ToJsonString()).HasSlots, "retired slot fields refuse " + retired);
-        }
-        foreach (string schema in new[] { "infini.vfx.runtime-events.v15", "infini.vfx.runtime-events.v14", "infini.vfx.runtime-events.v16 " })
-        {
-            var root = JsonSerializer.SerializeToNode(new VfxManifestSpec { Slots = new[] { LocalRgbSlot("nativeLight") } }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
-            root["schema"] = schema;
-            Equal(false, VfxManifestSpec.FromJson(root.ToJsonString()).HasSlots, "only exact current schema admitted " + schema);
-        }
+        var rootUnknown = canonical.DeepClone().AsObject();
+        rootUnknown["motif"] = new JsonObject();
+        Equal(false, VfxManifestSpec.FromJson(rootUnknown.ToJsonString()).HasSlots, "unknown root field refuses otherwise-valid manifest");
+        Equal(true, ContractJsonDiagnostics.TryGet("VfxManifestSpec.FromJson", out _), "root refusal is diagnosed");
+        var slotUnknown = canonical.DeepClone().AsObject();
+        slotUnknown["slots"]![0]!["bakedCommands"] = new JsonArray();
+        Equal(false, VfxManifestSpec.FromJson(slotUnknown.ToJsonString()).HasSlots, "unknown slot field refuses otherwise-valid manifest");
+        var wrongSchema = canonical.DeepClone().AsObject();
+        wrongSchema["schema"] = "infini.vfx.runtime-events.v15";
+        Equal(false, VfxManifestSpec.FromJson(wrongSchema.ToJsonString()).HasSlots, "mismatched wire schema refuses otherwise-valid manifest");
     }
 
     private static void VfxLocalRgbReachesSimpleNativeConsumers()

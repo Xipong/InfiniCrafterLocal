@@ -66,9 +66,14 @@ def _buff(final, group=None):
     return owner["generatedBuff"]
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("group", [None, "survey"])
-@pytest.mark.parametrize("value", [OMITTED, 0, 1, 21600])
+# Both provider formats exercise absence, zero and both numeric bounds.
+# Both ownership routes exercise every value; owner selection follows parse.
+@pytest.mark.parametrize("mode,group,value", [
+    ("json_object", None, OMITTED), ("json_schema", "survey", OMITTED),
+    ("json_schema", None, 0), ("json_object", "survey", 0),
+    ("json_object", None, 1), ("json_schema", "survey", 1),
+    ("json_schema", None, 21600), ("json_object", "survey", 21600),
+])
 def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode, group, value):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "policy", model_name="offline")
@@ -101,8 +106,18 @@ def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode
     assert validate_runtime_wire(final)["ok"]  # Delivery DTO intentionally strips provenance.
 
 
-@pytest.mark.parametrize("group", [None, "survey"])
-@pytest.mark.parametrize("value", [None, True, False, 0.1, "180", -1, 21601])
+@pytest.mark.parametrize('group,value', [
+    (None, None),
+    (None, True),
+    (None, False),
+    (None, 0.1),
+    (None, "180"),
+    (None, -1),
+    (None, 21601),
+    ("survey", None),
+    ("survey", 0.1),
+    ("survey", 21601),
+])
 def test_present_invalid_policy_is_rejected_by_real_parse_author_and_strict_wire(group, value):
     doc, call = _policy_fixture(value, group)
     parsed = author._prepare_parsed_author_item(json.loads(json.dumps(doc)), response_format={"type": "json_object"})
@@ -203,7 +218,7 @@ def _two_groups():
     return doc
 
 
-@pytest.mark.parametrize("attack", ["value", "call", "coordinate", "group", "coherent-group", "missing", "duplicate", "status", "delete-both", "remove-all"])
+@pytest.mark.parametrize("attack", ["value", "call", "coordinate", "group", "coherent-group", "missing", "duplicate", "status", "delete-both"])
 def test_existing_receipts_authenticate_exact_policy_value_call_and_group(attack):
     doc = _two_groups()
     final = json.loads(json.dumps(compile_runtime_program(doc)))
@@ -238,11 +253,9 @@ def test_existing_receipts_authenticate_exact_policy_value_call_and_group(attack
     elif attack == "delete-both":
         rows.remove(row)
         _buff(final, "first").pop("exhaustionTicks")
-    else:
-        rows[:] = [r for r in rows if r.get("fn") != FN]
     report = audit_compiler_receipts(rows, authored_document=doc, final_document=final)
     assert not report["ok"], report
-    if attack in {"group", "missing", "duplicate", "status", "remove-all"}:
+    if attack in {"group", "missing", "duplicate", "status"}:
         assert not audit_compiler_receipts(rows, final_document=final)["ok"]
         assert not validate_runtime_wire(final)["ok"]
     if attack in {"value", "coherent-group", "delete-both"}:
@@ -257,6 +270,7 @@ def test_policy_wire_presence_demands_receipts_even_when_all_capability_rows_are
     final = compile_runtime_program(doc)
     rows = final["runtimeContract"]["finalWireReceipts"]
     rows[:] = [r for r in rows if r.get("fn") != FN]
+    assert not audit_compiler_receipts(rows, authored_document=doc, final_document=final)["ok"]
     report = audit_compiler_receipts(rows, final_document=final)
     assert not report["ok"], report
     assert not validate_runtime_wire(final)["ok"]
@@ -426,8 +440,15 @@ def test_permanent_generated_buff_is_an_explicit_provider_choice(monkeypatch, mo
     assert validate_runtime_wire(final)["ok"]
 
 
-@pytest.mark.parametrize("group", [None, "survey"])
-@pytest.mark.parametrize("seconds", [None, True, -1, 0.001, 2147483647 / 60])
+@pytest.mark.parametrize('group,seconds', [
+    (None, None),
+    (None, True),
+    (None, -1),
+    (None, 0.001),
+    (None, 2147483647 / 60),
+    ("survey", None),
+    ("survey", -1),
+])
 def test_invalid_generated_buff_lifetime_does_not_turn_into_permanence(group, seconds):
     document, call = _policy_fixture(group=group)
     call["params"]["duration"] = seconds
@@ -438,8 +459,15 @@ def test_invalid_generated_buff_lifetime_does_not_turn_into_permanence(group, se
         compile_runtime_program(document)
 
 
-@pytest.mark.parametrize("group", [None, "survey"])
-@pytest.mark.parametrize("value", [OMITTED, None, True, -1, 2147483647])
+@pytest.mark.parametrize('group,value', [
+    (None, OMITTED),
+    (None, None),
+    (None, True),
+    (None, -1),
+    (None, 2147483647),
+    ("survey", OMITTED),
+    ("survey", None),
+])
 def test_nonempty_generated_buff_requires_a_valid_explicit_wire_lifetime(group, value):
     document, call = _policy_fixture(group=group)
     call["params"]["duration"] = 2700

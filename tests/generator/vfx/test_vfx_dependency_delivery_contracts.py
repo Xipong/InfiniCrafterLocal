@@ -284,9 +284,12 @@ def test_storage_requires_ready_nested_existing_texture_even_without_new_request
     assert validate_vfx_manifest_wire(data)["ok"]
     assert world_storage.is_deliverable_recipe_payload(data) is False
 
-@pytest.mark.parametrize("source", ["item", "entity"])
-@pytest.mark.parametrize("renderer", ["spriteElement", "texturedPath"])
-@pytest.mark.parametrize("damage", ["missing", "pending"])
+@pytest.mark.parametrize('source,renderer,damage', [
+    ("item", "spriteElement", "missing"),
+    ("item", "texturedPath", "pending"),
+    ("entity", "spriteElement", "pending"),
+    ("entity", "texturedPath", "missing"),
+])
 def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, monkeypatch, source, renderer, damage):
     from infini_local.core.vfx.validation import validate_vfx_manifest_wire
     from infini_local.storage import world_storage

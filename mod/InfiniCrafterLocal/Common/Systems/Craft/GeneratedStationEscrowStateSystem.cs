@@ -28,13 +28,13 @@ public sealed class GeneratedStationEscrowStateSystem : ModSystem
     private static string _authorityScope = "";
 
     // An opaque world-owned authority identity, never a guessed world name/id or
-    // endpoint. Old player claims without this exact token remain read-only.
+    // endpoint. Player claims without a valid token are not admitted.
     internal static string AuthorityScope => _authorityScope;
 
     internal static bool IsExactAuthorityScope(string? scope)
         => ValidAuthorityScope(scope) && string.Equals(scope, _authorityScope, StringComparison.Ordinal);
 
-    private static bool ValidAuthorityScope(string? scope)
+    internal static bool ValidAuthorityScope(string? scope)
         => scope is not null && scope.Length == 32 && scope.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static void EnsureAuthorityScope()

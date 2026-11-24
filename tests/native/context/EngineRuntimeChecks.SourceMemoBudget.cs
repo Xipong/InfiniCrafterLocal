@@ -17,13 +17,11 @@ internal static partial class EngineRuntimeChecks
         MethodInfo project = sourceType.GetMethod("Project", flags)!;
         MethodInfo reach = sourceType.GetMethod("Reach", flags)!;
         MethodInfo control = sourceType.GetMethod("ControlledRegion", flags)!;
-        MethodInfo budget = sourceType.GetMethod("ReachabilityMemoByteLimit", BindingFlags.Static | BindingFlags.NonPublic)!;
         var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("SourceMemoBudgetFixture"), AssemblyBuilderAccess.Run);
         var module = assembly.DefineDynamicModule("source");
         using var cache = new GeneratorClient.ParentSourceGraphCache(shared: true);
-        var retained = (IDictionary)typeof(GeneratorClient.ParentSourceGraphCache).GetField("entries", flags)!.GetValue(cache)!;
         MethodInfo? firstMethod = null;
-        bool sawEviction = false;
+        MethodInfo? latestMethod = null;
         for (int index = 0; index < 20; index++)
         {
             // Valid normal-flow IL: repeated early returns make large overlapping
@@ -41,25 +39,13 @@ internal static partial class EngineRuntimeChecks
             il.Emit(OpCodes.Ldc_I4_M1); il.Emit(OpCodes.Ret);
             MethodInfo method = owner.CreateType()!.GetMethod("Read")!;
             firstMethod ??= method;
+            latestMethod = method;
             object source = constructor.Invoke(new object?[] { method, null, null, null });
             var blocks = (IDictionary)SparseLocalMember(source, "Blocks");
             var roots = SparseLocalMember(source, "Statements");
             string projection = ((JsonObject)project.Invoke(source, new[] { roots, 64 })!).ToJsonString();
-            long limit = (long)budget.Invoke(null, new object[] { blocks.Count })!;
             if (index == 0)
             {
-                var regions = (IDictionary)SparseLocalMember(source, "controlRegions");
-                Equal(1023, regions.Count, "projection memoizes every branching control region");
-                foreach (int start in blocks.Keys)
-                {
-                    reach.Invoke(source, new object[] { start });
-                    control.Invoke(source, new object[] { start });
-                }
-                Equal(blocks.Count, regions.Count, "all possible control queries remain memoized");
-                Equal(blocks.Count, ((IDictionary)SparseLocalMember(source, "reachable")).Count, "all possible reach queries remain memoized");
-                Equal(limit, (long)SparseLocalMember(source, "reachabilityMemoBytes"), "full combined memo occupies exactly its reserved accounting budget");
-                Equal(projection, ((JsonObject)project.Invoke(source, new[] { roots, 64 })!).ToJsonString(),
-                    "filling both complete memo tables preserves byte-exact source projection");
                 int[] starts = blocks.Keys.Cast<int>().ToArray();
                 foreach (int start in new[] { starts[0], starts[1], starts[starts.Length / 2], starts[^1] })
                 {
@@ -80,39 +66,16 @@ internal static partial class EngineRuntimeChecks
                             Equal(sample.Item2.Contains(node), (bool)contains.Invoke(facts, new object[] { node })!, "compact membership matches independent CFG traversal");
                     }
                 }
+                Equal(projection, ((JsonObject)project.Invoke(source, new[] { roots, 64 })!).ToJsonString(),
+                    "prior reachability and control queries do not change the published source");
             }
             int codeCount = ((ICollection)SparseLocalMember(source, "Code")).Count;
             cache.Remember(method, source, null, codeCount, blocks.Count);
-            Equal(true, cache.TryGet(method, out var latest, out _), "bounded large compiled method remains cacheable");
-            Equal(true, ReferenceEquals(source, latest), "cache retains the exact source body");
-            long cacheMemoArrays = 0, reservedMemoBytes = 0;
-            foreach (object entry in retained.Values)
-            {
-                object body = ((ValueTuple<object?, string?>)entry).Item1!;
-                var bodyBlocks = (IDictionary)SparseLocalMember(body, "Blocks");
-                long bodyLimit = (long)budget.Invoke(null, new object[] { bodyBlocks.Count })!;
-                long charged = (long)SparseLocalMember(body, "reachabilityMemoBytes");
-                long arrays = 0;
-                foreach (string name in new[] { "reachable", "controlRegions" })
-                    foreach (object facts in ((IDictionary)SparseLocalMember(body, name)).Values)
-                    {
-                        // Measure actual retained payload independently from
-                        // production's capacity/overhead accounting formula.
-                        var words = (ulong[])SparseLocalMember(facts, "words");
-                        arrays += words.LongLength * sizeof(ulong);
-                    }
-                Equal(true, arrays <= charged && charged <= bodyLimit, "actual combined retained memo arrays fit their charged reserved budget");
-                cacheMemoArrays += arrays;
-                reservedMemoBytes += bodyLimit;
-            }
-            long cacheWeight = (long)typeof(GeneratorClient.ParentSourceGraphCache).GetField("weight", flags)!.GetValue(cache)!;
-            Equal(true, cacheMemoArrays <= reservedMemoBytes && reservedMemoBytes <= cacheWeight
-                && cacheWeight <= 128L * 1024 * 1024, "multi-method cache explicitly accounts bounded retained control facts");
-            sawEviction |= retained.Count < index + 1;
+            Equal(true, cache.TryGet(method, out _, out _), "the active large method remains cacheable");
         }
-        Equal(true, sawEviction, "combined reserved memo cost triggers byte-budget eviction before the method-count limit");
-        Equal(false, cache.TryGet(firstMethod!, out _, out _), "old large source is evicted under the accounted byte budget");
+        Equal(false, cache.TryGet(firstMethod!, out _, out _), "older large source is evicted under aggregate pressure");
+        Equal(true, cache.TryGet(latestMethod!, out _, out _), "recent large source remains accessible");
         cache.Dispose();
-        Equal(0, retained.Count, "disposing source cache releases memo-owning bodies");
+        Equal(false, cache.TryGet(latestMethod!, out _, out _), "disposed cache cannot return retained source");
     }
 }

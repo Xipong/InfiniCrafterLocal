@@ -74,21 +74,30 @@ def test_source_installer_resolves_root_from_build_directory(tmp_path):
     assert (source / "fixture.txt").is_file()
 
 
-def test_bash_release_wrapper_resolves_public_entrypoint_from_any_cwd(tmp_path):
-    import os
+def test_release_cli_reports_a_skipped_required_build_from_another_cwd(tmp_path):
+    import json
     import shutil
     import subprocess
     import sys
-    import pytest
 
-    shell = shutil.which("bash")
-    if shell is None:
-        pytest.skip("bash unavailable; wrapper execution is notRun")
-    environment = dict(os.environ, INFINI_PYTHON=sys.executable)
-    result = subprocess.run([shell, str(ROOT / "tools/build/validate_release.sh"), "--help"],
-                            cwd=tmp_path, env=environment, text=True, capture_output=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "--group" in result.stdout
+    # Exercise the real CLI without a native build or other validation tools.
+    repo = tmp_path / "release project"
+    cli = repo / "tools/validate_release.py"
+    cli.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / "tools/validate_release.py", cli)
+    manifest = repo / ".agent/manifest.json"
+    manifest.parent.mkdir()
+    manifest.write_text(json.dumps({"validationGroups": {"build": ["tml_build"]}}), encoding="utf-8")
+    report = tmp_path / "build report.json"
+
+    result = subprocess.run([sys.executable, str(cli), "--group", "build", "--skip-build",
+                             "--require-build", "--report", str(report)],
+                            cwd=tmp_path, text=True, capture_output=True, timeout=30)
+    assert result.returncode == 1, result.stdout + result.stderr
+    data = json.loads(report.read_text(encoding="utf-8"))
+    assert data["ok"] is False and data["releaseReady"] is False
+    assert data["unavailableRequired"] == ["tml_build"]
+    assert [(row["name"], row["status"]) for row in data["checks"]] == [("tml_build", "notRun")]
 
 
 def test_agent_navigation_links_resolve_existing_repository_targets():

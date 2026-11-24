@@ -4,65 +4,42 @@ from __future__ import annotations
 
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.settings_env import parse_env
-from infini_local.desktop.settings_fields import FIELDS
+from infini_local.desktop.web_studio import StudioController
 
 
-def test_home_health_feedback_is_honest_when_check_failed_or_stale(tmp_path):
-    home = SettingsController(tmp_path / 'config.env')
+def test_home_health_feedback_uses_status_data_not_translated_prose(tmp_path):
+    app = SettingsController(tmp_path / "config.env")
+    controller = StudioController(app, None)
     try:
-        home.status = 'Готово'
-        home._health_checked = True
-        home.applied_config = 'Любой перевод'
-        home.refresh_home()
-        assert home.home_state == 'Соединение не подтверждено'
-        home.actions.tasks['health-config'] = {}
-        home.applied_config = 'Любой перевод'
-        home.refresh_home()
-        assert home.home_state == 'Проверяем состояние…'
-        home.actions.tasks.clear()
-        home.activity = 'Текст без счётчиков'
-        home._applied_config_ack = {'pid': 1234, 'activity': {'active': 2, 'waiting': 1, 'accepting': True}}
-        home._config_match = 'match'
-        home.applied_config = 'Произвольная формулировка'
-        home.refresh_home()
-        assert home.home_state == 'Идёт генерация'
-        assert '2' in home.home_detail and '1' in home.home_detail
-        assert 'снимок' in home.home_detail.lower()
-        before = home.runtime_status(), home.home_state, home.home_detail, home.home_config
-        for wording in ('failed checking restart', 'ошибка matches unavailable', 'Сервер остановлен', ''):
-            home.status = home.activity = home.applied_config = wording
-            home.refresh_home()
-            assert (home.runtime_status(), home.home_state, home.home_detail, home.home_config) == before
-        home._config_match = 'mismatch'
-        home.applied_config = 'Произвольная формулировка'
-        home.refresh_home()
-        assert 'Настройки изменены' in home.home_config
-        assert 'перезапуск' in home.home_config
-        # A negative status phrase never certifies successful stop.
-        home.actions.last_action = {'status': 'failed', 'action': 'stop'}
-        home.status = 'Произвольная формулировка'
-        home.refresh_home()
-        assert home.home_state == 'Нужно внимание'
-        home._applied_config_ack = None
-        home.actions.last_action = {}
-        home._server_lifecycle = 'stopped'
-        home.applied_config = 'Stopped; Runtime config unconfirmed'
-        for unrelated in ('Server stopped through guarded /shutdown.', 'Saved: config.env', 'Codex OAuth: сессия готова'):
-            home.status = unrelated
-            home.refresh_home()
-            assert home.home_state == 'Сервер остановлен'
-        home._server_lifecycle = 'starting'
-        home.status = 'Saved: config.env'
-        home.refresh_home()
-        assert home.home_state == 'Сервер запускается'
-        home._server_lifecycle = 'responding'
-        home._applied_config_ack = {'pid': 1234}
-        home.activity = 'Backend activity unknown'
-        home.status = 'Codex OAuth: сессия готова'
-        home.refresh_home()
-        assert home.home_state == 'Сервер отвечает'
+        # Supply server/action facts, not the rendered prose the browser receives.
+        app._health_checked = True
+        assert controller.snapshot()["home"]["code"] == "unconfirmed"
+        app.actions.tasks["health-config"] = {}
+        assert controller.snapshot()["home"]["code"] == "checking"
+        app.actions.tasks.clear()
+        app._applied_config_ack = {"pid": 1234, "activity": {"active": 2, "waiting": 1, "accepting": True}}
+        app._config_match = "match"
+        for noise in ("failed checking restart", "Сервер остановлен", ""):
+            app.status = app.activity = app.applied_config = noise
+            snapshot = controller.snapshot()
+            assert snapshot["home"]["code"] == "generating"
+            runtime = snapshot["runtime"]
+            assert (runtime["active"], runtime["waiting"], runtime["config_match"]) == (2, 1, "match")
+        app._config_match = "mismatch"
+        assert controller.snapshot()["runtime"]["config_match"] == "mismatch"
+        app.actions.last_action = {"status": "failed", "action": "stop"}
+        assert controller.snapshot()["home"]["code"] == "attention"
+        app._applied_config_ack = None
+        app.actions.last_action = {}
+        for lifecycle in ("stopped", "starting"):
+            app._server_lifecycle = lifecycle
+            app.status = "Codex OAuth: сессия готова"
+            assert controller.snapshot()["home"]["code"] == lifecycle
+        app._server_lifecycle = "responding"
+        app._applied_config_ack = {"pid": 1234}
+        assert controller.snapshot()["home"]["code"] == "responding"
     finally:
-        home.on_close()
+        app.on_close()
 
 
 def test_form_branches_preserve_secrets_unknown_keys_and_explicit_choices(tmp_path):
@@ -73,8 +50,6 @@ def test_form_branches_preserve_secrets_unknown_keys_and_explicit_choices(tmp_pa
         'INFINI_SDCPP_MODEL=retained.gguf\n'), encoding='utf-8')
     app = SettingsController(config)
     try:
-        assert all(field['key'] in app.values for field in FIELDS)
-        assert next(field for field in FIELDS if field['key'] == 'INFINI_OPENROUTER_API_KEY')['secret']
         for provider in ('local', 'openrouter', 'openai_compat', 'openai_codex'):
             app.values['INFINI_LLM_PROVIDER'] = provider
             app._refresh_visibility()

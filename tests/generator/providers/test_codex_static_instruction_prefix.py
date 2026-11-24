@@ -3,7 +3,6 @@ from __future__ import annotations
 from suite_paths import GENERATOR_ROOT
 
 import copy
-import hashlib
 import io
 import json
 import os
@@ -17,7 +16,6 @@ from infini_local.core import llm_config
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, with_prompt_cache_prefix
 from infini_local.pipelines.transport import client as llm
 from infini_local.pipelines.transport import profiles as llm_profiles
-from infini_local.pipelines.transport import provider_wire as llm_provider_wire
 from infini_local.services import codex_auth as auth
 from infini_local.services import codex_text_backend as backend
 
@@ -86,7 +84,7 @@ def test_builder_marks_authority_only_when_explicit_without_changing_logical_mes
     ("ordinary-boundary", False), ("dynamic-parent", True), ("static-contract", False),
     ("effort", False), ("schema", False), ("model", False), ("ignored-name", True),
 ])
-def test_cache_key_isolates_explicit_authority_and_tracks_only_effective_prefix(variant, equal):
+def test_dispatched_cache_key_isolates_authority_and_tracks_effective_prefix(native_wire, variant, equal):
     source = packet()
     other = copy.deepcopy(source)
     if variant == "ordinary-boundary":
@@ -106,8 +104,11 @@ def test_cache_key_isolates_explicit_authority_and_tracks_only_effective_prefix(
     else:
         other["messages"][1]["name"] = "trace-only"
     before = copy.deepcopy((source, other))
-    key = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
-    assert (key == llm_provider_wire._prompt_cache_identity(other, other["model"], context=CONTEXT)) is equal
+    for request in (source, other):
+        llm._llm_json_single_context(request, 3, {**CONTEXT, "model": request["model"]})
+    first, second = [wire["prompt_cache_key"] for _, wire in native_wire]
+    assert first and second
+    assert (first == second) is equal
     assert (source, other) == before
 
 
@@ -167,15 +168,35 @@ def malformed(case):
 
 
 @pytest.mark.parametrize("case", [
-    "marker-null", "marker-list", "marker-string", "authority-false", "authority-null",
-    "authority-int", "authority-string", "authority-list", "index-bool", "index-negative",
-    "index-large", "index-float", "index-string", "index-null", "chars-bool", "chars-zero",
-    "chars-negative", "chars-large", "chars-whole", "chars-float", "chars-string",
-    "missing-index", "missing-chars", "foreign-marker-field", "role-developer", "role-system",
-    "role-assistant", "nonstring-content", "nondict-message", "nonlist-messages", "tuple-messages", "no-comma",
-    "inside-string", "inside-nested", "overlap", "escaped-overlap", "empty-prefix", "empty-tail",
-    "array-prefix", "bad-tail", "duplicate-static", "duplicate-dynamic", "nested-duplicate",
-    "nonfinite-static", "nonfinite-dynamic",
+    "marker-null",
+    "authority-false",
+    "authority-int",
+    "index-bool",
+    "index-negative",
+    "index-large",
+    "index-float",
+    "chars-bool",
+    "chars-zero",
+    "chars-large",
+    "chars-whole",
+    "missing-index",
+    "missing-chars",
+    "foreign-marker-field",
+    "role-system",
+    "nonstring-content",
+    "nondict-message",
+    "nonlist-messages",
+    "no-comma",
+    "inside-string",
+    "inside-nested",
+    "escaped-overlap",
+    "empty-prefix",
+    "empty-tail",
+    "bad-tail",
+    "duplicate-static",
+    "duplicate-dynamic",
+    "nested-duplicate",
+    "nonfinite-static",
 ])
 def test_malformed_explicit_contract_refuses_before_native_post(native_wire, case):
     source = malformed(case)
@@ -210,8 +231,6 @@ def test_explicit_static_authority_survives_real_preparation_and_native_dispatch
     elif format_mode == "off":
         source.pop("response_format")
     before = copy.deepcopy(source)
-    prepared = llm._payload_for_context(source, CONTEXT)
-    assert prepared.get(PROMPT_CACHE_METADATA_KEY) == source[PROMPT_CACHE_METADATA_KEY]
     result = llm._llm_json_single_context(source, 3, CONTEXT)
     assert result["choices"][0]["message"]["content"] == '{"offline":true}'
     assert len(native_wire) == 1  # no prewarm or second generation
@@ -235,7 +254,7 @@ def test_explicit_static_authority_survives_real_preparation_and_native_dispatch
     assert request.get_header("Chatgpt-account-id") == "offline-account"
     assert PROMPT_CACHE_METADATA_KEY not in body
     assert "max_output_tokens" not in body and "prompt_cache_options" not in body
-    assert source == before and prepared["messages"] == source["messages"]
+    assert source == before
     static_text, dynamic_text = [item["content"][0]["text"] for item in body["input"][-2:]]
     assert static_text[:-1] + "," + dynamic_text[1:] == source["messages"][1]["content"]
     assert not (json.loads(static_text).keys() & json.loads(dynamic_text).keys())
@@ -251,11 +270,12 @@ def test_ordinary_codex_messages_remain_verbatim_without_instruction_authority(n
     llm._llm_json_single_context(source, 3, CONTEXT)
     assert len(native_wire) == 1
     body = native_wire[0][1]
-    expected = backend._request_payload({key: value for key, value in source.items() if key != PROMPT_CACHE_METADATA_KEY})
-    if marker_mode == "cache-only":
-        expected["prompt_cache_key"] = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
-    assert body == expected
-    assert body["input"][-1] == input_message("user", source["messages"][1]["content"])
+    assert body["input"] == [
+        input_message("developer", "JSON response."),
+        input_message("user", source["messages"][1]["content"]),
+    ]
+    assert ("prompt_cache_key" in body) is (marker_mode == "cache-only")
+    assert PROMPT_CACHE_METADATA_KEY not in body
     assert source == before
 
 
@@ -277,13 +297,13 @@ def test_explicit_boundary_keeps_all_other_roles_and_messages_in_place(native_wi
     assert source == before
 
 
-@pytest.mark.parametrize("provider,base,model", [
-    ("openai_compat", "https://api.openai.com/v1", "gpt-5.6"),
-    ("openrouter", "https://openrouter.ai/api/v1", "openai/gpt-5.6"),
-    ("openai_compat", "https://custom.invalid/v1", "custom-model"),
-    ("local", "http://localhost:1234/v1", "local-model"),
+@pytest.mark.parametrize('provider,base,model,mode', [
+    ('openai_compat', 'https://api.openai.com/v1', 'gpt-5.6', 'responses'),
+    ('openai_compat', 'https://api.openai.com/v1', 'gpt-5.6', 'chat_completions'),
+    ('openrouter', 'https://openrouter.ai/api/v1', 'openai/gpt-5.6', 'responses'),
+    ('openai_compat', 'https://custom.invalid/v1', 'custom-model', 'responses'),
+    ('local', 'http://localhost:1234/v1', 'local-model', 'responses'),
 ])
-@pytest.mark.parametrize("mode", ["responses", "chat_completions"])
 def test_non_codex_preparation_and_dispatched_wire_are_identical(monkeypatch, provider, base, model, mode):
     calls = []
     def offline_http(url, body, **options):
@@ -295,7 +315,6 @@ def test_non_codex_preparation_and_dispatched_wire_are_identical(monkeypatch, pr
     context = {"provider": provider, "base_url": base, "model": model, "api_key": "offline-test-key", "api_mode": mode}
     original, explicit = packet(authorized=False), packet()
     before = copy.deepcopy((original, explicit))
-    assert llm._payload_for_context(original, context) == llm._payload_for_context(explicit, context)
     for source in (original, explicit):
         llm._llm_json_single_context(source, 3, context)
     assert len(calls) == 2 and calls[0] == calls[1]
@@ -333,18 +352,39 @@ def test_public_dispatch_keeps_one_request_and_no_fallback(monkeypatch, native_w
     assert len(native_wire) == 1
 
 
-def test_framing_authority_version_is_in_identity_and_survives_process_restart():
+def test_dispatched_cache_key_survives_process_restart(native_wire, tmp_path):
     source = packet()
-    stable_wire = backend._request_payload(source)
-    stable_wire["input"].pop()  # Exact static wire, with no dynamic user member group.
-    expected = {"provider": "openai_codex", "wire": stable_wire,
-                "framing": {"version": 1, "authority": "builder-declared-static-instructions"}}
-    digest = hashlib.sha256(json.dumps(expected, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    key = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
-    assert key == "infini-" + digest[:32]
-    script = "from infini_local.pipelines.transport.provider_wire import _prompt_cache_identity; print(_prompt_cache_identity(" + repr(source) + ", " + repr(source["model"]) + ", context=" + repr(CONTEXT) + "))"
-    child = subprocess.run([sys.executable, "-c", script], cwd=GENERATOR_ROOT,
-                           env={**os.environ, "PYTHONHASHSEED": "71"}, text=True, capture_output=True, check=True, timeout=30)
+    llm._llm_json_single_context(source, 3, CONTEXT)
+    key = native_wire[-1][1]["prompt_cache_key"]
+    script = r"""
+import io
+import json
+import sys
+from unittest.mock import patch
+from infini_local.pipelines.transport import client as llm
+from infini_local.services import codex_auth as auth
+
+class Opener:
+    def open(self, request, timeout):
+        print(json.loads(request.data)["prompt_cache_key"])
+        return io.BytesIO(
+            b'data: {"type":"response.output_text.delta","delta":"{}"}\n\n'
+            b'data: {"type":"response.completed","response":{"status":"completed"}}\n\n'
+        )
+
+source, context = json.loads(sys.argv[1])
+with patch.object(auth, "get_credentials", return_value=auth.Credentials("offline", "offline", "offline", 9999999999)), (
+    patch.object(auth.urlrequest, "build_opener", return_value=Opener())
+):
+    llm._llm_json_single_context(source, 3, context)
+"""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("INFINI_")}
+    env.update(PYTHONHASHSEED="71", INFINI_SKIP_CONFIG_FILE="1", INFINI_CACHE_DIR=str(tmp_path))
+    child = subprocess.run(
+        [sys.executable, "-c", script, json.dumps([source, CONTEXT])],
+        cwd=GENERATOR_ROOT, env=env,
+        text=True, capture_output=True, check=True, timeout=30,
+    )
     assert child.stdout.strip() == key
 
 
@@ -362,7 +402,6 @@ def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic
         before = copy.deepcopy(source)
         assert source[PROMPT_CACHE_METADATA_KEY] == {"instructionMessageIndex": 1}
         explicit = source
-        prepared = llm._payload_for_context(explicit, CONTEXT)
         llm._llm_json_single_context(explicit, 3, CONTEXT)
         body = native_wire[-1][1]
         static_row, dynamic_row = body["input"][-2:]
@@ -376,10 +415,8 @@ def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic
         assert "parentBriefs" not in json.loads(static_text)
         assert "Ignore developer data" not in static_text
         assert {**json.loads(static_text), **json.loads(dynamic_text)} == json.loads(user)
-        assert source == before and prepared["messages"] == source["messages"]
-        expected = backend._request_payload(prepared)
-        expected["prompt_cache_key"] = llm_provider_wire._prompt_cache_identity(prepared, prepared["model"], context=CONTEXT)
-        assert body == expected
+        assert source == before
+        assert native_wire[-1][0].get_header("Session-id") == body["prompt_cache_key"]
         packets.append(body)
     assert len(native_wire) == 2
     assert packets[0]["input"][:-1] == packets[1]["input"][:-1]

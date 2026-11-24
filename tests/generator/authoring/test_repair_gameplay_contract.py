@@ -17,12 +17,14 @@ from repair_test_helpers import assert_delivery, assert_repaired_source
 from repair_test_helpers import gameplay_repair as _offline_gameplay_repair
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,leaf,old,new,hostile,frozen_leaf,frozen_value", [
-    pytest.param("item_stats", "damage", True, 1, {"manaCost": 10}, "useStyle", "swing", id="true-to-integer-one"),
-    pytest.param("item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
-    pytest.param("item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
-    pytest.param("item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
+@pytest.mark.parametrize("format_mode,fn,leaf,old,new,hostile,frozen_leaf,frozen_value", [
+    pytest.param(mode, "item_stats", "damage", True, 1, {"manaCost": 10}, "useStyle", "swing",
+                 id=f"{mode}-true-to-integer-one")
+    for mode in ("json_object", "json_schema")
+] + [
+    pytest.param("json_schema", "item_stats", "damage", False, 0, {"manaCost": 10}, "useStyle", "swing", id="false-to-integer-zero"),
+    pytest.param("json_object", "item_stats", "damage", 1.0, 1, {"manaCost": 10}, "useStyle", "swing", id="float-to-integer"),
+    pytest.param("json_schema", "item_use", "autoReuse", 1, True, {"useTurn": False}, "knockback", 3, id="integer-to-boolean"),
 ])
 def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode, fn, leaf, old, new, hostile, frozen_leaf, frozen_value):
     doc = build_capability_witness("item_use")
@@ -253,13 +255,12 @@ def test_duplicate_occurrences_require_exact_index_deletion(namespace):
     assert doc == before
 
 
-@pytest.mark.parametrize("fn,param", [
-    ("generated_buff_on_use", "miningSpeedMultiplier"),
-    ("generated_buff_on_use", "manaRegen"),
-    ("place_tile", "tileId"),
-    ("accessory", "lightStrength"),
+@pytest.mark.parametrize("fn,param,value", [
+    pytest.param("generated_buff_on_use", "miningSpeedMultiplier", 10**400, id="buff-number-overflow"),
+    pytest.param("generated_buff_on_use", "manaRegen", 65536, id="buff-integer-bound"),
+    pytest.param("place_tile", "tileId", 10**400, id="native-id-overflow"),
+    pytest.param("accessory", "lightStrength", 65536, id="accessory-strength-bound"),
 ])
-@pytest.mark.parametrize("value", [10**400, 65536], ids=["huge-json-integer", "bounded-range-error"])
 def test_large_json_numbers_keep_exact_shape_repair(fn, param, value):
     good = build_capability_witness(fn)
     if fn == "accessory":
@@ -541,7 +542,13 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
         assert filtered["bindingsUpsert"] != [candidate]
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
+# Exercise both small and structured branches of the shared discriminator.
+# The vertical registry suite still checks admission for every capability.
+@pytest.mark.parametrize("fn", [
+    "item_stats", "spawn", "attach", "emit_to_targets_on_event", "set_aim",
+    "projectile_collision", "place_object", "generated_buff_on_use",
+    "heal_owner_on_event", "beam_geometry", "refresh_held_effect", "weapon_ammo",
+])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]

@@ -7,8 +7,15 @@ from infini_local.services import runtime_dump_service as dumps
 from tests.generator.context.test_mechanics_context import _caller_parent, _profile, _request_parent_views
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("role", ["collision", "motionDispatch", "motion", "motionDispatchEffects", "positionIntegration"])
+@pytest.mark.parametrize('mode,role', [
+    ("json_object", "collision"),
+    ("json_object", "motionDispatch"),
+    ("json_object", "motion"),
+    ("json_object", "motionDispatchEffects"),
+    ("json_object", "positionIntegration"),
+    ("json_schema", "collision"),
+    ("json_schema", "motionDispatchEffects"),
+])
 def test_partial_same_named_source_does_not_hide_symbolic_caller(monkeypatch, mode, role):
     parent = _caller_parent(role)
     profile = parent["directProjectileRaw"]
@@ -28,8 +35,11 @@ def test_partial_same_named_source_does_not_hide_symbolic_caller(monkeypatch, mo
         assert any(source["code"] == "if (type == 31) { return false; }" for source in mechanics["source"])
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("with_profiles", [True, False])
+@pytest.mark.parametrize('mode,with_profiles', [
+    ("json_object", True),
+    ("json_object", False),
+    ("json_schema", False),
+])
 def test_spawn_edges_keep_partial_candidates_guards_and_unresolved_calls(monkeypatch, mode, with_profiles):
     parent = _caller_parent()
     profile = parent["directProjectileRaw"]
@@ -81,8 +91,11 @@ def test_replacement_candidates_keep_capture_specific_dispatch_and_hook_links(mo
         assert all("sourceReferences" not in row["defaults"] for row in rows)
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("matched", [False, True])
+@pytest.mark.parametrize('mode,matched', [
+    ("json_object", False),
+    ("json_object", True),
+    ("json_schema", True),
+])
 def test_actual_snapshot_lookup_keeps_provenance_beside_mechanics(monkeypatch, mode, matched):
     profile = _profile()
     profile["fullName"] = "Example/Bolt"

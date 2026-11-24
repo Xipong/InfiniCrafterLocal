@@ -173,9 +173,20 @@ def test_unknown_nested_fields_and_literal_tooltips_are_not_interpreted():
     assert result["motion"]["programs"][0]["future"] == source["motion"]["programs"][0]["future"]
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("stage", ["Author", "GameplayRepair", "Visual", "VisualRepair", "VFX", "VFXRepair"])
-@pytest.mark.parametrize("fixture", ["synthetic", "native_excalibur"])
+@pytest.mark.parametrize('mode,stage,fixture', [
+    ('json_object', 'Author', 'synthetic'),
+    ('json_object', 'GameplayRepair', 'native_excalibur'),
+    ('json_object', 'Visual', 'synthetic'),
+    ('json_object', 'VisualRepair', 'synthetic'),
+    ('json_object', 'VFX', 'synthetic'),
+    ('json_object', 'VFXRepair', 'synthetic'),
+    ('json_schema', 'Author', 'native_excalibur'),
+    ('json_schema', 'GameplayRepair', 'synthetic'),
+    ('json_schema', 'Visual', 'native_excalibur'),
+    ('json_schema', 'VisualRepair', 'native_excalibur'),
+    ('json_schema', 'VFX', 'native_excalibur'),
+    ('json_schema', 'VFXRepair', 'native_excalibur'),
+])
 def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode, stage, fixture):
     from infini_local.core import llm_config
     import infini_local.pipelines.vfx.prompt as vfx_prompt

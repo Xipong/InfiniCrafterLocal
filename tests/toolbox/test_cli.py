@@ -20,8 +20,18 @@ def cli(monkeypatch, capsys, *args):
     return exc.value.code, capsys.readouterr()
 
 
+@pytest.fixture
+def current_dump(tmp_path):
+    from toolbox.live.catalog import DEFAULT_PRESETS, load_panel
+    rows = load_panel(DEFAULT_PRESETS['live20'])['cases']
+    names = sorted({row[key] for row in rows for key in ('itemA', 'itemB')})
+    dump = tmp_path / 'synthetic-current.jsonl'
+    dump.write_text(''.join(json.dumps({'internalName': name}) + '\n' for name in names))
+    return dump
+
+
 @pytest.mark.parametrize('panel,count', [('live20', 20)])
-def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatch, capsys, tmp_path, panel, count):
+def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatch, capsys, tmp_path, panel, count, current_dump):
     before = set(tmp_path.rglob('*'))
     import builtins
     original_import = builtins.__import__
@@ -30,7 +40,7 @@ def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatc
             pytest.fail('preflight imported production runtime')
         return original_import(name, *args, **kwargs)
     monkeypatch.setattr(builtins, '__import__', no_runtime)
-    code, captured = cli(monkeypatch, capsys, panel)
+    code, captured = cli(monkeypatch, capsys, panel, '--runtime-dump', current_dump)
     assert code == 0, captured
     report = json.loads(captured.out)
     assert report['preflightOnly'] is True
@@ -53,53 +63,60 @@ def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatc
     (['--run'], 'requires'),
     (['--run', '--preflight-only'], 'mutually exclusive'),
 ])
-def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, flags, fragment):
-    code, captured = cli(monkeypatch, capsys, 'live20', *flags)
+def test_cli_refuses_invalid_boundaries_before_bootstrap(monkeypatch, capsys, flags, fragment, current_dump):
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, *flags)
     assert code == 2
     assert fragment in captured.err
 
 
 @pytest.mark.parametrize('key', ['INFINI_LLM_FALLBACK_MODEL', 'INFINI_LLM_REAUTHOR_TEMPERATURE'])
-def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tmp_path, key):
+def test_retired_config_is_refused_without_secret_values(monkeypatch, capsys, tmp_path, key, current_dump):
     config = tmp_path / 'private.env'
     config.write_text(f'# infini-config-format: json-string-v1\n{key}=SECRET-OLD-VALUE\n')
-    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--config', config)
     assert code == 2
     assert key in captured.err
     assert 'SECRET-OLD-VALUE' not in captured.out + captured.err
     assert not (tmp_path / 'cache').exists()
 
 
-def test_private_config_is_checked_not_printed(monkeypatch, capsys, tmp_path):
+def test_private_config_is_checked_not_printed(monkeypatch, capsys, tmp_path, current_dump):
     config = tmp_path / 'private.env'
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_LLM_PROVIDER=openai_compat\nINFINI_OPENAI_COMPAT_MODEL=qa-model\nINFINI_OPENAI_COMPAT_API_KEY=TOP-SECRET\nINFINI_OPENAI_COMPAT_BASE_URL=https://example.invalid/v1/\n'))
-    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config, '--expected-model', 'wrong')
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--config', config, '--expected-model', 'wrong')
     assert code == 2
     assert 'model' in captured.err.lower()
     assert 'TOP-SECRET' not in captured.out + captured.err
-    code, captured = cli(monkeypatch, capsys, 'live20', '--config', config, '--expected-model', 'qa-model')
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--config', config, '--expected-model', 'qa-model')
     assert code == 0
     assert json.loads(captured.out)['configured']['model'] == 'qa-model'
     assert 'TOP-SECRET' not in captured.out + captured.err
 
 
-def test_clean_head_binding_rejects_dirty_source(monkeypatch, capsys, tmp_path):
+def test_clean_head_binding_rejects_dirty_source(monkeypatch, capsys, tmp_path, current_dump):
     import subprocess
     project = tmp_path / 'source'
     (project / 'generator/infini_local').mkdir(parents=True)
     subprocess.run(['git', 'init', '-q', str(project)], check=True)
     subprocess.run(['git', '-C', str(project), '-c', 'user.name=QA', '-c', 'user.email=qa@example.invalid', 'commit', '--allow-empty', '-qm', 'fixture'], check=True)
     head = subprocess.check_output(['git', '-C', str(project), 'rev-parse', 'HEAD'], text=True).strip()
-    code, _ = cli(monkeypatch, capsys, 'live20', '--project', project, '--expected-head', head)
+    code, _ = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--project', project, '--expected-head', head)
     assert code == 0
     (project / 'dirty.txt').write_text('changed input')
-    code, captured = cli(monkeypatch, capsys, 'live20', '--project', project, '--expected-head', head)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--project', project, '--expected-head', head)
     assert code == 2
     assert 'clean' in captured.err
 
 
-@pytest.mark.parametrize('panel', ['live10', 'live20', 'live40'])
-@pytest.mark.parametrize('output_kind', ['absolute', 'existing_tilde', 'relative'])
+@pytest.mark.parametrize('panel,output_kind', [
+    ('live10', 'absolute'),
+    ('live10', 'existing_tilde'),
+    ('live10', 'relative'),
+    ('live20', 'absolute'),
+    ('live20', 'relative'),
+    ('live40', 'absolute'),
+    ('live40', 'relative'),
+])
 def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path, output_kind, panel):
     import subprocess
     project = tmp_path / 'source'
@@ -169,7 +186,7 @@ def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monke
 
 
 @pytest.mark.parametrize('kind,fragment', [('duplicate', 'repeats'), ('missing', 'missing'), ('invalid', 'invalid case')])
-def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind, fragment):
+def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind, fragment, current_dump):
     cases = [{'case': 'custom', 'itemA': 'WoodenSword', 'itemB': 'WorkBench'}]
     if kind == 'duplicate':
         cases *= 2
@@ -179,7 +196,7 @@ def test_custom_cases_validate_real_fixture(monkeypatch, capsys, tmp_path, kind,
         cases[0]['case'] = '../unsafe'
     file = tmp_path / 'cases.json'
     file.write_text(json.dumps(cases))
-    code, captured = cli(monkeypatch, capsys, 'live20', '--cases-file', file)
+    code, captured = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--cases-file', file)
     assert code == 2
     assert fragment in captured.err
 
@@ -201,37 +218,29 @@ def test_explicit_missing_private_config_is_not_silently_ignored(monkeypatch, ca
 
 def test_duplicate_parent_snapshot_identity_is_refused(monkeypatch, capsys, tmp_path):
     dump = tmp_path / 'duplicate.jsonl'
-    fixture = (ROOT / 'toolbox/fixtures/items.jsonl').read_text(encoding='utf-8-sig')
-    dump.write_text(fixture + '\n' + fixture.splitlines()[0] + '\n')
+    dump.write_text('{"internalName":"WoodenSword"}\n' * 2)
     code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', dump)
     assert code == 2
     assert 'duplicate parent' in output.err
 
 
-def test_skip_config_does_not_read_operator_profile_unless_explicit(monkeypatch, capsys, tmp_path):
+def test_skip_config_does_not_read_operator_profile_unless_explicit(monkeypatch, capsys, tmp_path, current_dump):
     project = tmp_path / 'source'
     (project / 'generator/infini_local').mkdir(parents=True)
     config = project / 'generator/config.env'
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_OPENAI_COMPAT_MODEL=private-model\n'))
     monkeypatch.setenv('INFINI_SKIP_CONFIG_FILE', '1')
-    code, output = cli(monkeypatch, capsys, 'live20', '--project', project)
+    code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--project', project)
     assert code == 0
     assert json.loads(output.out)['configured']['model'] == ''
-    code, output = cli(monkeypatch, capsys, 'live20', '--project', project, '--config', config)
+    code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--project', project, '--config', config)
     assert code == 0
     assert json.loads(output.out)['configured']['model'] == 'private-model'
 
 
-def test_named_panel_is_not_silently_reduced_by_legacy_environment(monkeypatch, capsys):
-    monkeypatch.setenv('INFINI_LIVE_CASES', 'woodwork_blade')
-    code, output = cli(monkeypatch, capsys, 'live20')
-    assert code == 0
-    assert json.loads(output.out)['caseCount'] == 20
-
-
 @pytest.mark.parametrize('selection', ['', 'woodwork_blade,woodwork_blade'])
-def test_explicit_empty_or_duplicate_selection_is_refused(monkeypatch, capsys, selection):
-    code, output = cli(monkeypatch, capsys, 'live20', '--cases', selection)
+def test_explicit_empty_or_duplicate_selection_is_refused(monkeypatch, capsys, selection, current_dump):
+    code, output = cli(monkeypatch, capsys, 'live20', '--runtime-dump', current_dump, '--cases', selection)
     assert code == 2
     assert '--cases' in output.err
 
@@ -240,14 +249,6 @@ def test_public_panel_name_cannot_be_overridden(monkeypatch, capsys):
     code, output = cli(monkeypatch, capsys, 'live20', '--panel', 'live20')
     assert code == 2
     assert 'unrecognized' in output.err
-
-
-def test_live40_requires_explicit_current_dump_without_traceback(monkeypatch, capsys):
-    code, captured = cli(monkeypatch, capsys, 'live40')
-    assert code == 2
-    assert not captured.out
-    assert 'requires an explicit current --runtime-dump' in captured.err
-    assert 'Traceback' not in captured.err
 
 
 def test_custom_forty_case_cli_preflight_uses_explicit_inputs(monkeypatch, capsys, tmp_path):
@@ -269,3 +270,11 @@ def test_custom_forty_case_cli_preflight_uses_explicit_inputs(monkeypatch, capsy
     assert report['historicalPreset'] is False
     assert len({row['case'] for row in report['cases']}) == 40
     assert set(tmp_path.rglob('*')) == before
+
+def test_custom_cases_never_borrow_a_default_parent_dump(monkeypatch, capsys, tmp_path):
+    cases = tmp_path / 'cases.json'
+    cases.write_text('[{"case":"custom","itemA":"WoodenSword","itemB":"WorkBench"}]')
+    code, output = cli(monkeypatch, capsys, 'live20', '--cases-file', cases)
+    assert code == 2
+    assert not output.out
+    assert '--cases-file requires an explicit current --runtime-dump' in output.err

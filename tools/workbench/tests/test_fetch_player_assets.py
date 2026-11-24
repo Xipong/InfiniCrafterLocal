@@ -135,10 +135,10 @@ class PlayerAssetsTests(unittest.TestCase):
         manifest = json.loads(fetcher.MANIFEST.read_text())
         self.assertEqual(manifest['commit'], fetcher.COMMIT)
         self.assertEqual({Path(e['path']).name for e in manifest['files']}, fetcher.REQUIRED)
-        self.assertEqual(len(manifest['files']), 20)
+        self.assertEqual(len(manifest['files']), len(fetcher.REQUIRED))
         for entry in manifest['files']:
             self.assertEqual(entry['sourceURL'], fetcher.PREFIX + Path(entry['path']).name)
-            self.assertEqual(len(entry['sha256']), 64)
+            self.assertRegex(entry['sha256'], r'^[0-9a-f]{64}$')
 
 
 if __name__ == '__main__': unittest.main()

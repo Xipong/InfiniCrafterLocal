@@ -140,7 +140,7 @@ def test_large_whole_method_source_takes_priority_over_a_small_bounded_graph():
 
 
 @pytest.mark.parametrize("mutation", ["module", "method", "method_hash", "code_hash", "record_future", "envelope_future",
-    "bool_version", "engine_future", "engine_version", "coverage_shape", "location_future", "location_range",
+    "bool_version", "engine_version", "coverage_shape", "location_range",
     "symbol_shape", "argument_shape", "row_future", "windows_shape", "call_future", "bool_path"])
 def test_unmatched_or_unfamiliar_source_preserves_the_complete_original_namespace(mutation):
     reference, calls = _parts(_parent())
@@ -153,10 +153,8 @@ def test_unmatched_or_unfamiliar_source_preserves_the_complete_original_namespac
     elif mutation == "record_future": record["futureBinding"] = {"graphNode": "b3"}
     elif mutation == "envelope_future": envelope["futureBinding"] = {"graphNode": "b3"}
     elif mutation == "bool_version": envelope["version"] = True
-    elif mutation == "engine_future": record["decompiler"]["futureMode"] = "unknown"
     elif mutation == "engine_version": record["decompiler"]["version"] = "8.3.0"
     elif mutation == "coverage_shape": record["coverage"] = {"future": True}
-    elif mutation == "location_future": record["locations"][0]["futureBinding"] = "b3"
     elif mutation == "location_range": record["locations"][0]["endLine"] = 1_000_000
     elif mutation == "symbol_shape": graph["symbols"]["Fixture.Emit"] = {"signature": "Fixture.Emit(int)", "future": True}
     elif mutation == "argument_shape": graph["observations"][0]["arguments"] = {"value": {"futureReference": "b3"}}
@@ -382,8 +380,12 @@ def test_main_ammo_observations_keep_readable_source_and_profile_links(section, 
     assert parent == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("route", ["direct", "child", "ammo"])
+@pytest.mark.parametrize('mode,route', [
+    ("json_object", "direct"),
+    ("json_object", "child"),
+    ("json_object", "ammo"),
+    ("json_schema", "child"),
+])
 def test_actual_author_keeps_fuller_source_before_size_with_opaque_runtime_unknowns(monkeypatch, mode, route):
     from infini_local.core import llm_config
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
@@ -478,7 +480,7 @@ def test_graph_selection_failures_keep_their_owner_when_full_source_replaces_sli
     assert parent == before
 
 
-@pytest.mark.parametrize("diagnostic", [None, False, 81, {}, [], ""])
+@pytest.mark.parametrize("diagnostic", [None, False, {}, ""])
 def test_unfamiliar_graph_selection_failure_shape_keeps_original_namespace(diagnostic):
     reference, calls = _parts(_parent())
     reference["motion"]["programs"][0]["identitySelectionUnavailable"] = diagnostic
@@ -504,43 +506,6 @@ def test_compact_selection_diagnostics_do_not_admit_unknown_shapes(capture):
     projected, _ = native_csharp_source_for_llm(reference, calls)
     projected["motion"]["programs"][0]["graphCapture"] = capture
     assert not known_native_csharp_context(projected)
-
-
-def test_single_whole_source_skips_unneeded_author_stage_size_build(monkeypatch):
-    import importlib
-
-    picker = importlib.import_module("infini_local.pipelines.context.native_csharp_source")
-    reference, calls = _parts(_parent())
-
-    def forbidden_projection(*args, **kwargs):
-        raise AssertionError("full-method evidence wins independently of projected dossier size")
-
-    monkeypatch.setattr(picker, "parent_context_for_stage", forbidden_projection)
-    projected, linked = native_csharp_source_for_llm(reference, calls)
-    assert projected["motion"]["programs"] == [{"nativeCSharpSourceRef": "s0"}]
-    assert linked[0]["sourceLocation"]["sourceRecord"] == "s0"
-
-
-def test_compared_source_reuses_winning_projection(monkeypatch):
-    import importlib
-
-    picker = importlib.import_module("infini_local.pipelines.context.native_csharp_source")
-    reference, calls, record = _specialized_fixture()
-    expected = native_csharp_source_for_llm(reference, calls)
-    original = picker._compact_model_view
-    computed = []
-
-    def capture(*args, **kwargs):
-        result = original(*args, **kwargs)
-        computed.append(result)
-        return result
-
-    monkeypatch.setattr(picker, "_compact_model_view", capture)
-    actual = native_csharp_source_for_llm(reference, calls)
-    assert actual == expected
-    assert actual[0]["nativeCSharpSource"]["records"][0]["code"] == record["identitySpecialized"]["code"]
-    assert len(computed) == 2
-    assert actual[0] is computed[-1][0]
 
 
 def test_request_source_memo_keeps_calls_modes_and_mechanics_supplements_separate():

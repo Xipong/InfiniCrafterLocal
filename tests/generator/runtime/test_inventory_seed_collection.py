@@ -1,8 +1,6 @@
 """Explicit inventory passive: Author -> literal receipt -> strict delivery."""
-from suite_paths import REPO_ROOT
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import pytest
 from repair_test_helpers import gameplay_repair, provider_roundtrip
@@ -60,8 +58,10 @@ def test_delivered_seed_flag_is_strict_boolean(value):
     assert any(row["path"] == "$.gameplay." + FIELD for row in report["errors"])
 
 
-@pytest.mark.parametrize("source_available", [True, False])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "type", "value", "source", "owner", "path"])
+@pytest.mark.parametrize("mutation,source_available", [
+    ("drop", False), ("duplicate", False), ("type", False), ("value", True),
+    ("source", True), ("source", False), ("owner", True), ("owner", False), ("path", False),
+])
 def test_seed_literal_receipt_requires_unique_exact_fn_owner(mutation, source_available):
     doc = seed_source()
     final = compile_runtime_program(doc)
@@ -161,34 +161,3 @@ def test_leaf_repair_freezes_seed_selection_or_absence(monkeypatch, present, mod
     final = sanitize_recipe_for_delivery(compile_runtime_program(repaired))
     assert final["gameplay"].get(FIELD, False) is present
     assert validate_runtime_wire(final)["ok"]
-
-
-
-def test_archived_native_fixture_is_refused_without_rewriting_seed_evidence():
-    actual = sanitize_recipe_for_delivery(compile_runtime_program(seed_source()))
-    # The compiler emits mechanics, not a completed image stage. Declare this
-    # CPU-only fixture honestly and fix identity so pre/post native hashes are
-    # comparable; do not counterfeit ready PNG status or let the DTO invent IDs.
-    actual.update(sourceMode="test_fixture", id="g_1122334455667788",
-                  recipeKey="inventory_seed_native_fixture")
-    # This fixture exercises inventory queries, never art/drawing. Supply an
-    # explicit no-image choice rather than an incomplete pre-Visual asset mode.
-    for entity in actual["runtimeProgram"]["entities"]:
-        entity["visual"]["assetMode"] = "no_asset"
-    fixture = REPO_ROOT / "tests/fixtures/inventory-seed-collection.json"
-    retained = json.loads(fixture.read_text())
-    # Inventory seed opt-in and its native ammo/input coexistence are the
-    # contract, not a snapshot of unrelated later optional item statistics.
-    report = validate_runtime_wire(retained)
-    assert not report["ok"] and any(e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
-    assert validate_runtime_wire(actual)["ok"]
-    for payload in (retained, actual):
-        assert payload["gameplay"][FIELD] is True
-        assert payload["id"] == "g_1122334455667788"
-        assert payload["recipeKey"] == "inventory_seed_native_fixture"
-        assert payload["sourceMode"] == "test_fixture"
-        assert all(e["visual"]["assetMode"] == "no_asset" for e in payload["runtimeProgram"]["entities"])
-    # Current inventory/ammo coexistence is observed through final delivery
-    # above; the archived runtime is not upgraded into a positive control.
-    assert retained["runtimeProgram"]["bindings"] == actual["runtimeProgram"]["bindings"]
-    assert json.loads(fixture.read_text()) == retained

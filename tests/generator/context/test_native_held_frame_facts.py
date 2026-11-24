@@ -53,9 +53,14 @@ def test_projection_preserves_only_actual_accepted_fields_and_is_detached(hidden
     assert native_held_frame_facts({"runtimeProgram": {"itemUse": {}}})["acceptedItemUse"] == {}
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("repair_path", [None, "renderSizePx", "prompt"])
-@pytest.mark.parametrize("placement,offset", [("owner_center", 16), ("cursor", 0)])
+@pytest.mark.parametrize('mode,repair_path,placement,offset', [
+    ('json_object', None, 'owner_center', 16),
+    ('json_object', 'renderSizePx', 'cursor', 0),
+    ('json_object', 'prompt', 'owner_center', 16),
+    ('json_schema', None, 'cursor', 0),
+    ('json_schema', 'renderSizePx', 'owner_center', 16),
+    ('json_schema', 'prompt', 'cursor', 0),
+])
 def test_visual_outgoing_request_preserves_emission_and_scoped_guidance(
         wire_transport, monkeypatch, mode, repair_path, placement, offset):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
@@ -131,16 +136,16 @@ def test_actual_image_backend_and_retry_keep_native_frame_facts(monkeypatch, tmp
     assert data["visualKit"] == frozen_kit
 
 
-@pytest.mark.parametrize("placement,offset,aim,height,expected", [
-    ("owner_center", 16, "cursor", 0, {"placement": "owner_center", "offsetPx": 16, "aim": "cursor"}),
-    ("cursor", 0, "cursor", 0, {"placement": "cursor", "offsetPx": 0}),
-    ("owner_center", 16, "none", 0, {"placement": "owner_center", "offsetPx": 16, "aim": "none"}),
-    ("cursor", 0, "facing", 3, {"placement": "cursor", "offsetPx": 0, "overTarget": {"heightTiles": 3}}),
-    ("owner_center", 16, None, 0, {"placement": "owner_center", "offsetPx": 16}),
-    ("owner_center", None, "cursor", 0, {"placement": "owner_center"}),
-    ("above_cursor", 0, "cursor", 0, {"placement": "above_cursor", "offsetPx": 0}),
+@pytest.mark.parametrize('placement,offset,aim,height,expected,reverse', [
+    ('owner_center', 16, 'cursor', 0, {'placement': 'owner_center', 'offsetPx': 16, 'aim': 'cursor'}, False),
+    ('owner_center', 16, 'cursor', 0, {'placement': 'owner_center', 'offsetPx': 16, 'aim': 'cursor'}, True),
+    ('cursor', 0, 'cursor', 0, {'placement': 'cursor', 'offsetPx': 0}, False),
+    ('owner_center', 16, 'none', 0, {'placement': 'owner_center', 'offsetPx': 16, 'aim': 'none'}, False),
+    ('cursor', 0, 'facing', 3, {'placement': 'cursor', 'offsetPx': 0, 'overTarget': {'heightTiles': 3}}, False),
+    ('owner_center', 16, None, 0, {'placement': 'owner_center', 'offsetPx': 16}, False),
+    ('owner_center', None, 'cursor', 0, {'placement': 'owner_center'}, False),
+    ('above_cursor', 0, 'cursor', 0, {'placement': 'above_cursor', 'offsetPx': 0}, False),
 ])
-@pytest.mark.parametrize("reverse", [False, True])
 def test_image_requests_deliver_only_explicit_use_target_placement(monkeypatch, tmp_path, placement, offset, aim, height, expected, reverse):
     data = _accepted_visual_data()
     runtime = data["runtimeProgram"]

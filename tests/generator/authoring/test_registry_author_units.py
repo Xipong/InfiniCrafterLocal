@@ -1,14 +1,9 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
-from suite_paths import TEST_ROOT
-
-
-import hashlib
 import json
 import math
 import re
 import struct
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 from infini_local.core import llm_config
@@ -415,8 +410,6 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
 
 BUFF_SPEED_PERCENT = "moveSpeedBonus"
 BUFF_SPEED_FACTOR = "moveSpeedBonusFactor"
-BUFF_FACTOR_ARCHIVE = json.loads(((TEST_ROOT / "fixtures") / "buff_speed_factor_retained_wire.json").read_text())
-BUFF_FACTOR_CASES = BUFF_FACTOR_ARCHIVE["cases"]
 
 
 def _buff_speed_receipt(wire, name=BUFF_SPEED_FACTOR):
@@ -436,35 +429,26 @@ def _buff_speed_source(scope, value=None):
         document["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "swift"
     return document, call
 
-@pytest.mark.parametrize("case", BUFF_FACTOR_CASES, ids=lambda case: case["id"])
-def test_buff_capture_keeps_prior_bytes_but_only_current_names_authenticate_fresh_source(case):
-    assert BUFF_FACTOR_ARCHIVE["sourceHead"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
-    prior_wire = case["wire"]
-    before = _bytes(prior_wire)
-    assert hashlib.sha256(before).hexdigest() == case["wireSha256"]
-    rows = prior_wire["runtimeContract"]["finalWireReceipts"]
-    report = audit_compiler_receipts(rows, final_document=prior_wire)
-    assert not report["ok"] and report["authoredSourceChecked"] is False, report
-    assert not validate_runtime_wire(prior_wire)["ok"]
-    prior = _buff_speed_receipt(prior_wire)
-    value = case["authoredFactor"]
-    if value is None:
-        assert prior["status"] == "declared_neutral_omission" and type(prior["value"]) is int and prior["value"] == 0
-    else:
-        assert prior["status"] == "delivered" and _bytes(prior["value"]) == _bytes(value)
-    document, call = _buff_speed_source(case["scope"], None if value is None else value * 100)
-    source_before = _bytes(document)
+@pytest.mark.parametrize("scope,percent,expected,path", [
+    ("global", -80, -0.8, "gameplay.generatedBuff.movementSpeed"),
+    ("global", 200, 2.0, "gameplay.generatedBuff.movementSpeed"),
+    ("effect_group", 20, 0.2, "runtimeProgram.effectGroups[0].generatedBuff.movementSpeed"),
+    ("effect_group", None, 0.0, "runtimeProgram.effectGroups[0].generatedBuff.movementSpeed"),
+])
+def test_buff_speed_current_author_preserves_float32_delivery(scope, percent, expected, path):
+    document, call = _buff_speed_source(scope, percent)
+    before = _bytes(document)
     wire = compile_runtime_program(document)
     actual = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
-    assert actual["finalPath"] == prior["finalPath"]
-    assert struct.pack("!f", actual["value"]) == struct.pack("!f", prior["value"])
-    if value is None:
-        assert BUFF_SPEED_PERCENT not in call["params"] and actual["status"] == "declared_neutral_omission"
-        assert _bytes(actual["value"]) == b"0.0"
+    assert actual["finalPath"] == path
+    assert struct.pack("!f", actual["value"]) == struct.pack("!f", expected)
+    assert actual["status"] == ("declared_neutral_omission" if percent is None else "delivered")
+    if percent is None:
+        assert BUFF_SPEED_PERCENT not in call["params"] and _bytes(actual["value"]) == b"0.0"
     assert validate_runtime_wire(wire)["ok"]
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=document, final_document=wire)["ok"]
-    assert not audit_compiler_receipts(rows, authored_document=document, final_document=prior_wire)["ok"]
-    assert _bytes(document) == source_before and _bytes(prior_wire) == before
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=document, final_document=wire)["ok"]
+    assert _bytes(document) == before
 
 
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
@@ -511,52 +495,39 @@ def test_frozen_percent_absence_survives_duration_repair_and_requires_exact_zero
 # Wire numeric domain is shared by global and group slots. Distinct slots get
 # type/ordinary/subnormal sentinels; the full status/type/sign matrix runs once.
 WIRE_VALUES = (
-    ("current", "delivered", None, False, "null"),
-    ("current", "delivered", False, False, "bool"),
-    ("current", "delivered", "0", False, "string"),
-    ("current", "delivered", 0, False, "int-zero"),
-    ("current", "delivered", 1, False, "int-one"),
-    ("current", "delivered", 5e-324, False, "binary64-collapse"),
-    ("current", "delivered", 1e-50, False, "positive-storage-collapse"),
-    ("current", "delivered", -1e-50, False, "negative-storage-collapse"),
-    ("current", "delivered", 0.0, True, "positive-zero"),
-    ("current", "delivered", -0.0, True, "negative-zero"),
-    ("current", "delivered", -.8, True, "minimum"),
-    ("current", "delivered", 2.0, True, "maximum"),
-    ("current", "delivered", math.nextafter(-.8, -math.inf), False, "below-minimum"),
-    ("current", "delivered", math.nextafter(2.0, math.inf), False, "above-maximum"),
-    ("current", "delivered", .007 / 100, True, "decimal-collision"),
-    ("current", "delivered", 2**-149, True, "float32-subnormal"),
-    ("current", "delivered", math.nextafter(2**-150, math.inf), True, "above-half"),
-    # Retired parameter names are rejected before any numeric-domain admission.
-    # Keep both receipt statuses and both owner slots, with malformed, neutral
-    # and ordinary representations; old floating-point boundary grids no longer
-    # exercise a distinct contract. Current-name numeric boundaries stay above.
-    *(("prior", status, value, False, label) for status in ("delivered", "declared_neutral_omission")
-      for value, label in ((None, "null"), (0, "int-zero"), (.2, "ordinary"))),
+    (None, False, "null"),
+    (False, False, "bool"),
+    ("0", False, "string"),
+    (0, False, "int-zero"),
+    (1, False, "int-one"),
+    (5e-324, False, "binary64-collapse"),
+    (1e-50, False, "positive-storage-collapse"),
+    (-1e-50, False, "negative-storage-collapse"),
+    (0.0, True, "positive-zero"),
+    (-0.0, True, "negative-zero"),
+    (-.8, True, "minimum"),
+    (2.0, True, "maximum"),
+    (math.nextafter(-.8, -math.inf), False, "below-minimum"),
+    (math.nextafter(2.0, math.inf), False, "above-maximum"),
+    (.007 / 100, True, "decimal-collision"),
+    (2**-149, True, "float32-subnormal"),
+    (math.nextafter(2**-150, math.inf), True, "above-half"),
 )
 
-
-@pytest.mark.parametrize("scope,version,status,value,accepted", [
-    pytest.param(scope, version, status, value, accepted, id=f"{scope}-{version}-{status}-{label}")
-    for version, status, value, accepted, label in WIRE_VALUES
-    for scope in (("global", "effect_group") if version == "prior" or label in {"int-zero", "float32-subnormal"} else ("global",))])
-def test_buff_wire_domain_authenticates_representation_without_redividing(scope, version, status, value, accepted):
-    document, source_before = {}, b""
-    if version == "current":
-        document, _ = _buff_speed_source(scope, 20)
-        source_before = _bytes(document)
-        wire = compile_runtime_program(document)
-        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], authored_document=document, final_document=wire)["ok"]
-        name, reason = BUFF_SPEED_PERCENT, "scalar receipt is outside its exact declared wire domain"
-    else:
-        wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary"))
-        name, reason = BUFF_SPEED_FACTOR, "compiler receipt used an undeclared authored parameter"
-        accepted = False
-    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)["ok"] is (version == "current")
-    assert validate_runtime_wire(wire)["ok"] is (version == "current")
-    receipt = _buff_speed_receipt(wire, name)
-    receipt.update(status=status, value=value)
+@pytest.mark.parametrize("scope,value,accepted", [
+    pytest.param(scope, value, accepted, id=f"{scope}-{label}")
+    for value, accepted, label in WIRE_VALUES
+    for scope in (("global", "effect_group") if label in {"int-zero", "float32-subnormal"} else ("global",))
+])
+def test_buff_wire_domain_authenticates_representation_without_redividing(scope, value, accepted):
+    document, _ = _buff_speed_source(scope, 20)
+    source_before = _bytes(document)
+    wire = compile_runtime_program(document)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
+    receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
+    receipt["value"] = value
     owner, _, key = receipt["finalPath"].rpartition(".")
     _get(wire, owner)[key] = value
     wire = json.loads(_bytes(wire))
@@ -564,56 +535,37 @@ def test_buff_wire_domain_authenticates_representation_without_redividing(scope,
     report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"], final_document=wire)
     assert report["ok"] is accepted, report
     assert validate_runtime_wire(wire)["ok"] is accepted
-    if version == "current":
-        assert CAPABILITY_REGISTRY[FN].params[name].matches_scalar_projection(value) is accepted
-        assert _bytes(document) == source_before
+    assert CAPABILITY_REGISTRY[FN].params[BUFF_SPEED_PERCENT].matches_scalar_projection(value) is accepted
     if not accepted:
-        assert any(row["reason"] == reason and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
-    assert _bytes(wire) == before
+        assert any(row["reason"] == "scalar receipt is outside its exact declared wire domain"
+                   and row["finalPath"] == receipt["finalPath"] for row in report["violations"])
+    assert _bytes(wire) == before and _bytes(document) == source_before
 
 
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-@pytest.mark.parametrize("old_name", [BUFF_SPEED_FACTOR, "movementSpeed"])
-def test_prior_author_names_are_rejected_without_inference_or_source_mutation(scope, old_name):
-    document, call = _buff_speed_source(scope)
-    call["params"][old_name] = 0.2
-    before = _bytes(document)
-    report = validate_runtime_program(document)
-    assert any(row["code"] == "shape_additional_property" and row["path"].endswith(".params." + old_name)
-               for row in report["errors"])
-    with pytest.raises(ValueError):
-        compile_runtime_program(document)
-    old = next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_ordinary")
-    assert not audit_compiler_receipts(old["runtimeContract"]["finalWireReceipts"],
-                                       authored_document=document, final_document=old)["ok"]
-    assert _bytes(document) == before
-
-@pytest.mark.parametrize("scope", ["global", "effect_group"])
-@pytest.mark.parametrize("mutation", ["drop", "duplicate", "current-and-prior", "wrong-slot", "wrong-fn", "wrong-status", "source-list"])
-def test_retained_omission_needs_one_exact_prior_source_claim_for_the_wire_slot(scope, mutation):
-    wire = deepcopy(next(case["wire"] for case in BUFF_FACTOR_CASES if case["id"] == scope + "_omitted"))
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    old = _buff_speed_receipt(wire)
-    if mutation == "drop":
-        rows.remove(old)
-    elif mutation == "duplicate":
-        rows.append(deepcopy(old))
-    elif mutation == "current-and-prior":
-        current = deepcopy(old)
-        current["authoredPath"] = current["authoredPath"].removesuffix(BUFF_SPEED_FACTOR) + BUFF_SPEED_PERCENT
-        rows.append(current)
-    elif mutation == "wrong-slot":
-        old["finalPath"] = old["finalPath"].removesuffix("movementSpeed") + "jumpBoost"
-    elif mutation == "wrong-fn":
-        old["fn"] = "item_stats"
-    elif mutation == "wrong-status":
-        old["status"] = "alias_lowering"
-    else:
-        old["authoredPaths"] = [old["authoredPath"]]
-    before = _bytes(wire)
-    assert not audit_compiler_receipts(rows, final_document=wire)["ok"]
+@pytest.mark.parametrize("scope,percent", [("global", 20), ("effect_group", None)])
+def test_old_buff_speed_author_name_and_receipt_are_refused(scope, percent):
+    source, call = _buff_speed_source(scope, percent)
+    wire = compile_runtime_program(source)
+    receipt = _buff_speed_receipt(wire, BUFF_SPEED_PERCENT)
+    receipt["authoredPath"] = receipt["authoredPath"].removesuffix(BUFF_SPEED_PERCENT) + BUFF_SPEED_FACTOR
+    before_wire = _bytes(wire)
+    for context in (source, None):
+        report = audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                         authored_document=context, final_document=wire)
+        assert not report["ok"]
+        assert any(row["reason"] == "compiler receipt used an undeclared authored parameter"
+                   and row["finalPath"] == receipt["finalPath"] for row in report["violations"]), report
     assert not validate_runtime_wire(wire)["ok"]
-    assert _bytes(wire) == before
+    assert _bytes(wire) == before_wire
+
+    call["params"][BUFF_SPEED_FACTOR] = 0.2
+    before = _bytes(source)
+    report = validate_runtime_program(source)
+    assert any(row["code"] == "shape_additional_property"
+               and row["path"].endswith(".params." + BUFF_SPEED_FACTOR) for row in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(source)
+    assert _bytes(source) == before
 
 
 @pytest.mark.parametrize("mutation", ["missing-marker", "stale-marker", "stale-source", "wrong-output"])

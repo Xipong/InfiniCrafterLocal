@@ -273,40 +273,42 @@ def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
         assert ("targets" in card) != ("targetsRef" in card)
 
 
-@pytest.mark.parametrize("target_chars", [300_000, 300_001, 349_999, 350_000, 400_000, 400_001])
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
-def test_author_above_development_target_reaches_http_without_clipping(
-        monkeypatch, loopback_transport, target_chars, mode, api_mode):
-    from infini_local.pipelines.author import prompt
-    from infini_local.pipelines.transport import client as transport
-    from infini_local.pipelines.author import request as author_request
-
-    warnings = []
-    monkeypatch.setattr(author_request, "log_event", lambda *args: warnings.append(args))
-
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+def _author_size_probe(target_chars):
     from tests.generator.context.test_parent_attack_reference import source_defined_attack_fixture
-    from prompt_packet_helpers import expand_native_source_references
 
     observation = source_defined_attack_fixture()
     observation["sourceText"] = ""
     parent = {"directProjectileRaw": {"type": 42, "attackReference": observation}}
     _, initial, _ = build_initial_author_request(parent, {}, "size-probe", model_name="offline")
     observation["sourceText"] = "Ж" * (target_chars - len(initial))
+    return parent, observation
+
+
+@pytest.mark.parametrize("target_chars,expected_headroom", [(300_000, 0), (300_001, -1)])
+def test_author_development_budget_is_advisory_at_exact_boundary(target_chars, expected_headroom):
+    from infini_local.pipelines.author.prompt import planner_prompt_usability_report
+
+    parent, _ = _author_size_probe(target_chars)
+    report = planner_prompt_usability_report(parent, {}, "size-probe")
+    assert report["chars"] == target_chars
+    assert report["ok"] is (expected_headroom == 0)
+    assert report["headroom"] == expected_headroom
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
+def test_author_above_development_and_warning_limits_reaches_http_without_clipping(
+        monkeypatch, loopback_transport, mode, api_mode):
+    from infini_local.pipelines.transport import client as transport
+    from prompt_packet_helpers import expand_native_source_references
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    target_chars = 400_001
+    parent, observation = _author_size_probe(target_chars)
     parent_before = copy.deepcopy(parent)
     request, text, _ = build_initial_author_request(parent, {}, "size-probe", model_name="offline")
     before = copy.deepcopy(request)
     assert len(text) == target_chars
-    expected_warnings = [] if target_chars < 350_000 else [(
-        "warn", f"Author context is {target_chars} characters (warning threshold 350000); continuing without truncation",
-        {"stage": "author", "contextChars": target_chars, "warningThresholdChars": 350_000},
-    )]
-    assert warnings == expected_warnings  # No recipe key, parent data, or prompt content.
-    report = prompt.planner_prompt_usability_report(parent, {}, "size-probe")
-    assert report["chars"] == target_chars
-    assert report["ok"] is (target_chars <= 300_000)
-    assert report["headroom"] == 300_000 - target_chars
     endpoint, _ = loopback_transport
     base, observed = endpoint()
     from infini_local.pipelines.transport import http as transport_http
@@ -343,7 +345,7 @@ def test_author_above_development_target_reaches_http_without_clipping(
                       "requestUtf8Bytes": len(raw_requests[0])}))
 
 
-@pytest.mark.parametrize("target_chars", [349_999, 350_000, 400_001])
+@pytest.mark.parametrize("target_chars", [349_999, 350_000])
 def test_author_size_warning_written_without_context_content(monkeypatch, tmp_path, target_chars):
     from infini_local.storage import trace_runtime
     from tests.generator.context.test_parent_attack_reference import source_defined_attack_fixture

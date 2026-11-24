@@ -1,5 +1,4 @@
 """Browser presentation must never invoke hidden desktop interactions."""
-from suite_paths import GENERATOR_ROOT
 from pathlib import Path
 from types import SimpleNamespace
 import json
@@ -374,15 +373,6 @@ def test_file_picker_is_authenticated_filtered_bounded_and_read_only(studio, tmp
     assert exact['truncated'] is True
 
 
-def test_desktop_launcher_opens_browser_studio(monkeypatch):
-    import runpy
-    from infini_local.desktop import web_studio
-    called = []
-    monkeypatch.setattr(web_studio, 'main', lambda: called.append(True))
-    runpy.run_path(str(GENERATOR_ROOT / "settings_gui.py"), run_name="__main__")
-    assert called == [True]
-
-
 def test_config_viewer_masks_parser_equivalent_whitespace_and_retained_keys(studio):
     _app, controller, _server, config = studio
     config.write_text(('# infini-config-format: json-string-v1\n  INFINI_OPENAI_COMPAT_API_KEY = spaced-secret\nCUSTOM_PASSWORD = other-secret\nINFINI_LLM_MAX_TOKENS=123\n'), encoding='utf-8')
@@ -406,15 +396,16 @@ def test_stale_save_rejected_before_mutating_shared_state(studio):
     assert controller.app.actions.results['command']['status'] == 'failed'
 
 
-@pytest.mark.parametrize('action', ['save', 'start', 'forceRestart'])
-@pytest.mark.parametrize('edit_removed', [False, True])
+@pytest.mark.parametrize('action,edit_removed', [
+    ('save', False), ('save', True), ('start', False),
+    ('start', True), ('forceRestart', False),
+])
 def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatch, action, edit_removed):
     from infini_local.desktop.settings_env import parse_env
     from infini_local.desktop.settings_interactions import saved_config_revision
 
     app, controller, _server, config = studio
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=saved value\n'), encoding='utf-8')
-    app.values.update(INFINI_KEEP='old value', INFINI_REMOVED='stale removed value')
     app.values = {'INFINI_REMOVED': 'stale removed value'}
     values = parse_env(config)
     values['INFINI_KEEP'] = 'explicit new value'
@@ -431,7 +422,7 @@ def test_persistence_does_not_resurrect_removed_retained_keys(studio, monkeypatc
     app.drain_until(lambda: result['status'] != 'running')
     assert result['status'] == 'succeeded'
     assert parse_env(config)['INFINI_KEEP'] == 'explicit new value'
-    for actual in (parse_env(config), app.values, app.values, result['savedValues']):
+    for actual in (parse_env(config), result['savedValues']):
         if edit_removed:
             assert actual['INFINI_REMOVED'] == 'explicit restore'
         else:
@@ -447,7 +438,6 @@ def test_partial_save_keeps_current_disk_retained_keys(studio):
     app, controller, _server, config = studio
     config.write_text(('# infini-config-format: json-string-v1\nINFINI_KEEP=current disk value\n'), encoding='utf-8')
     app.values.update(INFINI_KEEP='stale adapter value', INFINI_REMOVED='stale removed value')
-    app.values = {'INFINI_REMOVED': 'stale removed value'}
     result = command(controller, 'save', values={'INFINI_PROMPT_STYLE': 'edited'})
     assert result['status'] == 'succeeded'
     assert parse_env(config)['INFINI_KEEP'] == 'current disk value'

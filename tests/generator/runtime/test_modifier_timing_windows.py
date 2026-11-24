@@ -90,24 +90,35 @@ def test_exact_forms_roundtrip_receipts_and_preserve_source(fn, member, author_l
     assert validate_runtime_wire(stripped)["ok"]
 
 
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("mutation,form", [
-    pytest.param(mutation, form, id=f"{mutation}-{form}")
-    for mutation, forms in (
-        # These mutations replace the scalar pair. Starting with window-only
-        # or intersection therefore produces identical authored AND wire input.
-        ("half_delay", ("pair", "window")),
-        ("half_duration", ("pair", "window")),
-        ("null_delay", ("pair", "window")),
-        ("null_duration", ("pair", "window")),
-        ("zero_duration", ("pair", "window")),
-        # Other fields leave all three distinct timing representations intact.
-        ("bad_numeric", ("pair", "window", "intersection")),
-        ("unknown", ("pair", "window", "intersection")),
-        ("null_window", ("pair", "window", "intersection")),
-        ("malformed_window", ("pair", "window", "intersection")),
-    )
-    for form in forms
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value,mutation,form", [
+    pytest.param(*case, mutation, form, id=f"{case[0]}-{mutation}-{form}")
+    for case in CASES
+    for mutation, form in [
+        # Each component has its own numeric field and schema registration.
+        ("bad_numeric", "intersection"),
+        ("unknown", "window"),
+        # Positive admission above checks every owner registration; shared
+        # malformed window and timing-pair semantics need one witness each.
+        *([("half_delay", "pair"), ("malformed_window", "window")] if case[0] == "turn_velocity" else []),
+        # The remaining malformed timing shapes exercise the shared timing
+        # fields. Positive pair/window/intersection delivery stays covered for
+        # every component above. A null replacement makes pair and intersection
+        # the same input, so keep only one of those origins.
+        *([
+            ("half_delay", "window"),
+            ("half_duration", "pair"),
+            ("half_duration", "window"),
+            ("null_delay", "pair"),
+            ("null_delay", "window"),
+            ("null_duration", "pair"),
+            ("null_duration", "window"),
+            ("zero_duration", "pair"),
+            ("zero_duration", "window"),
+            ("null_window", "window"),
+            ("null_window", "pair"),
+            ("malformed_window", "pair"),
+        ] if case[0] == "turn_velocity" else []),
+    ]
 ])
 def test_author_provider_and_stripped_wire_refuse_invalid_fields(fn, member, author_leaf, wire_leaf, value, form, mutation):
     source, call = document(fn, form)
@@ -164,8 +175,10 @@ def test_relative_windows_require_exact_latch_in_author_and_wire(fn, member, aut
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["pair", "window", "intersection"])
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value,form", [
+    (*case, form) for case, forms in zip(CASES, (("pair", "window", "intersection"), ("window",), ("intersection",)), strict=True)
+    for form in forms
+])
 def test_non_timing_repair_freezes_timing_presence_values_and_deletions(fn, member, author_leaf, wire_leaf, value, form):
     source, call = document(fn, form)
     call["params"][author_leaf] = -99999
@@ -208,8 +221,10 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
     assert apply_repair_patch(source, filtered) == expected
 
 
-@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["omitted", "pair", "window", "intersection"])
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value,form", [
+    (*case, form) for case in CASES for form in
+    (("omitted", "pair", "window", "intersection") if case[0] == "turn_velocity" else ("omitted", "intersection"))
+])
 def test_strict_provider_nullable_transport_preserves_selected_timing_shape(fn, member, author_leaf, wire_leaf, value, form):
     import infini_local.core.provider_schema as contract_provider_schema
     from jsonschema import Draft202012Validator

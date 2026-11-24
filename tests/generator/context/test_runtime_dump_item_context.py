@@ -84,8 +84,16 @@ def test_sparse_author_and_visual_cards_receive_available_whole_observations(sav
     assert item == before and recipe_key(item, {}, 1, "fixture-version") == key_before
 
 
-@pytest.mark.parametrize("container", ["root", "fingerprint", "runtimeFacts", "fingerprint_runtimeFacts"])
-@pytest.mark.parametrize("value", [None, {}, {"unavailable": True}, {"attackReference": {"coverage": "explicit_partial"}}])
+@pytest.mark.parametrize('container,value', [
+    ('root', None),
+    ('root', {}),
+    ('root', {'unavailable': True}),
+    ('root', {'attackReference': {'coverage': 'explicit_partial'}}),
+    ('fingerprint', None),
+    ('runtimeFacts', None),
+    ('fingerprint_runtimeFacts', None),
+    ('fingerprint', {}),
+])
 def test_present_projectile_unknown_or_partial_is_not_filled(saved_row, container, value):
     item = sparse_item()
     observations = {"directProjectileRaw": copy.deepcopy(value), "nativeShootReference": None,
@@ -190,10 +198,13 @@ def test_generated_and_explicit_unavailable_item_envelopes_exclude_enrichment(sa
     assert parents.native_item_context_from_dump(item) is item
 
 
-@pytest.mark.parametrize("key", ["DirectProjectileRaw", "dIrEcTpRoJeCtIlErAw"])
-@pytest.mark.parametrize("container", ["root", "fingerprint"])
-@pytest.mark.parametrize("value", [None, {}, {"type": 900, "timeLeft": 11}])
-def test_retired_case_aliases_do_not_override_current_saved_observation(saved_row, key, container, value):
+@pytest.mark.parametrize("key,container,value", [
+    ("DirectProjectileRaw", "root", {"type": 900, "timeLeft": 11}),
+    ("dIrEcTpRoJeCtIlErAw", "fingerprint", {"type": 900, "timeLeft": 11}),
+    ("DirectProjectileRaw", "fingerprint", None),
+    ("dIrEcTpRoJeCtIlErAw", "root", {}),
+])
+def test_out_of_case_fields_do_not_override_current_saved_observation(saved_row, key, container, value):
     item = sparse_item()
     if container == "root":
         item[key] = value

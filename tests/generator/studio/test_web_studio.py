@@ -194,11 +194,9 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         app.on_close()
 
 
-def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monkeypatch):
+def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path):
     from infini_local.desktop.settings_controller import SettingsController
-    from infini_local.desktop.settings_schema import DEFAULTS
     from infini_local.desktop.settings_env import parse_env
-    monkeypatch.setitem(DEFAULTS, 'INFINI_LLM_MAX_TOKENS', '18000')
     config = tmp_path / 'config.env'
     original = ((b'# infini-config-format: json-string-v1\n# isolated consent proof\r\nINFINI_LLM_MAX_TOKENS=9000\r\n'
                 b'INFINI_USE_LLM=0\r\nINFINI_IMAGE_BACKEND=off\r\n'
@@ -217,24 +215,19 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
         assert {row['key'] for row in offer['changes']} == {'INFINI_LLM_MAX_TOKENS'}
         assert config.read_bytes() == original
         app.update_values({'INFINI_PROMPT_STYLE': 'Unsaved controller draft'})
-        preset = app.preset
-        baseline = dict(app._profile_baseline)
-        def forbidden(*_args, **_kwargs):
-            pytest.fail('Defaults decisions must not save/collect/capture the entire draft')
-        monkeypatch.setattr(app, 'save', forbidden)
-        monkeypatch.setattr(app, 'collect', forbidden)
-        monkeypatch.setattr(app, '_capture_profile_baseline', forbidden)
         app.lan_enabled = False
         controller.apply({'id': 'accept-offer', 'action': 'acceptDefaults',
                           'values': {'INFINI_PRIVATE_UNKNOWN': 'malicious-draft', 'INFINI_PROMPT_STYLE': 'sent-draft'},
                           'extra': {'revision': offer['revision'], 'lanEnabled': True}})
-        assert config.read_bytes() == original.replace(b'9000', b'"18000"')
-        assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
+        recommended = offer["changes"][0]["recommended"]
+        key = b"INFINI_LLM_MAX_TOKENS="
+        untouched = lambda raw: [line for line in raw.splitlines(keepends=True) if not line.startswith(key)]
+        assert untouched(config.read_bytes()) == untouched(original)
+        assert parse_env(config)["INFINI_LLM_MAX_TOKENS"] == recommended
+        assert app.values["INFINI_LLM_MAX_TOKENS"] == recommended
         assert app.values['INFINI_PROMPT_STYLE'] == 'Unsaved controller draft'
         assert app.values['INFINI_PRIVATE_UNKNOWN'] == 'keep'
         assert app.lan_enabled is False
-        assert app.preset == preset
-        assert app._profile_baseline == baseline
         assert parse_env(config)['INFINI_PROMPT_STYLE'] == 'Default'
         assert controller.app.actions.last_action['ok'] is True
     finally:

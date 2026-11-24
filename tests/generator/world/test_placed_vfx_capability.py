@@ -77,18 +77,12 @@ def test_selector_rejects_foreign_or_unconsumed_branches(change):
     assert not validate_vfx_manifest_wire(wire)['ok']
 
 
-def test_absent_component_has_no_selectable_binding_and_old_manifest_bytes_unchanged():
-    from vfx_material_fixtures import _legacy
-    wire=compile_runtime_program(_dual_use_placeable());raw=_legacy(wire)
-    old=_compile_manifest(wire,raw,'old')
-    assert 'placementBindingId' not in json.dumps(old)
-    selected={'schema':VFX_DIRECTOR_SCHEMA,'slots':[light_slot()]}
-    assert not validate_vfx_director_output(selected,wire)['ok']
-    assert not validate_vfx_director_output(raw,wire)['ok']
-    wire['vfxManifest']=old
-    before=copy.deepcopy(wire)
-    assert not validate_vfx_manifest_wire(wire)['ok']
-    assert wire==before
+def test_placed_selector_is_rejected_without_authored_component():
+    wire = compile_runtime_program(_dual_use_placeable())
+    declared_slot = {"schema": VFX_DIRECTOR_SCHEMA, "slots": [light_slot()]}
+    assert not validate_vfx_director_output(declared_slot, wire)["ok"]
+    wire["vfxManifest"] = _compile_manifest(wire, declared_slot, "missing_placed_vfx")
+    assert not validate_vfx_manifest_wire(wire)["ok"]
 
 
 def test_authored_reference_and_receipts_are_exact_and_repair_leaf_frozen():

@@ -54,9 +54,14 @@ internal static partial class EngineRuntimeChecks
                 string.Join(",", identities), "ordered item/projectile boundaries survive incremental scheduling");
             string[] items = File.ReadAllLines(Path.Combine(root, manifest["files"]!["items"]!["path"]!.GetValue<string>()));
             Equal(9, items.Length, "air/null row skipped while failed row retained");
-            JsonObject failed = JsonNode.Parse(items[2])!.AsObject();
+            var itemRows = items.Select(line => JsonNode.Parse(line)!.AsObject()).ToArray();
+            Equal("1,2,4,5,6,7,8,9,10", string.Join(",", itemRows.Select(row => row["type"]!.GetValue<int>())),
+                "failed capture retains its ordered slot and does not hide later rows");
+            Equal(0, itemRows[0]["damage"]!.GetValue<int>(), "zero source facts remain literal");
+            JsonObject failed = itemRows[2];
             Equal(4, failed["type"]!.GetValue<int>(), "failed type retained");
             Equal(true, failed["unavailable"]!.GetValue<bool>(), "failed hook remains explicitly unavailable");
+            Equal(nameof(InvalidOperationException), failed["captureError"]!.GetValue<string>(), "bounded diagnostic is exception type only");
             Equal(false, items[2].Contains("private hook detail", StringComparison.Ordinal), "exception details not exported");
             Equal(1, manifest["files"]!["items"]!["unavailableRows"]!.GetValue<int>(), "manifest retains exact failed-row count");
             Equal(6, manifest["files"]!["projectiles"]!["rows"]!.GetValue<int>(), "projectile channel boundary not lost");

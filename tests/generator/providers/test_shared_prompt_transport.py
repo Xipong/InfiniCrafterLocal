@@ -15,12 +15,17 @@ def test_nullable_guidance_is_absent_without_schema(response_format):
     assert provider_nullable_transport_rule(response_format) == ""
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("provider,base,api,model", [
-    ("openai_compat", "https://api.openai.com/v1", "chat_completions", "gpt-6.1-sol"),
-    ("openai_compat", "https://api.openai.com/v1", "responses", "gpt-6.1-sol"),
-    ("openai_codex", "https://chatgpt.com/backend-api/codex", "responses", "gpt-6.1-sol"),
-    ("openrouter", "https://openrouter.ai/api/v1", "chat_completions", "anthropic/claude-opus-4.6"),
+@pytest.mark.parametrize('stage,provider,base,api,model', [
+    ('author', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('author', 'openai_compat', 'https://api.openai.com/v1', 'responses', 'gpt-6.1-sol'),
+    ('author', 'openai_codex', 'https://chatgpt.com/backend-api/codex', 'responses', 'gpt-6.1-sol'),
+    ('author', 'openrouter', 'https://openrouter.ai/api/v1', 'chat_completions', 'anthropic/claude-opus-4.6'),
+    ('repair', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('visual', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('visual_repair', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('vfx', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('vfx_repair', 'openai_compat', 'https://api.openai.com/v1', 'chat_completions', 'gpt-6.1-sol'),
+    ('repair', 'openai_compat', 'https://api.openai.com/v1', 'responses', 'gpt-6.1-sol'),
 ])
 def test_shared_guidance_reaches_wire_once_and_fallback_retains_contract(monkeypatch, stage, provider, base, api, model):
     packet, = stage_packets(monkeypatch, stage, format_mode="json_schema", labels=("shared-guidance",))

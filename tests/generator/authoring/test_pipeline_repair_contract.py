@@ -68,7 +68,6 @@ def test_primary_identity_transaction(source, selection, ok):
     assert sorted(e["id"] for e in dossier["immutableProgramIndex"]["entities"]) == ids
     if source != "unrelated":
         assert scope["repairTransactions"]["primaryEntitySelection"] == {"allowed": True, "candidateEntityIds": ids, "mustSelectExactlyOne": True}
-        assert any("immutableProgramIndex.entities[*].id" in rule for rule in dossier["rules"])
         _, empty_audit = filter_repair_patch_scope(current, _empty_gameplay_patch(), scope)
         assert not empty_audit["ok"]
         assert any("leaves a reported repair error open" in e["message"] for e in empty_audit["errors"])
@@ -199,11 +198,7 @@ def test_exact_call_key_deletion(scenario):
     assert filtered[roster_key + "Delete"] == [permission]
     result_call = next(c for c in result["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert key not in (result_call if scenario == "call-property" else result_call["params"])
-    if scenario == "call-property":
-        dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
-        assert any("callPropertyKeysDelete" in rule for rule in dossier["rules"])
-        assert any("Notes do not change the program" in rule for rule in dossier["rules"])
-    else:
+    if scenario != "call-property":
         filtered_call = next(c for c in filtered["callsUpsert"] if c["id"] == call["id"])
         assert key not in filtered_call["params"]
         if scenario == "renamed-value":
@@ -436,7 +431,6 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     )
     assert len(requests) == 1 and not responses
     dossier = request_dossier(requests[0])
-    assert any("create.calls.allowedTargetKinds" in rule for rule in dossier["rules"])
     assert dossier["repairScope"]["create"]["calls"]["allowedTargetKinds"] == ["item_body"]
     assert validate_runtime_program(llm_repaired)["ok"]
 

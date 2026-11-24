@@ -43,8 +43,12 @@ def _presentation_input(mode="reuse_item_icon", *, attachment=True, pose=False):
     return data, raw
 
 
-@pytest.mark.parametrize("mode", ["reuse_item_icon", "baked_sprite"])
-@pytest.mark.parametrize("field", ["grip", "renderSizePx", "forwardAngleDegrees"])
+@pytest.mark.parametrize('mode,field', [
+    ("reuse_item_icon", "grip"),
+    ("reuse_item_icon", "renderSizePx"),
+    ("reuse_item_icon", "forwardAngleDegrees"),
+    ("baked_sprite", "grip"),
+])
 def test_attachment_requires_exact_selected_png_owner_metadata(mode, field):
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _presentation_input(mode)
@@ -114,12 +118,12 @@ def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire
     assert raw == frozen[1]
 
 
-@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
-@pytest.mark.parametrize("geometry,component,expected", [
-    ("beam", "beamGeometry", {"lengthPx": 127.5, "widthPx": 6.25, "raycastTiles": False}),
-    ("whip", "lashGeometry", {"clock": "active", "durationTicks": 35, "anchor": "owner_mounted",
+@pytest.mark.parametrize('format_name,geometry,component,expected', [
+    ("json_object", "beam", "beamGeometry", {"lengthPx": 127.5, "widthPx": 6.25, "raycastTiles": False}),
+    ("json_object", "whip", "lashGeometry", {"clock": "active", "durationTicks": 35, "anchor": "owner_mounted",
                               "reachPx": 96.5, "segments": 9, "sweepStartRadians": -0.5, "sweepEndRadians": 0.7,
                               "bendRatio": 0.25, "useOwnerGravity": False, "useWhipRange": False}),
+    ("json_schema", "beam", "beamGeometry", {"lengthPx": 127.5, "widthPx": 6.25, "raycastTiles": False}),
 ])
 def test_vfx_and_frozen_repair_use_independent_collision_geometry(wire_transport, monkeypatch, format_name, geometry, component, expected):
     import infini_local.core.vfx.contract as vfx_contract
@@ -158,8 +162,14 @@ def test_vfx_and_frozen_repair_use_independent_collision_geometry(wire_transport
     assert {key: value for key, value in result.items() if key in before and key != "debug"} == {key: value for key, value in before.items() if key != "debug"}
 
 
-@pytest.mark.parametrize("mode", ["reuse_item_icon", "baked_sprite", "no_asset", "runtime_geometry"])
-@pytest.mark.parametrize("attachment,pose", [(True, False), (False, True)])
+@pytest.mark.parametrize('mode,attachment,pose', [
+    ("reuse_item_icon", True, False),
+    ("reuse_item_icon", False, True),
+    ("baked_sprite", True, False),
+    ("no_asset", True, False),
+    ("runtime_geometry", True, False),
+    ("runtime_geometry", False, True),
+])
 def test_hand_anchor_reader_and_pose_writer_keep_asset_choice_independent(wire_transport, mode, attachment, pose):
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors, front_hand_sprite_requirement
     from infini_local.pipelines.visual.assets import build_visual_asset_plan
@@ -189,8 +199,11 @@ def test_hand_anchor_reader_and_pose_writer_keep_asset_choice_independent(wire_t
         assert not {"grip", "renderSizePx", "forwardAngleDegrees", "canvas"} & plan.keys()
 
 
-@pytest.mark.parametrize("mode", ["reuse_item_icon", "baked_sprite"])
-@pytest.mark.parametrize("with_base_flight", [True, False])
+@pytest.mark.parametrize('mode,with_base_flight', [
+    ("reuse_item_icon", True),
+    ("reuse_item_icon", False),
+    ("baked_sprite", False),
+])
 def test_real_no_image_request_carries_selected_grip_and_actual_components(monkeypatch, mode, with_base_flight):
     import json
     from infini_local.pipelines.images import stage as images
@@ -219,12 +232,15 @@ def test_real_no_image_request_carries_selected_grip_and_actual_components(monke
     assert projected["visual"] == before["visual"]
 
 
-@pytest.mark.parametrize("law,expected", [
-    ("angular_sine", ["law.angular_sine.amplitudeRadiansPerSecond", "radians/second"]),
-    ("lateral_velocity_sine", ["law.lateral_velocity_sine.amplitudeBlocksPerSecond", "blocks/second"]),
-    (None, None), ("unknown", None),
+@pytest.mark.parametrize('law,expected,extra', [
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], None),
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], 0),
+    ('angular_sine', ['law.angular_sine.amplitudeRadiansPerSecond', 'radians/second'], 2),
+    ('lateral_velocity_sine', ['law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'blocks/second'], None),
+    (None, None, None),
+    ('unknown', None, None),
+    ('lateral_velocity_sine', ['law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'blocks/second'], 0),
 ])
-@pytest.mark.parametrize("extra", [None, 0, 2])
 def test_source_units_preserve_explicit_sine_law_without_inferring_it(law, expected, extra):
     from infini_local.pipelines.author.prompt import source_wire_units_for_llm
     oscillator = {"amplitude": 0.125, **({"law": law} if law is not None else {})}

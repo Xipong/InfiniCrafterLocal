@@ -24,8 +24,6 @@ def _cache(monkeypatch, tmp_path):
 
 def test_exact_stage_artifact_keeps_clean_bytes_and_sanitizes_only_credentials(monkeypatch, tmp_path):
     _cache(monkeypatch, tmp_path)
-    record = getattr(trace_runtime, 'trace_stage_request', None)
-    assert callable(record), 'trace owner needs a full stage request artifact, not a clipped rolling preview'
     clean = '{"parents":"' + ('ж' * 94000) + '","tail":"PARENT_TAIL","escaped":"\\u0410"}\r\n'
     secret = 'sk-fixturecredential123456789'
     request = {'messages': [
@@ -43,7 +41,7 @@ def test_exact_stage_artifact_keeps_clean_bytes_and_sanitizes_only_credentials(m
             assert dossier_text(json.loads(source.read_bytes())) == clean
         return native_replace(source, target)
     monkeypatch.setattr(trace_tools.os, 'replace', replace)
-    receipt = record('gameplay_author', 'r_exact', request, recipe_id='g_exact')
+    receipt = trace_runtime.trace_stage_request('gameplay_author', 'r_exact', request, recipe_id='g_exact')
     assert receipt['status'] == 'stored'
     path = tmp_path / receipt['path']
     raw = path.read_bytes()

@@ -1,26 +1,36 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from pathlib import Path
 
-from infini_local.core.env_file import read_env_file
+from infini_local.core.env_file import parse_env_text
 
 _TRUE_VALUES = {"1", "true", "yes", "on", "y", "t"}
 _FALSE_VALUES = {"0", "false", "no", "off", "n", "f"}
 
 
-def load_env_file(path: Path) -> None:
+def skip_config_file() -> bool:
+    return os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES
+
+
+def load_env_file(path: Path) -> str | None:
     """Load versioned config.env strings through the canonical codec.
 
     Existing process environment variables win over file values. This helper is
     deliberately tiny because the local generator must keep working on Windows
     GUI/bat launches without adding another dependency.
     """
-    if os.environ.get("INFINI_SKIP_CONFIG_FILE", "").strip().lower() in _TRUE_VALUES:
-        return
-    for key, value in read_env_file(path).items():
+    if skip_config_file():
+        return None
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    for key, value in parse_env_text(raw.decode("utf-8-sig")).items():
         os.environ.setdefault(key, value)
+    return hashlib.sha256(raw).hexdigest()
 
 
 def env_str(name: str, default: str = "", *, strip: bool = True) -> str:

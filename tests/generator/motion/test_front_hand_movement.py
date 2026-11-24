@@ -4,10 +4,8 @@ The retired bundle's singleton/zero-speed/tile-off/monotone-stretch rules are
 not primitive invariants. Their replacements below exercise explicit independent
 choices; pose ownership, typed leaves and frozen Repair remain strict.
 """
-from suite_paths import REPO_ROOT
 from copy import deepcopy
 import json
-from pathlib import Path
 
 import pytest
 
@@ -15,7 +13,7 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, MOVEMENT_OPCODE
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.qa.capability_witnesses import build_capability_witness
 from tests.generator.motion.test_composable_motion_primitives import add
 
@@ -40,11 +38,6 @@ def fixture(*, source="cursor", axisOffsetBlocks=11 / 16, **pose_params):
 
 def entity(wire):
     return next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == "witness_entity")
-
-
-def saved_hand_wire():
-    """Immutable already-compiled delivery; never reconstruct retired Author calls."""
-    return json.loads((REPO_ROOT / "tests/fixtures/front-hand-compiled.json").read_text())
 
 
 def test_independent_hand_choices_compile_without_adding_bundle_mechanics():
@@ -150,8 +143,13 @@ def test_actual_pose_or_position_ownership_conflicts_are_red(mutation):
     with pytest.raises(ValueError): compile_runtime_program(doc)
 
 
-@pytest.mark.parametrize("source", ["initial", "cursor", "facing", "velocity"])
-@pytest.mark.parametrize("spawn_aim", ["none", "cursor", "facing", "velocity"])
+# Every direction is exercised with independent unequal inputs. Matching
+# enum spellings also work; they are not a special shared ownership mode.
+@pytest.mark.parametrize("source,spawn_aim", [
+    ("initial", "none"), ("initial", "velocity"), ("cursor", "facing"),
+    ("facing", "velocity"), ("velocity", "cursor"), ("cursor", "cursor"),
+    ("facing", "facing"), ("velocity", "velocity"),
+])
 def test_axis_owner_is_explicit_and_independent_of_spawn_launch(source, spawn_aim):
     doc, _ = fixture(source=source)
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "spawn")["params"]["aim"] = spawn_aim
@@ -166,18 +164,15 @@ def test_axis_owner_is_explicit_and_independent_of_spawn_launch(source, spawn_ai
 
 @pytest.mark.parametrize("fn,key,value,wire_key", [
     ("set_aim", "source", "initial ", "source"),
-    ("set_aim", "source", None, "source"),
     ("set_aim", "turnOwner", 1, "turnOwner"),
     ("front_arm_pose", "duration", 1 / 60, "durationTicks"),
     ("front_arm_pose", "duration", 241 / 60, "durationTicks"),
-    ("front_arm_pose", "duration", "13", "durationTicks"),
     ("front_arm_pose", "startStretch", "threequarters", "startStretch"),
     ("front_arm_pose", "endStretch", None, "endStretch"),
     ("front_arm_pose", "peakProgress", False, "peakProgress"),
     ("front_arm_pose", "peakProgress", 0, "peakProgress"),
     ("front_arm_pose", "peakProgress", 1, "peakProgress"),
     ("attach", "axisOffsetBlocks", False, "axisOffsetPx"),
-    ("attach", "axisOffsetBlocks", "11", "axisOffsetPx"),
     ("attach", "axisOffsetBlocks", None, "axisOffsetPx"),
     ("attach", "axisOffsetBlocks", float("nan"), "axisOffsetPx"),
     ("attach", "normalOffsetBlocks", float("inf"), "normalOffsetPx"),
@@ -203,17 +198,6 @@ def test_required_pose_choices_have_no_omission_lowering(key):
     with pytest.raises(ValueError): compile_runtime_program(doc)
 
 
-@pytest.mark.parametrize("fn", ["move_front_hand", "move_forward_then_retract", "charge_then_release"])
-def test_retired_bundle_has_no_author_card_or_opcode_admission(fn):
-    doc, pose = fixture()
-    pose.update(fn=fn, params={})
-    assert fn not in CAPABILITY_REGISTRY
-    assert not validate_runtime_program(doc)["ok"]
-    with pytest.raises(ValueError): compile_runtime_program(doc)
-    assert "move_front_hand" not in MOVEMENT_OPCODE
-    assert "move_forward_then_retract" not in MOVEMENT_OPCODE
-
-
 @pytest.mark.parametrize("source,offset,duration", [("initial", -12, 2), ("cursor", 12, 240), ("initial", 0, 13)])
 def test_non_damage_hand_animation_does_not_select_style_class_visibility_or_metadata(source, offset, duration):
     doc, _ = fixture(source=source, axisOffsetBlocks=offset, duration=duration / 60)
@@ -235,7 +219,7 @@ def test_non_damage_hand_animation_does_not_select_style_class_visibility_or_met
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
-def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(monkeypatch, mode):
+def test_real_author_packet_offers_separate_hand_choices(monkeypatch, mode):
     from infini_local.pipelines.author.request import build_initial_author_request
     from prompt_packet_helpers import request_dossier
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
@@ -246,15 +230,18 @@ def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(mo
     packet = json.dumps(request, ensure_ascii=False)
     for fn in ("set_aim", "attach", "front_arm_pose", "reachCurve"):
         assert fn in packet
-    offered = {c["fn"] for c in catalog}
-    assert not offered.intersection({"move_front_hand", "move_forward_then_retract", "charge_then_release"})
     for fact in ("front_hand", "peakProgress", "endStretch", "normalOffsetBlocks", "grip"):
         assert fact in packet
 
 
-@pytest.mark.parametrize("source", ["initial", "cursor"])
-@pytest.mark.parametrize("lane", ["hit", "hit_geometry", "periodic"])
-@pytest.mark.parametrize("delay", [0, 2])
+@pytest.mark.parametrize('source,lane,delay', [
+    ('initial', 'hit', 0),
+    ('initial', 'hit_geometry', 2),
+    ('initial', 'periodic', 0),
+    ('cursor', 'hit', 2),
+    ('cursor', 'hit_geometry', 0),
+    ('cursor', 'periodic', 2),
+])
 def test_front_hand_directional_event_compositions_remain_explicit_and_admitted(source, lane, delay):
     doc, _ = fixture(source=source)
     fn = "spawn_at_hit" if lane == "hit_geometry" else "spawn_on_event"

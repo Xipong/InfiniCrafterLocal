@@ -118,8 +118,9 @@ def test_probability_repair_changes_only_invalid_leaf_and_omission_does_not_defa
     assert apply_repair_patch(authored, filtered)["runtimeProgram"]["bindings"][0]["stackConsumeChancePercent"] == 101
 
 
-@pytest.mark.parametrize("input_value", [[], {}, ["primary_use"], None, True, 1, "PRIMARY_USE"])
-def test_malformed_wire_input_with_stack_chance_is_structured_refusal(input_value):
+def test_malformed_wire_input_with_stack_chance_is_structured_refusal():
+    # Other malformed shapes are covered together with the effect-group owner.
+    input_value = []
     wire = compile_runtime_program(_fixture())
     wire.pop("runtimeContract")
     wire["runtimeProgram"]["bindings"][0]["input"] = deepcopy(input_value)

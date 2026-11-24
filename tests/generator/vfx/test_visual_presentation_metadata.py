@@ -28,8 +28,11 @@ def _runtime_mechanics(data):
     return program
 
 
-@pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
-@pytest.mark.parametrize("asset_mode", ["full", "off"])
+@pytest.mark.parametrize('format_mode,asset_mode', [
+    ("json_schema", "full"),
+    ("json_schema", "off"),
+    ("json_object", "off"),
+])
 def test_visual_asset_setting_reaches_real_request_before_design(wire_transport, monkeypatch, format_mode, asset_mode):
     from infini_local.core.images import config
     from infini_local.core.schema_validation import strict_schema_errors

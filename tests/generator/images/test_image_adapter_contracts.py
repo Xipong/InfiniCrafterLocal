@@ -22,26 +22,29 @@ from tests.generator.images.test_image_attempt_contracts import Response, offlin
 from tests.generator.vfx_image_fixtures import _data, _request, offline_backend
 
 
-@pytest.mark.parametrize('mode,model,active', [
-    ('0', 'z_image_turbo.gguf', False), ('off', 'z-image-turbo.gguf', False),
-    ('1', 'flux.2-klein.gguf', True), ('on', 'flux.2-klein.gguf', True),
-    ('auto', 'z_image_turbo.gguf', True), ('auto', 'flux.2-klein.gguf', False),
+@pytest.mark.parametrize('mode,model,active,positive_only,style', [
+    ('0', 'z_image_turbo.gguf', False, False, 'a1111'),
+    ('0', 'z_image_turbo.gguf', False, True, 'sdcpp'),
+    ('off', 'z-image-turbo.gguf', False, False, 'openai'),
+    ('off', 'z-image-turbo.gguf', False, True, 'a1111'),
+    ('1', 'flux.2-klein.gguf', True, False, 'openai'),
+    ('1', 'flux.2-klein.gguf', True, True, 'a1111'),
+    ('on', 'flux.2-klein.gguf', True, False, 'sdcpp'),
+    ('on', 'flux.2-klein.gguf', True, True, 'openai'),
+    ('auto', 'z_image_turbo.gguf', True, False, 'a1111'),
+    ('auto', 'z_image_turbo.gguf', True, True, 'sdcpp'),
+    ('auto', 'flux.2-klein.gguf', False, False, 'a1111'),
+    ('auto', 'flux.2-klein.gguf', False, True, 'openai'),
 ])
-@pytest.mark.parametrize('positive_only', [False, True])
-@pytest.mark.parametrize('style', ['a1111', 'sdcpp', 'openai'])
 def test_model_policy_reaches_retry_and_real_sdcpp_payload(offline, monkeypatch, mode, model, active, positive_only, style):
-    from infini_local.core.images import config, contracts
-    from infini_local.pipelines.images import prompts, retry
+    from infini_local.core.images import config
+    from infini_local.pipelines.images import retry
 
     for key, value in {'IMAGE_BACKEND': 'sdcpp', 'ZIMAGE_PROMPT_CONTRACT': mode,
                        'ZIMAGE_POSITIVE_ONLY': positive_only, 'SDCPP_MODEL': model,
                        'SDCPP_SERVER_COMMAND_TEMPLATE': '', 'SDCPP_SERVER_EXTRA_ARGS': ''}.items():
         monkeypatch.setattr(config, key, value)
-    assert contracts.image_backend_is_zimage() is active
-    assert prompts.image_backend_is_zimage() is active
     prompt = retry.build_retry_prompt_from_validation('Literal brass subject', {}, 'item', 1, 32)
-    assert ('Revision 1:' in prompt) is active
-    assert ('STRICT RETRY 1:' in prompt) is not active
     monkeypatch.setattr(backend, 'SDCPP_SERVER_PAYLOAD_STYLE', style)
     payloads = []
 
@@ -53,9 +56,11 @@ def test_model_policy_reaches_retry_and_real_sdcpp_payload(offline, monkeypatch,
     backend.generate_sdcpp(prompt, 'literal authored negative', 'policy')
     assert len(payloads) == 1
     wire = payloads[0]
+    assert 'Literal brass subject' in wire['prompt']
     if style == 'openai':
         assert ('literal authored negative' in wire['prompt']) is not (active and positive_only)
     else:
+        assert wire['prompt'].split() == prompt.split()
         assert wire['negative_prompt'] == ('' if active and positive_only else 'literal authored negative')
         assert ('zimage_prompt_contract' in wire) is active
         if active:

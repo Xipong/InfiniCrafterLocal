@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -213,8 +214,10 @@ class FishingResourceHandoffTests(unittest.TestCase):
 class CiAssetReceiptHandoffTests(unittest.TestCase):
     def test_actual_ci_gate_uses_canonical_loaded_byte_receipts_and_keeps_refusals(self):
         workflow = (w.ROOT/'.github/workflows/workbench-native.yml').read_text()
-        step = workflow.split('- name: Capture native vanilla weapon effects through probe\n', 1)[1]
-        script = textwrap.dedent(step.split("python - <<'PY'\n", 1)[1].split('          PY\n', 1)[0])
+        blocks = re.finditer(r"^([ ]*)python - <<'(\w+)'\n(.*?)^\1\2[ \t]*$",
+                             workflow, re.MULTILINE | re.DOTALL)
+        script, = (textwrap.dedent(match[3]) for match in blocks
+                   if 'vanilla-legacy-excalibur-run/native.json' in match[3])
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); captures = root/'artifacts/workbench-ci'
             index = dict(schemaVersion=1, communityCommit=COMMIT, sourceTreeSha='synthetic-tree',

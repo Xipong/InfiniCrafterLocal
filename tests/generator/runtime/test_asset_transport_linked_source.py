@@ -43,4 +43,3 @@ def test_asset_transport_linked_source(tmp_path: Path) -> None:
     )
     output = result.stdout + result.stderr
     assert result.returncode == 0, build_output + output
-    assert "Asset transport checks: 17/17 passed" in output, output

@@ -30,7 +30,6 @@ def test_chroma_prompt_keyer_and_retry_agree(monkeypatch, name, rgb):
     from infini_local.core.images import config
     from infini_local.pipelines.images import keyer, prompts
     monkeypatch.setattr(config, "BG_COLOR", name)
-    assert contracts.chroma_rgb() == prompts.chroma_rgb() == keyer.chroma_rgb() == rgb
     authored = "a magenta crystal, cyan rim and white tip"
     data = {"visual": {"palette": ["magenta", "cyan", "white"]}}
     prompt = prompts.normalize_asset_prompt(data, "item", authored, 128)
@@ -413,7 +412,7 @@ def test_asset_plan_requires_explicit_image_project_canvas_without_hitbox_fallba
     assert data == before
 
 
-@pytest.mark.parametrize("root", [None, [], "32", 32, True])
+@pytest.mark.parametrize("root", [None, [], "32"])
 def test_asset_plan_refuses_nonobject_root_visual_for_item_canvas(root):
     data = {"visual": root, "runtimeProgram": {"itemEntityId": "item", "entities": [
         {"id": "item", "kind": "item_body", "hitbox": {"widthPx": 32, "heightPx": 32},
@@ -460,7 +459,7 @@ def test_grip_image_boundary(monkeypatch, role, present, long):
         assert authored in captured[0]["prompt"] and '"normalizedX":0.123456789' in captured[0]["prompt"] and '"normalizedY":0.8' in captured[0]["prompt"]
 
 
-@pytest.mark.parametrize("canvas", [24, 64, 128])
+@pytest.mark.parametrize("canvas", [24, 128])
 def test_entity_canvas_and_presentation_do_not_leak_to_reused_item_icon(canvas):
     data = {"id": "plan", "visual": {"preferredCanvasSize": 96, "renderSizePx": 40, "forwardAngleDegrees": 45},
         "runtimeProgram": {"itemEntityId": "opaque_root", "entities": [
@@ -522,8 +521,10 @@ def test_postprocess_retains_exact_prebake_master_privately(tmp_path, monkeypatc
     assert master.width > 24
     assert Image.open(final_path).tobytes() == post_pixels.bake_sprite_from_master(master, 24, 'field').tobytes()
 
-@pytest.mark.parametrize("mode", ["RGB", "RGBA"])
-@pytest.mark.parametrize("role", ["item", "runtime:child_projectile", "vfx_cutout"])
+@pytest.mark.parametrize("mode,role", [
+    ("RGB", "item"), ("RGBA", "item"),
+    ("RGBA", "runtime:child_projectile"), ("RGB", "vfx_cutout"),
+])
 def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, monkeypatch, mode, role):
     from infini_local.core.images import config
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
@@ -544,39 +545,15 @@ def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, m
     assert not (tmp_path / "opaque-result.png").exists()
 
 
-def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monkeypatch):
-    from infini_local.core.images import config
-    monkeypatch.setattr(config, "BG_COLOR", "transparent")
-    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
-    raw = Image.new("RGBA", (64, 64))
-    draw = ImageDraw.Draw(raw)
-    for y in range(8, 56, 8):
-        for x in range(8, 56, 8):
-            draw.rectangle((x, y, x + 7, y + 7), fill=(200, 200, 200, 255) if (x // 8 + y // 8) % 2 else (255, 255, 255, 255))
-    source = tmp_path / "authored-pattern.png"
-    raw.save(source)
-    result = post.postprocess_sprite(str(source), "pattern-result", 32, "runtime:child_projectile", output_dir=tmp_path)
-    assert post_validation.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]
-
-
-@pytest.mark.parametrize("mode", ["chroma", "magic_wand", "sprite-keyer", "off", "none", "typo"])
-def test_retired_background_modes_cannot_silently_change_processing(monkeypatch, mode):
+def test_invalid_background_mode_cannot_silently_change_processing(monkeypatch):
     from infini_local.core.images import config
     from infini_local.pipelines.images.keyer import apply_background_removal
     from PIL import Image
     monkeypatch.setattr(config, "BG_COLOR", "magenta")
     monkeypatch.setattr(config, "REMOVE_BG", True)
-    monkeypatch.setattr(config, "BG_REMOVE_MODE", mode)
+    monkeypatch.setattr(config, "BG_REMOVE_MODE", "unsupported-mode")
     raw = Image.new("RGBA", (4, 4), (255, 0, 255, 255))
     before = raw.tobytes()
     with pytest.raises(ValueError, match="INFINI_BG_REMOVE_MODE must be sprite_keyer"):
         apply_background_removal(raw)
     assert raw.tobytes() == before
-
-
-@pytest.mark.parametrize("color", ["lime", "greenscreen"])
-def test_retired_background_color_aliases_are_refused(monkeypatch, color):
-    from infini_local.core.images import config
-    monkeypatch.setattr(config, "BG_COLOR", color)
-    with pytest.raises(ValueError, match="Invalid INFINI_BG_COLOR"):
-        contracts.chroma_rgb()

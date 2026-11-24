@@ -93,11 +93,12 @@ def test_first_visit_resume_completion_and_new_origin(onboarding_browser):
     page, server, config, original, requests = onboarding_browser
     page.goto(server.url)
     page.locator('#onboarding-dialog').wait_for(state='visible')
-    assert page.locator('#onboarding-title').inner_text() == 'Твоя идея. Новый предмет.'
+    active_step = page.locator('[data-onboarding-step][aria-current=step]')
+    assert active_step.get_attribute('data-onboarding-step') == '0'
     assert page.locator('#onboarding-title').evaluate('(e)=>document.activeElement===e')
     wait_progress(page, seen=True)
     page.locator('[data-onboarding-next]').click()
-    assert 'мозг' in page.locator('#onboarding-title').inner_text()
+    assert active_step.get_attribute('data-onboarding-step') == '1'
     assert page.locator('a[href="https://openrouter.ai/nvidia/nemotron-3.5-super-vl:free"]').count() == 1
     page.locator('[data-onboarding-next]').click()
     wait_progress(page, step=2)
@@ -107,7 +108,7 @@ def test_first_visit_resume_completion_and_new_origin(onboarding_browser):
     page.locator('#onboarding-launcher:not(:disabled)').wait_for()
     assert not page.locator('#onboarding-dialog').is_visible()
     page.locator('#onboarding-launcher').click()
-    assert 'характер' in page.locator('#onboarding-title').inner_text()
+    assert active_step.get_attribute('data-onboarding-step') == '2'
     page.locator('[data-onboarding-step="4"]').click()
     page.locator('[data-onboarding-next]').click()
     wait_progress(page, step=4, completed=True)
@@ -209,7 +210,8 @@ def test_current_step_keeps_readable_hover_and_keyboard_focus(onboarding_browser
     assert current.evaluate("e => getComputedStyle(e).outlineStyle !== 'none'")
     assert contrast() >= 4.5
     page.keyboard.press('Enter')
-    assert page.locator('#onboarding-title').inner_text() == 'Твоя идея. Новый предмет.'
+    active_step = page.locator('[data-onboarding-step][aria-current=step]')
+    assert active_step.get_attribute('data-onboarding-step') == '0'
 
 
 @pytest.mark.parametrize('language', ['ru', 'en'])

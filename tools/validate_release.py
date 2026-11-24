@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared validation execution for agentctl, CI and release wrappers.
+"""Shared validation execution for agentctl, CI and local release checks.
 
 The manifest owns commands and groups; existing tools own each actual gate.
 Missing native environments are reported explicitly, never as successful builds.
@@ -173,7 +173,6 @@ def refresh(group: str, manifest: dict[str, Any] | None = None) -> list[dict[str
 
 
 def main() -> int:
-    os.environ.setdefault("INFINI_PYTHON", sys.executable)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', choices=['runtime', 'config', 'docs'])
     parser.add_argument('--group', choices=['full', 'python', 'static', 'build'], default='full')

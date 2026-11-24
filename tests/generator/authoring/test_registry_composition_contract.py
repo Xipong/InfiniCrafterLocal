@@ -290,30 +290,6 @@ def test_planned_player_actions_are_requested_but_never_a_craft_gate() -> None:
     assert report["ok"] is True, report
 
 
-def test_final_wire_refuses_retired_entity_impact_visual_fields() -> None:
-    compiled = compile_runtime_program(build_runtime_fixture("workbench_blade"))
-    visual = compiled["runtimeProgram"]["entities"][0]["visual"]
-    visual.update(
-        {
-            "impactPrompt": "literal wooden impact",
-            "impactNegativePrompt": "text, watermark",
-            "impactSpritePath": "impact_wood.png",
-            "impactSpriteUrl": "/get_asset?file=impact_wood.png",
-            "impactSpriteStatus": "ready",
-            "impactSpriteTechnicalScore": 0.93,
-        }
-    )
-
-    before = deepcopy(compiled)
-    report = validate_runtime_wire(compiled)
-    assert {(row["path"], row["code"]) for row in report["errors"]} == {
-        ("$.runtimeProgram.entities[0].visual." + key, "unknown_final_wire_field")
-        for key in ("impactPrompt", "impactNegativePrompt", "impactSpritePath",
-                    "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore")
-    }
-    assert not report["ok"] and compiled == before
-
-
 def test_entity_kind_visual_role_and_sorted_event_receipts_remain_exact() -> None:
     authored = build_runtime_fixture("returning_potion")
     calls = authored["runtimeProgram"]["calls"]

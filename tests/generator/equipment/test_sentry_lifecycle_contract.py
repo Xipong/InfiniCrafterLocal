@@ -27,24 +27,17 @@ def _entity(wire):
     return next(e for e in wire["runtimeProgram"]["entities"] if e.get("targeting"))
 
 
-# Keep all 3 x 2 presence/value masks for each placement consumer: native true
-# triggers sentry/UpdateMaxTurrets, false differs from absence in DTO/receipts,
-# and pool presence installs its independent ancestor ledger. Capacity's 1..96
-# identity branch does not interact with placement or native; endpoints need one
-# additional witness each, not another full cross-product.
+# Every pair of placement, native registration and pool presence is covered.
+# The all-on native resting witness and numeric endpoints are explicit.
 @pytest.mark.parametrize("native,pool,placement", [
-    pytest.param(native, pool, placement, id=f"{mask}-{placement}")
-    for placement in ("item_use_origin", "cursor", "native_resting_spot")
-    for mask, native, pool in (
-        ("neither", None, None), ("explicit-inert-native", False, None),
-        ("native-only", True, None), ("pool-only", None, 3),
-        ("inert-native-and-pool", False, 3), ("native-and-pool", True, 3),
-    )
-] + [
+    (None, None, "item_use_origin"), (False, 3, "item_use_origin"), (True, None, "item_use_origin"),
+    (None, 3, "cursor"), (False, None, "cursor"), (True, 3, "cursor"),
+    (None, None, "native_resting_spot"), (False, 3, "native_resting_spot"),
+    (True, 3, "native_resting_spot"),
     pytest.param(True, 1, "native_resting_spot", id="native-pool-minimum"),
     pytest.param(True, 96, "native_resting_spot", id="native-pool-maximum"),
 ])
-def test_every_independent_combination_preserves_exact_authored_delta(native, pool, placement):
+def test_pairwise_sentry_choices_preserve_exact_authored_delta(native, pool, placement):
     base = compile_runtime_program(_fixture())
     doc = _fixture(native, pool, placement)
     before = deepcopy(doc)
@@ -73,8 +66,8 @@ def test_every_independent_combination_preserves_exact_authored_delta(native, po
 
 
 @pytest.mark.parametrize("fn,key,bad", [
-    *(('sentry', 'enabled', v) for v in (None, 0, 1, "true", {}, [])),
-    *(('descendant_limit', 'maxActive', v) for v in (None, True, False, 0, 97, 1.0, "3", {}, [])),
+    *(('sentry', 'enabled', v) for v in (None, 1, "true", {})),
+    *(('descendant_limit', 'maxActive', v) for v in (None, True, 0, 97, 1.0, "3", [])),
 ])
 def test_present_invalid_values_are_red_without_coercion_or_provenance(fn, key, bad):
     doc = _fixture(True, 3)

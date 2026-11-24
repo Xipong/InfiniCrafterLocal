@@ -255,8 +255,14 @@ def test_complete_instruction_declaration_rejects_malformed_authority(monkeypatc
         instruction_segment_index(packet)
 
 
-@pytest.mark.parametrize("stage", ["author", "repair", "visual", "visual_repair", "vfx", "vfx_repair"])
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize(("stage", "format_mode"), [
+    ("author", "json_schema"),
+    ("repair", "json_object"),
+    ("visual", "json_schema"),
+    ("visual_repair", "json_object"),
+    ("vfx", "json_object"),
+    ("vfx_repair", "json_schema"),
+])
 def test_local_responses_template_receives_one_initial_instruction_block(monkeypatch, stage, format_mode):
     packet = stage_packets(monkeypatch, stage, format_mode, labels=("local-responses-probe",))[0]
     original = copy.deepcopy(packet)
@@ -284,7 +290,11 @@ def test_local_responses_template_receives_one_initial_instruction_block(monkeyp
         original["messages"][0]["content"] + "\n\nDeveloper instructions:\n" + original["messages"][1]["content"])
     assert observed[1]["input"] == [{key: row[key] for key in ("role", "content")} for row in original["messages"][1:]]
     assert observed[1]["instructions"] == original["messages"][0]["content"]
-    assert observed[0]["text"] == observed[1]["text"]
+    if format_mode == "json_schema":
+        expected_format = {"type": "json_schema", **original["response_format"]["json_schema"]}
+    else:
+        expected_format = {"type": "json_object"}
+    assert observed[0]["text"] == observed[1]["text"] == {"format": expected_format}
     assert packet == original
 
 

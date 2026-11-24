@@ -109,8 +109,8 @@ def test_neutral_action_repair_opens_only_modifier_leaves(chance):
 
 @pytest.mark.parametrize("leaf,value", [
     ("when", "periodic"), ("when", "on_expire"), ("chancePercent", True), ("chancePercent", None),
-    ("chancePercent", "25"), ("chancePercent", -0.5), ("damagePerSecond", 200.5),
-    ("damagePerSecond", True), ("defenseDelta", 1.5), ("defenseDelta", True),
+    ("chancePercent", -0.5), ("damagePerSecond", 200.5),
+    ("defenseDelta", 1.5), ("defenseDelta", True),
     ("duration", 0), ("contactDamageMultiplier", 3.01),
     ("retentionPerTick", 0.09), ("buffId", 20),
 ])

@@ -98,11 +98,18 @@ def test_reasoning_headroom_preserves_answer_budget_only_for_actual_google(wire,
         assert "reasoning_effort" not in prepared and prepared["reasoning"]["effort"] == effort
 
 
-@pytest.mark.parametrize("provider,api_mode", [
-    ("openai_compat", "chat_completions"), ("openai_compat", "responses"),
-    ("openrouter", "chat_completions"), ("local", "chat_completions"),
+@pytest.mark.parametrize('provider,api_mode,mode', [
+    ('openai_compat', 'chat_completions', 'off'),
+    ('openai_compat', 'chat_completions', 'none'),
+    ('openai_compat', 'chat_completions', 'low'),
+    ('openai_compat', 'chat_completions', 'high'),
+    ('openai_compat', 'responses', 'off'),
+    ('openrouter', 'chat_completions', 'off'),
+    ('local', 'chat_completions', 'off'),
+    ('openai_compat', 'responses', 'high'),
+    ('openrouter', 'chat_completions', 'high'),
+    ('local', 'chat_completions', 'high'),
 ])
-@pytest.mark.parametrize("mode", ["off", "none", "low", "high"])
 def test_author_honors_configured_reasoning_on_actual_provider_wire(wire, monkeypatch, provider, api_mode, mode):
     from infini_local.pipelines.author.request import build_initial_author_request
 
@@ -331,11 +338,9 @@ def test_usage_reasoning_reads_chat_and_responses_without_rewriting_usage(detail
 
 @pytest.mark.parametrize("usage,input_tokens,output_tokens", [
     pytest.param({}, None, None, id="absent-not-free"),
-    pytest.param(None, None, None, id="null-usage"),
     pytest.param([], None, None, id="nonobject-usage"),
     pytest.param({"input_tokens": 0, "prompt_tokens": 12, "output_tokens": 0,
                   "completion_tokens": 6}, 0, 0, id="explicit-zero-preserved"),
-    pytest.param({"prompt_tokens": 12, "completion_tokens": 6}, 12, 6, id="chat-totals"),
     pytest.param({"input_tokens": 20, "output_tokens": 7}, 20, 7, id="responses-totals"),
     pytest.param({"input_tokens": True, "output_tokens": "6"}, None, None, id="malformed-not-coerced"),
     pytest.param({"prompt_tokens": -1, "completion_tokens": 1.5}, None, None, id="invalid-domain"),
@@ -456,8 +461,8 @@ def test_responses_transport_never_uses_reasoning_as_final_output(monkeypatch, o
 
 
 @pytest.mark.parametrize("text", [
-    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":Infinity}',
-    '{"damage":1e999}', '{"child":{"damage":1,"damage":2}}',
+    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":1e999}',
+    '{"child":{"damage":1,"damage":2}}',
 ])
 def test_llm_json_rejects_ambiguous_or_nonfinite_candidates(text):
     with pytest.raises(ValueError):

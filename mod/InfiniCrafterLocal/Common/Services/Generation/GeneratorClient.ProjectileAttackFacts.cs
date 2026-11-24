@@ -685,8 +685,6 @@ public sealed partial class GeneratorClient
             if (value.Operand is MethodBase method) return Symbol(method) + "[" + string.Join(",", inputs) + "]";
             return value.Op + "(" + string.Join(",", inputs) + (value.Operand is null ? "" : ";" + (SourceOperand(value.Operand)?.ToJsonString() ?? "null")) + ")";
         }
-        internal JsonArray LiteralProjectileSpawns(JsonObject program) => FiniteProjectileSpawns(program, selection);
-
         internal JsonArray FiniteProjectileSpawns(JsonObject program, AttackIdentitySelection? identity)
         {
             var references = new JsonArray();

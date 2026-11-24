@@ -916,18 +916,21 @@ def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_
     assert capture.code == status
     if status != 200:
         assert trace.read_text() == "retain diagnostic history\n"
-        assert combine_endpoint._GENERATION_ACCEPTING is True
+        assert combine_endpoint.generation_activity_snapshot()["accepting"] is True
         assert handler.rfile.read_calls == 0
     elif path == "/trace_clear":
         assert trace.read_bytes() == b""
     else:
-        assert combine_endpoint._GENERATION_ACCEPTING is False
+        assert combine_endpoint.generation_activity_snapshot()["accepting"] is False
         assert capture.payload["forced"] is True
         assert stopped.wait(2)
 
 
-@pytest.mark.parametrize("error", [OSError(22, "Invalid argument"), ValueError("I/O operation on closed file")])
-@pytest.mark.parametrize("method,path,status", [("GET", "/health", 200), ("GET", "/missing", 404), ("POST", "/combine", 200)])
+@pytest.mark.parametrize("error,method,path,status", [
+    (OSError(22, "Invalid argument"), "GET", "/health", 200),
+    (ValueError("I/O operation on closed file"), "GET", "/missing", 404),
+    (OSError(22, "Invalid argument"), "POST", "/combine", 200),
+])
 def test_broken_access_log_console_preserves_http_delivery(monkeypatch, tmp_path, error, method, path, status):
     from infini_local.storage import trace_runtime, trace_tools
     from contextlib import redirect_stdout
@@ -1050,8 +1053,8 @@ def test_visual_doctor_uses_current_processing_roles(tmp_path, monkeypatch, role
         assert baked.size == ((48, 48) if role == "runtime:projectile" else (32, 32))
 
 
-@pytest.mark.parametrize("role", ["projectile", "child", "unknown", "vfx_cutout", "vfx_strip"])
-def test_visual_doctor_rejects_retired_or_unknown_roles_before_image_request(monkeypatch, role):
+@pytest.mark.parametrize("role", ["unknown", "vfx_strip"])
+def test_visual_doctor_rejects_roles_outside_public_probe_before_image_request(monkeypatch, role):
     calls = []
     monkeypatch.setattr(server_utility_routes, "generate_visual_asset", lambda *_: calls.append("entity"))
     monkeypatch.setattr(server_utility_routes, "maybe_generate_sprite", lambda *_: calls.append("item"))

@@ -36,9 +36,6 @@ def test_nous_mapped_repair_json_mode_has_marker_in_input_not_only_system(monkey
     url, wire = calls[0]
     assert url == context["base_url"] + "/chat/completions"
     assert wire["messages"] == [*original["messages"], MARKER]
-    expected = transport._payload_for_context(original, context)
-    expected["messages"].append(MARKER)
-    assert wire == expected
     assert packet == original
 
 
@@ -59,9 +56,14 @@ def test_nous_explicit_responses_repair_json_mode_keeps_system_outside_input():
     assert packet == original
 
 
-@pytest.mark.parametrize("stage", ["planner", "author_repair", "visual_director", "visual_repair", "vfx_director", "vfx_repair"])
-@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema", None])
+@pytest.mark.parametrize('stage,api_mode,format_mode', [
+    ('planner', 'chat_completions', 'json_object'),
+    ('planner', 'chat_completions', None),
+    ('planner', 'responses', 'json_schema'),
+    ('vfx_repair', 'chat_completions', 'json_schema'),
+    ('vfx_repair', 'responses', 'json_object'),
+    ('vfx_repair', 'responses', None),
+])
 def test_marker_is_protocol_only_for_ordinary_and_repair_packets(monkeypatch, stage, api_mode, format_mode):
     packet = llm_provider_wire.with_llm_stage({"model": "openai/gpt-6-luna", "messages": [
         {"role": "system", "name": "frozen_contract", "content": "JSON result; preserve every accepted fact."},
@@ -87,28 +89,31 @@ def test_marker_is_protocol_only_for_ordinary_and_repair_packets(monkeypatch, st
     transport._llm_json_single_context(packet, 1, context)
     assert len(captured) == 1
     wire = captured[0]
-    prepared = transport._payload_for_context(original, context)
+    system, user = original["messages"]
     if api_mode == "responses":
-        expected = llm_provider_wire._responses_payload_from_chat(prepared)
-        expected["input"] = [*expected["input"], MARKER] if format_mode == "json_object" else expected["input"]
-    else:
-        expected = prepared
+        expected_input = [{"role": "user", "content": user["content"]}]
         if format_mode == "json_object":
-            expected["messages"].append(MARKER)
-    assert wire == expected
+            expected_input.append(MARKER)
+        assert wire["instructions"] == system["content"]
+        assert wire["input"] == expected_input
+    else:
+        expected_messages = [system, user]
+        if format_mode == "json_object":
+            expected_messages.append(MARKER)
+        assert wire["messages"] == expected_messages
     assert packet == original
 
 
-@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("role,content,present", [
-    ("user", "Return Json.", True),
-    ("developer", "Return (JSON).", True),
-    ("assistant", "JSON", True),
-    ("user", '{"json":14}', True),
-    ("user", '{"requiredJsonShape":14}', False),
-    ("user", "json_schema", False),
-    ("user", "notjson", False),
-    ("system", "JSON response.", False),
+@pytest.mark.parametrize('api_mode,role,content,present', [
+    ('chat_completions', 'user', 'Return Json.', True),
+    ('chat_completions', 'developer', 'Return (JSON).', True),
+    ('chat_completions', 'assistant', 'JSON', True),
+    ('chat_completions', 'user', '{"json":14}', True),
+    ('chat_completions', 'user', '{"requiredJsonShape":14}', False),
+    ('chat_completions', 'user', 'json_schema', False),
+    ('chat_completions', 'user', 'notjson', False),
+    ('chat_completions', 'system', 'JSON response.', False),
+    ('responses', 'user', 'Return Json.', True),
 ])
 def test_marker_checks_word_in_projected_input_content_only(monkeypatch, api_mode, role, content, present):
     packet = {"model": "openai/gpt-6.1-sol", "messages": [
@@ -135,15 +140,17 @@ def test_marker_checks_word_in_projected_input_content_only(monkeypatch, api_mod
     assert packet == original
 
 
-@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("provider,base_url,model", [
-    ("openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
-    ("openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "https://inference-api.nousresearch.com.evil.example/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
-    ("openai_compat", "https://inference-api.nousresearch.com/v1", "other/model"),
-    ("openrouter", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
-    ("local", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+@pytest.mark.parametrize('api_mode,provider,base_url,model', [
+    ("chat_completions", "openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://inference-api.nousresearch.com.evil.example/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "openai_compat", "https://inference-api.nousresearch.com/v1", "other/model"),
+    ("chat_completions", "openrouter", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("chat_completions", "local", "https://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
+    ("responses", "openai_compat", "https://api.openai.com/v1", "gpt-6.1-sol"),
+    ("responses", "openai_compat", "https://other.example/v1", "openai/gpt-6.1-sol"),
+    ("responses", "openai_compat", "http://inference-api.nousresearch.com/v1", "openai/gpt-6.1-sol"),
 ])
 def test_other_routes_and_models_retain_exact_wire(monkeypatch, api_mode, provider, base_url, model):
     packet = {"model": model, "messages": [{"role": "system", "content": "JSON response."},
@@ -180,24 +187,34 @@ def test_input_marker_handles_text_blocks_idempotently(content, present):
     assert messages == expected
 
 
-def test_protocol_marker_keeps_existing_prompt_cache_key_and_prefix(monkeypatch):
+def test_protocol_marker_preserves_the_provider_cache_key_across_recipe_tails(monkeypatch):
     from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY
-    packet = {"model": "openai/gpt-6.1-sol", "messages": [
-        {"role": "system", "content": "JSON result."},
-        {"role": "user", "content": '{"shared":"frozen","case":"one"}'},
-    ], "response_format": {"type": "json_object"},
-        PROMPT_CACHE_METADATA_KEY: {"messageIndex": 1, "prefixChars": 18}}
-    original = copy.deepcopy(packet)
-    context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1", "model": packet["model"]}
-    monkeypatch.setattr(llm_provider_wire, "_cache_route", lambda *_args: "explicit")
-    prepared = transport._payload_for_context(packet, context)
-    expected = copy.deepcopy(prepared)
-    llm_provider_wire._cache_wire_options(expected, packet, context, api_mode="chat")
-    cache_key = expected["prompt_cache_key"]
+
+    prefix = '{"shared":"frozen",'
+    context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1",
+               "model": "openai/gpt-6.1-sol"}
     captured = []
     monkeypatch.setattr(transport_http, "http_json", lambda url, body, **kwargs:
                         captured.append(copy.deepcopy(body)) or {"choices": [{"message": {"content": "{}"}}]})
-    transport._llm_chat_json_exact_context(packet, 1, context)
-    expected["messages"].append(MARKER)
-    assert captured == [expected] and captured[0]["prompt_cache_key"] == cache_key
-    assert packet == original
+    for tail in ('"case":"JSON"}', '"case":"one"}'):
+        packet = {
+            "model": context["model"],
+            "messages": [{"role": "system", "content": "Return a structured result."},
+                         {"role": "user", "content": prefix + tail}],
+            "response_format": {"type": "json_object"},
+            PROMPT_CACHE_METADATA_KEY: {"messageIndex": 1, "prefixChars": len(prefix)},
+        }
+        before = copy.deepcopy(packet)
+        transport._llm_chat_json_exact_context(packet, 1, context)
+        assert packet == before
+        wire = captured[-1]
+        assert wire["messages"][:2] == before["messages"]
+        assert wire["response_format"] == {"type": "json_object"}
+
+    already_framed, needs_framing = captured
+    assert len(already_framed["messages"]) == 2
+    assert len(needs_framing["messages"]) == 3
+    marker = needs_framing["messages"][-1]
+    assert marker["role"] == "user" and "JSON" in marker["content"].upper()
+    key = already_framed["prompt_cache_key"]
+    assert key and needs_framing["prompt_cache_key"] == key

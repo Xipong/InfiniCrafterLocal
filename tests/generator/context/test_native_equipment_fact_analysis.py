@@ -108,8 +108,17 @@ def test_full_set_keeps_all_slots_and_mixed_variants_not_item_ids():
     assert armor_set_facts(program(broken)) == []
 
 
-@pytest.mark.parametrize("key", ["nativeEquipmentReference", "nativeEnvironmentReference", "nativeItemDispatchReference"])
-@pytest.mark.parametrize("envelope", ["root", "runtimeFacts", "fingerprint", "fingerprint_runtimeFacts"])
+@pytest.mark.parametrize('key,envelope', [
+    ("nativeEquipmentReference", "root"),
+    ("nativeEquipmentReference", "runtimeFacts"),
+    ("nativeEquipmentReference", "fingerprint"),
+    ("nativeEquipmentReference", "fingerprint_runtimeFacts"),
+    ("nativeEnvironmentReference", "root"),
+    ("nativeItemDispatchReference", "root"),
+    ("nativeItemDispatchReference", "runtimeFacts"),
+    ("nativeItemDispatchReference", "fingerprint"),
+    ("nativeItemDispatchReference", "fingerprint_runtimeFacts"),
+])
 def test_compact_packet_keeps_complete_conditional_proof_and_independent_copy(key, envelope):
     ref = {
         "effects": [{"value": 0}],

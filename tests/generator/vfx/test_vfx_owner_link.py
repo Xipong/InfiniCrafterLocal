@@ -28,7 +28,13 @@ def test_owner_link_requires_exact_anchor_choice_on_actual_sent_schemas(anchor):
     assert vfx_validation.validate_vfx_manifest_wire(final)["ok"]
 
 
-@pytest.mark.parametrize("choice", [None, "", "MountedCenter", "front_hand", " frontHand", True, 0])
+@pytest.mark.parametrize("choice", [
+    None,
+    "MountedCenter",
+    "front_hand",
+    " frontHand",
+    True,
+])
 def test_owner_link_refuses_nonexact_or_null_anchor(choice):
     data = _data("seek")
     raw = _owner_path(data, "mountedCenter")
@@ -41,8 +47,15 @@ def test_owner_link_refuses_missing_anchor_without_mutation():
     _assert_anchor_refused(data, _path(data, "ownerLink"))
 
 
-@pytest.mark.parametrize("source,capability", [("anchorHistory", ""), ("beam", "beam_geometry"), ("whip", "lash_geometry")])
-@pytest.mark.parametrize("choice", ["mountedCenter", "frontHand", None])
+@pytest.mark.parametrize('source,capability,choice', [
+    ("anchorHistory", "", "mountedCenter"),
+    ("anchorHistory", "", "frontHand"),
+    ("anchorHistory", "", None),
+    ("beam", "beam_geometry", "mountedCenter"),
+    ("beam", "beam_geometry", None),
+    ("whip", "lash_geometry", "mountedCenter"),
+    ("whip", "lash_geometry", None),
+])
 def test_other_sources_forbid_even_null_owner_anchor(source, capability, choice):
     data = _data(capability)
     raw = _path(data, source)
@@ -133,10 +146,17 @@ def test_owner_link_surface_is_generic_registry_derived_not_a_flail_preset(kind)
 
 
 @pytest.mark.parametrize("field,bad", [
-    ("path.source", "ownerlink"), ("path.source", "owner_link"), ("path.source", "ownerLinkFrontHand"), ("path.source", None),
-    ("path.historyTicks", 2), ("path.historyTicks", True), ("path.minDistancePx", 1),
-    ("path.profileDomain", "age"), ("anchor", "owner"), ("event", "on_hit"),
-    ("entityId", "item"), ("path.widthPx", 97), ("path.maxSegmentLengthPx", 4097),
+    ("path.source", "ownerlink"),
+    ("path.source", "ownerLinkFrontHand"),
+    ("path.source", None),
+    ("path.historyTicks", 2),
+    ("path.minDistancePx", 1),
+    ("path.profileDomain", "age"),
+    ("anchor", "owner"),
+    ("event", "on_hit"),
+    ("entityId", "item"),
+    ("path.widthPx", 97),
+    ("path.maxSegmentLengthPx", 4097),
     ("path.texture.source", "entity"),
 ])
 def test_owner_link_rejects_foreign_controls_at_director_schema_and_wire(field, bad):

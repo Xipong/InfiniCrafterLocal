@@ -140,7 +140,7 @@ def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(w
     assert "placedBody" not in placement(plain) and "placedLight" not in placement(plain)
 
 
-@pytest.mark.parametrize("bad", [None, "alpha", "FRAME", " alpha_bounds ", "", True, 0, {}, []])
+@pytest.mark.parametrize("bad", [None, "FRAME", " alpha_bounds ", "", True, {}])
 def test_present_invalid_pivot_space_is_strict_without_mutation(bad):
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = bad

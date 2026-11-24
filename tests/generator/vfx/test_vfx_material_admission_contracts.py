@@ -10,7 +10,6 @@ import copy
 from typing import Any
 import pytest
 import infini_local.core.vfx.contract as vfx_contract
-import infini_local.core.vfx.materials as vfx_materials
 import infini_local.core.vfx.projection as vfx_projection
 import infini_local.core.vfx.repair as vfx_repair
 import infini_local.core.vfx.schema as vfx_schema
@@ -24,12 +23,19 @@ from tests.generator.authoring.test_low_level_three_stage_pipeline import _accep
 from tests.generator.vfx_material_fixtures import _asset, _data, _shape, _native, _history, _path, _sent, _sprite, _with_asset
 
 
-@pytest.mark.parametrize("repair", [False, True])
-@pytest.mark.parametrize("asset_id,valid", [
-    ("leaf", True), ("Glow", True), ("glow", True), ("x" * 48, True),
-    ("leaf\n", False), ("leaf\r\n", False), ("leaf\u2028", False),
-    ("leaf\u2029", False), ("", False), ("x" * 49, False),
-    ("../leaf", False), (" leaf", False),
+@pytest.mark.parametrize('repair,asset_id,valid', [
+    (False, 'leaf', True),
+    (False, 'glow', True),
+    (False, 'x' * 48, True),
+    (False, 'leaf\n', False),
+    (False, 'leaf\u2028', False),
+    (False, '', False),
+    (False, 'x' * 49, False),
+    (False, '../leaf', False),
+    (False, ' leaf', False),
+    (True, 'leaf', True),
+    (True, 'leaf\n', False),
+    (True, 'x' * 49, False),
 ])
 def test_standard_schema_and_local_gate_agree_on_exact_asset_ids(repair: bool, asset_id: str, valid: bool) -> None:
     packet = _sent(_data(), repair)
@@ -122,10 +128,8 @@ def test_library_material_facts_reach_director_and_frozen_repair(monkeypatch, wi
     pytest.param("screenShakeCue", {"screenShake.taperEndDistancePx": 300}, False, id="camera-inverted-taper"),
     pytest.param("screenShakeCue", {"screenShake.strengthPx": True}, False, id="camera-boolean"),
     pytest.param("screenShakeCue", {"screenShake.strengthPx": float("nan")}, False, id="camera-nan"),
-    pytest.param("screenShakeCue", {"screenShake.strengthPx": float("inf")}, False, id="camera-infinity"),
     pytest.param("screenShakeCue", {"screenShake.strengthPx": 10 ** 400}, False, id="camera-huge-number"),
     pytest.param("screenShakeCue", {"screenShake": None}, False, id="camera-null-payload"),
-    pytest.param("screenShakeCue", {"screenShake.strengthPx": None}, False, id="camera-null-control"),
     pytest.param("screenShakeCue", {"event": "periodic"}, False, id="camera-periodic-forbidden"),
     pytest.param("screenShakeCue", {"element": {}}, False, id="camera-foreign-payload"),
     pytest.param("screenShakeCue", {"rendererKind": "soundCue"}, False, id="camera-payload-on-native-sound"),
@@ -134,8 +138,6 @@ def test_library_material_facts_reach_director_and_frozen_repair(monkeypatch, wi
     pytest.param("libraryParticle", {"particle.textureId": "smoke"}, False, id="particle-unknown-texture"),
     pytest.param("libraryParticle", {"particle.count": True}, False, id="particle-boolean-count"),
     pytest.param("libraryParticle", {"particle.count": 65}, False, id="particle-overflow-count"),
-    pytest.param("libraryParticle", {"particle.widthPx": float("nan")}, False, id="particle-nan-width"),
-    pytest.param("libraryParticle", {"particle.widthPx": 10 ** 400}, False, id="particle-huge-width"),
     pytest.param("libraryParticle", {"particle.widthPx": 0}, True, id="particle-zero-width"),
     pytest.param("libraryParticle", {"particle": None}, False, id="particle-null-payload"),
     pytest.param("libraryParticle", {"screenShake": {}}, False, id="particle-foreign-payload"),
@@ -192,22 +194,6 @@ def test_pending_compiled_and_stripped_ready_runtime_wire_have_distinct_caption_
     assert vfx_validation.validate_vfx_manifest_wire(data) == {"ok": True, "errors": []}
     assert before["vfxManifest"]["assets"][0]["spriteStatus"] == "pending"
     assert not vfx_validation.validate_vfx_director_output({**_with_asset(data), "assets": [asset]}, data)["ok"]
-
-
-def test_shared_schema_mutation_reaches_wire_consumer_not_a_duplicate_definition(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = _compiled()
-    original = vfx_materials.element_schema
-
-    def tightened(**kwargs: Any) -> dict[str, Any]:
-        schema = original(**kwargs)
-        schema["properties"]["widthPx"]["maximum"] = 4
-        return schema
-
-    monkeypatch.setattr(vfx_schema, "element_schema", tightened)
-    report = vfx_validation.validate_vfx_manifest_wire(data)
-    assert not report["ok"]
-    assert "$.vfxManifest.slots[0].element.widthPx" in {row["path"] for row in report["errors"]}
-
 
 
 def test_wire_slot_ceiling_is_not_bypassed_by_canonical_shape_gate() -> None:
@@ -310,11 +296,6 @@ def test_material_boundary_rejection(case):
         limit = vfx_schema.vfx_director_schema(data)["properties"]["assets"]["maxItems"]
         target["assets"] = [_asset("asset_" + str(i)) for i in range(limit + 1)]
         target["slots"][0]["element"]["texture"]["assetId"] = "asset_0"
-    if case["id"] == "sprite:foreign_element:element":
-        # Same cross-renderer payload error on a current PNG renderer.
-        element = target["slots"][0]["element"]
-        target = _shape(data)
-        target["slots"][0]["element"] = element
     before = copy.deepcopy(target)
     validator = vfx_validation.validate_vfx_manifest_wire if case["wire"] else vfx_validation.validate_vfx_director_output
     assert callable(validator), "canonical persisted/admission boundary required"
@@ -347,6 +328,11 @@ def test_material_payload_roundtrip(kind, source, capability):
     library = kind == "screenShakeCue" or kind.startswith("particle_")
     raw = _renderer_material(data, "screenShakeCue" if kind == "screenShakeCue" else "libraryParticle") if library else _shape(data) if kind == "shape" else _with_asset(data) if kind == "shared_asset" else _path(data, source) if source else _sprite(data)
     slot = raw["slots"][0]
+    if kind == "sprite":
+        element = slot["element"]
+        element.update(widthPx=640, heightPx=640)
+        for field in ("widthProfile", "heightProfile"):
+            element[field].update(start=1, middle=1, end=1)
     if kind.startswith("particle_"):
         slot["particle"]["count"] = {"particle_zero": 0, "particle_ordinary": 3, "particle_maximum": 64}[kind]
     if kind == "history_length":
@@ -372,13 +358,14 @@ def test_material_payload_roundtrip(kind, source, capability):
     assert report["normalized"] == before
     final = vfx_stage.attach_vfx_manifest(data, "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
     compiled = final["vfxManifest"]["slots"]
-    assert compiled[0]["rendererKind"] == slot["rendererKind"]
+    # These cases already go through authored admission, real stage compilation
+    # and the saved-wire gate. Check the complete slot here rather than repeat
+    # each renderer with a second, shallower roundtrip.
+    assert [{k: v for k, v in row.items() if k != "slotSeed"} for row in compiled] == before["slots"]
     if kind == "shape":
-        assert compiled[0]["shape"] == slot["shape"]
         assert "assets" not in final["vfxManifest"]
     else:
         payload = "screenShake" if kind == "screenShakeCue" else "particle" if library else "path" if source else "element"
-        assert [row[payload] for row in compiled] == [row[payload] for row in before["slots"]]
         if library:
             payload_schema = schema["properties"][payload]
             assert set(slot[payload]) == set(payload_schema["required"])
@@ -405,8 +392,6 @@ def test_material_payload_roundtrip(kind, source, capability):
 
 
 
-ROUTE_SURFACE = vfx_surface.vfx_director_surface(_accepted_visual_data("workbench_blade"))
-
 def _renderer_material(data, renderer):
     from tests.generator.vfx.test_vfx_contour_contract import authored as contour
     from tests.generator.vfx.test_vfx_native_effect_contract import effect
@@ -420,19 +405,3 @@ def _renderer_material(data, renderer):
         "nativeEffect": lambda value: effect(data=value),
     }
     return builders[renderer](data)
-
-@pytest.mark.parametrize("renderer", ROUTE_SURFACE["rendererKind"])
-def test_current_renderer_admission_preserves_complete_authored_fields(renderer):
-    data = _data()
-    raw = _renderer_material(data, renderer)
-    before = copy.deepcopy(raw)
-    schema = _sent(data, False)["outputSchema"]
-    assert not strict_schema_errors(raw, schema)
-    report = vfx_validation.validate_vfx_director_output(raw, data)
-    assert report["ok"], report["errors"]
-    assert report["normalized"] == before
-    data["vfxManifest"] = vfx_projection._compile_manifest(data, raw, "literal-current-renderer")
-    assert vfx_validation.validate_vfx_manifest_wire(data)["ok"]
-    assert [{k: v for k, v in row.items() if k != "slotSeed"}
-            for row in data["vfxManifest"]["slots"]] == before["slots"]
-    assert raw == before

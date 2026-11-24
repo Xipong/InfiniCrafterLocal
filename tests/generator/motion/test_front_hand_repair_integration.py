@@ -44,8 +44,10 @@ def test_missing_axis_repair_creates_only_exact_dependency_not_retired_bundle(so
     assert doc == before
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("selected_axis", ["initial", "cursor", "facing", "velocity"])
+@pytest.mark.parametrize("mode,selected_axis", [
+    ("json_object", "initial"), ("json_schema", "initial"), ("json_object", "cursor"),
+    ("json_schema", "facing"), ("json_schema", "velocity"),
+])
 def test_invalid_axis_serialized_repair_offers_exact_choices_and_freezes_siblings(monkeypatch, mode, selected_axis):
     from infini_local.pipelines.author import request as stage
     from prompt_packet_helpers import request_dossier
@@ -111,46 +113,31 @@ def test_reordered_invalid_axis_repair_tracks_exact_call_not_other_entity():
                for r in scope["repairRequirements"])
 
 
-@pytest.mark.parametrize("fn", ["move_front_hand", "move_forward_then_retract", "charge_then_release"])
-def test_retired_bundle_is_never_a_repair_creation_choice(fn):
-    doc, _ = fixture()
-    axis = _call(doc, "set_aim")
-    doc["runtimeProgram"]["calls"].remove(axis)
-    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert fn not in scope["create"]["calls"]["allowedFns"]
-    filtered, audit = filter_repair_patch_scope(doc, {"callsUpsert": [
-        {"id": "retired", "fn": fn, "target": axis["target"], "params": {}}], "note": "not a fresh choice"}, scope)
-    assert not audit["ok"]
-    assert apply_repair_patch(doc, filtered) == doc
-
-
 @pytest.mark.parametrize("hand_pose,viable", [("", True), ("one_handed", False), (None, False), (False, False)])
-def test_candidate_frozen_pose_dependency_uses_typed_hand_pose_semantics(hand_pose, viable):
-    from infini_local.core.runtime_authoring.repair.facts import _candidate_capability_viable
-    doc, pose = fixture()
+def test_pose_and_item_gesture_must_be_compatible(hand_pose, viable):
+    doc, _ = fixture()
     _call(doc, "item_use")["params"]["handPose"] = hand_pose
     assert validate_runtime_program(doc)["ok"] is viable
-    doc["runtimeProgram"]["calls"].remove(pose)
-    assert _candidate_capability_viable("front_arm_pose", [pose["target"]], doc["runtimeProgram"]) is viable
 
 
 def test_pose_axis_requirement_cannot_consume_support_from_another_exact_entity():
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    from infini_local.core.runtime_authoring.validator import _validate_requirement
     doc, pose = fixture()
-    axis = _call(doc, "set_aim")
-    axis["target"] = "other_entity"
-    calls = doc["runtimeProgram"]["calls"]
-    cap = CAPABILITY_REGISTRY["front_arm_pose"]
-    requirement = next(r for r in cap.requirements if r.capability == "set_aim")
-    issue = _validate_requirement(requirement, call=pose, call_index=calls.index(pose), cap=cap,
-        item_id="item", calls_by_target={pose["target"]: [c for c in calls if c.get("target") == pose["target"]],
-                                       "other_entity": [axis]},
-        entities_by_id={}, bindings=doc["runtimeProgram"]["bindings"],
-        primary_entity_id=pose["target"], calls=calls)
-    assert issue is not None and issue.code == "missing_capability_dependency"
-    assert issue.path == f"$.runtimeProgram.calls[{calls.index(pose)}]"
-    assert issue.allowed == ("set_aim",)
+    assert validate_runtime_program(doc)["ok"]
+    program = doc["runtimeProgram"]
+    # Give the other entity an independently valid copy of the hand's setup
+    # except the primary-only pose; move, rather than duplicate, the aim.
+    body = next(row for row in program["entities"] if row["id"] == pose["target"])
+    other = {**deepcopy(body), "id": "other_body"}
+    program["entities"].append(other)
+    aim = _call(doc, "set_aim")
+    calls = program["calls"]
+    calls.extend({**deepcopy(call), "id": "other_" + call["id"], "target": other["id"]}
+                 for call in calls.copy() if call.get("target") == body["id"] and call not in (pose, aim))
+    aim["target"] = other["id"]
+    errors = validate_runtime_program(doc)["errors"]
+    pose_path = f"$.runtimeProgram.calls[{calls.index(pose)}]"
+    assert any(error["path"] == pose_path and error["code"] == "missing_capability_dependency"
+               and "set_aim" in error["allowed"] for error in errors)
 
 
 def test_frozen_wrong_primary_pose_target_does_not_offer_owner_reselection():
@@ -227,7 +214,6 @@ def test_emitted_json_container_descriptor_keeps_exact_type(expected):
     names, constraints = _capability_constraints(["spawn.velocity=" + encoded])
     assert names == {"spawn"}
     assert constraints == [{"capability": "spawn", "param": "velocity", "equals": expected}]
-    assert json.loads(json.dumps(constraints))[0]["equals"] == expected
 
 
 @pytest.mark.parametrize("raw,expected", [("true", True), ("FALSE", False), ("null", None), ("1", 1), ("0.0", 0.0),

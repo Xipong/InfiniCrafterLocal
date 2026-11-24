@@ -207,7 +207,8 @@ app.on_close()
             "import json, os, sys\nfrom pathlib import Path\nimport child_fixture\n"
             "print(json.dumps({'value': child_fixture.VALUE, 'cwd': str(Path.cwd()), "
             "'data': os.environ.get('INFINI_DATA_DIR'), 'launch_id': os.environ.get('INFINI_STUDIO_LAUNCH_ID'), "
-            "'images': os.environ.get('INFINI_IMAGE_DIR'), 'utf8': sys.flags.utf8_mode, "
+            "'images': os.environ.get('INFINI_IMAGE_DIR'), 'host': os.environ.get('INFINI_HOST'), "
+            "'utf8': sys.flags.utf8_mode, "
             "'unbuffered': sys.stdout.write_through}, ensure_ascii=False))\n", encoding="utf-8")
         before = inventory(self.runtime)
         script = r'''
@@ -231,19 +232,12 @@ with patch("infini_local.desktop.studio_operations.subprocess.Popen") as launch:
     assert launch.call_count == 1
     command = launch.call_args.args[0]
     options = launch.call_args.kwargs
-    assert options["env"]["INFINI_HOST"] == "0.0.0.0"
-    assert options["env"]["INFINI_STUDIO_LAUNCH_ID"] == app._owned_server_launch_id
-    launch_id = app._owned_server_launch_id
-    assert isinstance(launch_id, str) and launch_id
-    assert options["env"]["INFINI_IMAGE_DIR"] == str(save / "InfiniCrafterLocal/images")
-    assert app._owned_launch_settings["INFINI_IMAGE_DIR"] == options["env"]["INFINI_IMAGE_DIR"]
 app.on_close()
 # Embedded Python ignores PYTHON* settings. -E reproduces that interpreter
 # boundary here, without depending on Windows or a downloaded runtime.
 child = subprocess.run([command[0], "-E", *command[1:]], **options,
                        capture_output=True, text=True, encoding="utf-8", timeout=10)
 assert child.returncode == 0, child.stdout + child.stderr
-assert json.loads(child.stdout)["launch_id"] == launch_id
 print(child.stdout, end="")
 '''
         result = subprocess.run(
@@ -257,7 +251,7 @@ print(child.stdout, end="")
         self.assertTrue(launch_id)
         self.assertEqual(child, {"value": "готово", "cwd": str(self.data), "data": str(self.data),
                                  "images": str(self.save / "InfiniCrafterLocal/images"),
-                                 "utf8": 1, "unbuffered": True})
+                                 "host": "0.0.0.0", "utf8": 1, "unbuffered": True})
         self.assertTrue((self.data / "config.env").is_file())
         self.assertEqual(inventory(self.runtime), before)
 

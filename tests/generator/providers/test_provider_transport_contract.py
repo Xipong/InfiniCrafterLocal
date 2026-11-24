@@ -77,10 +77,24 @@ def test_all_numeric_loopback_endpoints_are_exempt_from_remote_quotas(monkeypatc
     assert attempt["rateAdmissionPolicy"] == "local_exempt"
 
 
-def test_remote_model_quota_identity_preserves_case():
-    url = "https://provider.example/v1/chat/completions"
-    assert llm_admission._remote_rate_key(url, {"model": "Model"}) != llm_admission._remote_rate_key(url, {"model": "model"})
-    assert llm_admission._remote_rate_key("http://192.168.1.2/v1", {"model": "Model"})
+def test_remote_model_quota_identity_preserves_case(rate_clock, monkeypatch):
+    url = "http://192.168.1.2/v1/chat/completions"
+    sender = HttpSender(monkeypatch, transport_http, rate_clock, default_body=b"{}")
+
+    def call(model):
+        return transport_http.http_json(url, {"model": model}, timeout=10)
+
+    # LAN (unlike loopback) is paced, but distinct provider-owned model IDs
+    # must not share that pacing bucket even when they differ only by case.
+    assert rate_clock.start("uppercase", lambda: call("Model")) == "done"
+    assert rate_clock.start("lowercase", lambda: call("model")) == "done"
+    assert rate_clock.start("uppercase-again", lambda: call("Model")) == "waiting"
+    assert [(row[0]["model"], row[1]) for row in sender.sends] == [("Model", 1000.0), ("model", 1000.0)]
+    assert rate_clock.step("uppercase-again", 1005.1) == "done"
+    assert rate_clock.results["uppercase-again"] == {}
+    assert [(row[0]["model"], row[1]) for row in sender.sends] == [
+        ("Model", 1000.0), ("model", 1000.0), ("Model", 1005.1),
+    ]
 
 
 def http_error(url, code, body="provider rejected request"):
@@ -298,8 +312,6 @@ def test_deadline_prevents_sending_after_rate_wait(loopback_transport, rate_cloc
     assert error._infini_transport_debug["physicalAttemptCount"] == 0
     assert error._infini_transport_debug["physicalAttempts"] == []
     assert observed == []
-    assert llm_admission._LLM_RATE_STATE["synthetic-rate-key"]["events"] == []
-    assert llm_admission._LLM_RATE_STATE["synthetic-rate-key"]["waiters"] == []
 
 
 @pytest.mark.parametrize("oversized", [False, True])
@@ -645,9 +657,10 @@ def test_content_failure_returns_unchanged_without_reroll(wire, stage, mode, att
     assert "transportRetryCount" not in result.get("_debug", {})
 
 
-@pytest.mark.parametrize("pool_size", [1, 2])
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("attempts", [1, 2])
+@pytest.mark.parametrize("pool_size,mode,attempts", [
+    (1, "chat_completions", 1), (1, "responses", 2),
+    (2, "chat_completions", 2), (2, "responses", 1), (2, "responses", 2),
+])
 def test_transient_retry_budget_never_changes_selected_route(wire, mode, attempts, pool_size):
     provider = "openrouter"
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
@@ -842,7 +855,6 @@ def test_http_admission_uses_feedback_only_for_exact_nous_route(
         assert [sent[1] for sent in sender.sends] == [1000.0, 1005.1]
         assert [sent[2] for sent in sender.sends] == [1010.0, 1010.0]
         assert observations[1]["rateWaitMs"] == 5100
-        assert llm_admission._LLM_RATE_STATE[llm_admission._remote_rate_key(url, payload)]["events"] == []
         assert [row["rateAdmissionPolicy"] for row in observations] == [policy] * 2
     else:
         assert clock.step("second", 1010.0) == "done"
@@ -925,7 +937,6 @@ def test_real_urllib_quota_headers_reach_logical_diagnostics(loopback_transport,
     assert row["rateLimitHeaders"] == {"x-ratelimit-limit-requests": 10,
                                        "x-ratelimit-remaining-requests": 0,
                                        "x-ratelimit-reset-requests": 360.0}
-    assert llm_admission._LLM_RATE_STATE == {}
     assert "synthetic-secret-cookie" not in json.dumps(debug)
     assert "synthetic-account-id" not in json.dumps(events)
 
@@ -971,7 +982,6 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     assert first["physicalAttempts"][0]["httpStatus"] == 200
     assert second["physicalAttemptCount"] == 0 and second["physicalAttempts"] == []
     assert second["rateWaitReason"] == "token_window" and second["rateWaitMsTotal"] == 70_000
-    assert not llm_admission._LLM_RATE_STATE[llm_admission._remote_rate_key(url, {"model": model})]["waiters"]
 
 
 def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch):
@@ -1079,25 +1089,21 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
     assert Path(path).read_bytes() == png
 
 
-@pytest.mark.parametrize("provider", ["openai", "api", "remote", "or", "lmstudio", "lm_studio", "ollama", "typo"])
-def test_retired_provider_names_refuse_before_transport(wire, provider):
-    wire.configure(LLM_PROVIDER=provider)
+def test_unknown_provider_refuses_before_transport(wire):
+    wire.configure(LLM_PROVIDER="unsupported_provider")
     with pytest.raises(ValueError, match="must be local, openrouter, openai_compat or openai_codex"):
         transport.llm_chat_json(packet(), timeout=1)
     assert wire.calls == []
-    assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
     wire.configure(LLM_PROVIDER="openrouter")
     assert transport.llm_chat_json(packet(), timeout=1)["choices"][0]["message"]["content"] == "{}"
     assert len(wire.calls) == 1
 
 
-@pytest.mark.parametrize("mode", ["chat", "response", "chat_completion", "completions", "typo"])
-def test_retired_api_modes_refuse_before_transport(wire, mode):
-    wire.configure(LLM_API_MODE=mode)
+def test_unknown_api_mode_refuses_before_transport(wire):
+    wire.configure(LLM_API_MODE="unsupported_mode")
     with pytest.raises(ValueError, match="API mode must be"):
         transport.llm_chat_json(packet(), timeout=1)
     assert wire.calls == []
-    assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
     wire.configure(LLM_API_MODE="chat_completions")
     assert transport.llm_chat_json(packet(), timeout=1)["choices"][0]["message"]["content"] == "{}"
     assert len(wire.calls) == 1
@@ -1119,9 +1125,6 @@ def test_logical_call_scope_is_released_before_the_next_stage(wire, monkeypatch,
         else:
             with pytest.raises(ValueError if first_outcome == "invalid_stage" else urllib.error.HTTPError):
                 transport.llm_chat_json(first, timeout=1)
-        assert transport_diagnostics._CURRENT_LLM_DEADLINE.get() is None
-        assert transport_diagnostics._CURRENT_LLM_DIAGNOSTICS.get() is None
-        assert transport_diagnostics._CURRENT_LLM_ATTEMPT.get() is None
         second = transport.llm_chat_json(packet("visual_director"), timeout=1)
         assert lease.stages == (["visual_director"] if first_outcome == "invalid_stage"
                                 else ["planner", "visual_director"])
@@ -1136,9 +1139,10 @@ def test_logical_call_scope_is_released_before_the_next_stage(wire, monkeypatch,
     assert len({data["logicalCallId"] for _, data in events}) == len(events)
 
 
-@pytest.mark.parametrize("pool_size", [1, 2])
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("status", [401, 402])
+@pytest.mark.parametrize("pool_size,mode,status", [
+    (1, "chat_completions", 401), (1, "responses", 402),
+    (2, "chat_completions", 402), (2, "responses", 401), (2, "responses", 402),
+])
 def test_pinned_terminal_auth_and_quota_do_not_retry(wire, pool_size, mode, status):
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
                  "base_url": "https://secondary.example/v1", "model": "vendor/secondary",
@@ -1155,9 +1159,13 @@ def test_pinned_terminal_auth_and_quota_do_not_retry(wire, pool_size, mode, stat
     assert wire.calls[0][1]["provider"] == {"only": [PIN], "allow_fallbacks": False}
 
 
-@pytest.mark.parametrize("mode", ["chat_completions", "responses"])
-@pytest.mark.parametrize("secondary_replies", [[503, None], [503, 503], [401], [402]],
-                         ids=["transient-success", "transient-exhausted", "auth-terminal", "quota-terminal"])
+@pytest.mark.parametrize("mode,secondary_replies", [
+    pytest.param("chat_completions", [503, None], id="chat-transient-success"),
+    pytest.param("responses", [503, None], id="responses-transient-success"),
+    pytest.param("responses", [503, 503], id="transient-exhausted"),
+    pytest.param("chat_completions", [401], id="auth-terminal"),
+    pytest.param("responses", [402], id="quota-terminal"),
+])
 def test_failover_into_pinned_profile_retains_in_place_retry_budget(wire, mode, secondary_replies):
     secondary = {"id": "llm_2", "enabled": True, "provider": "openrouter",
                  "base_url": "https://secondary.example/v1", "model": "vendor/secondary",

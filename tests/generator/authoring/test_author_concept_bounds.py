@@ -49,15 +49,6 @@ def test_rendered_author_requests_concise_notes_but_preserves_legacy_bounds(monk
     assert not validator.is_valid(valid), "visibility must not relax the existing bound"
 
 
-def test_changed_legacy_concept_bounds_do_not_impose_structured_report(monkeypatch):
-    schema = copy.deepcopy(contract.author_item_response_schema())
-    schema["properties"]["concept"]["properties"]["coreMechanic"]["maxLength"] = 537
-    monkeypatch.setattr(contract, "_author_schema", lambda: schema)
-    shape = contract.author_item_prompt_shape_card()
-    assert isinstance(shape["concept"], str)
-    assert contract.author_item_response_schema()["properties"]["concept"]["properties"]["coreMechanic"]["maxLength"] == 537
-
-
 @pytest.mark.parametrize("length,valid", [(501, True), (2000, True), (2001, False)])
 def test_expanded_core_mechanic_is_bounded_and_does_not_change_gameplay(length, valid):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program

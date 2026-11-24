@@ -19,6 +19,7 @@ import uuid
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
+from infini_local.core.llm_negotiation_notice import safe_notices
 from infini_local.storage import trace_tools
 from infini_local.core import http_io
 from infini_local.core.server_endpoint import resolve_server_endpoint
@@ -562,6 +563,7 @@ class StudioOperations:
         busy = any(name in self.actions.tasks for name in ('server-action', 'health-config'))
         return {
             'lifecycle': self.__dict__.get('_server_lifecycle', 'unknown'),
+            'llm_negotiation': ack.get('llmNegotiation', []) if ack else [],
             'confirmed': bool(ack), 'busy': busy,
             'active': activity['active'] if activity else None,
             'waiting': activity['waiting'] if activity else None,
@@ -672,6 +674,21 @@ class StudioOperations:
             self._runtime_health_after = now + 5
             self._delayed_health_check()
 
+    def _notify_llm_negotiations(self, rows):
+        previous = self.__dict__.get("_llm_negotiation_notifications", set())
+        current = {(row["kind"], row["profile"], row["scope"], row["state"]) for row in rows}
+        self._llm_negotiation_notifications = current
+        for kind, profile, _scope, state in sorted(current - previous):
+            if state not in {"saved", "recovery_failed", "recovered_not_saved"}:
+                continue
+            modes = "Responses → Chat Completions" if kind == "responses_to_chat" else "json_schema → json_object"
+            messages = {
+                "saved": "Первый запрос отклонён. Альтернатива вернула JSON. Переключение сохранено для текущей конфигурации.",
+                "recovery_failed": "Первый запрос отклонён. Альтернатива не вернула пригодный JSON. Не сохранено.",
+                "recovered_not_saved": "Первый запрос отклонён. Альтернатива вернула JSON, но переключение не сохранено.",
+            }
+            self.actions.notify("info" if state == "saved" else "warning", f"{profile}: {modes}", messages[state])
+
     def _delayed_health_check(self):
         # Called by the owner loop, never a background thread. Capture plain launch
         # inputs here and return results through the same bounded queue pattern.
@@ -711,7 +728,8 @@ class StudioOperations:
                 image_state = "unknown"
             return {"sdcppLifecycle": image_state, "pid": snap.get("pid"), "baseUrl": base_url, "effectiveConfig": safe,
                     "activityText": self._generation_activity_text(snap.get("generationActivity")),
-                    "activity": self._generation_activity(snap.get("generationActivity"))}
+                    "activity": self._generation_activity(snap.get("generationActivity")),
+                    "llmNegotiation": safe_notices(snap.get("llmNegotiation"))}
 
         def apply(ok, ack):
             current_target = self._saved_or_owned_server_base_url() if studio_request or owned else self._server_base_url()
@@ -728,6 +746,7 @@ class StudioOperations:
                 self.applied_config = ("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
                 return {"ok": False, "message": self.applied_config}
             self._applied_config_ack = ack
+            self._notify_llm_negotiations(ack["llmNegotiation"])
             self._sdcpp_lifecycle = ack["sdcppLifecycle"]
             self._server_lifecycle = "responding"
             self.observe_runtime_notifications(poll=False)

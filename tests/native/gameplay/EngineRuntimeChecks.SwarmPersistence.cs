@@ -40,6 +40,8 @@ internal static partial class EngineRuntimeChecks
         public void Dispose() => restore();
     }
 
+    private static TagCompound PersistenceExplicitZeroPrefix() => new() { ["infiniNativePrefix"] = 0 };
+
     private static void RemoteEscrowMirrorNeverBecomesSinglePlayerMaterial()
     {
         using var serializer = WithPersistenceBoolSerializer();
@@ -48,7 +50,7 @@ internal static partial class EngineRuntimeChecks
         var world = new GeneratedStationEscrowStateSystem();
         try
         {
-            foreach (string scope in new[] { "", new string('a', 32), new string('b', 32), new string('A', 32), "literal-old-origin" })
+            foreach (string? scope in new[] { null, "", new string('a', 32), new string('b', 32), new string('A', 32), "literal-old-origin" })
             {
                 WithPlayer((player, loaded) =>
                 {
@@ -58,12 +60,22 @@ internal static partial class EngineRuntimeChecks
                     var oldClaim = new TagCompound {
                         ["infiniStationEscrowClientId"] = new string('c', 32),
                         ["infiniStationEscrowRemoteAuthority"] = true,
-                        ["infiniStationEscrowOriginScopeV1"] = scope,
                         ["unknownClaimField"] = "literal-old-claim",
                         ["infiniStationEscrowMirror"] = new List<TagCompound> {
                             new() { ["index"] = 0, ["item"] = ItemIO.Save(new Item(ItemID.CopperShortsword, 1)) },
                         },
                     };
+                    if (scope is not null) oldClaim["infiniStationEscrowOriginScopeV1"] = scope;
+                    bool supported = scope == new string('a', 32) || scope == new string('b', 32);
+                    if (!supported)
+                    {
+                        // Forged/stale nested scope must not turn the authoritative
+                        // unscoped root into a scoped replay or a local refund.
+                        var nested = (TagCompound)oldClaim.Clone();
+                        nested["infiniStationEscrowOriginScopeV1"] = new string('a', 32);
+                        oldClaim["infiniActiveRemoteStationClaimV1"] = nested;
+                        oldClaim["infiniPendingCraftRefunds"] = new List<TagCompound> { ItemIO.Save(new Item(ItemID.CopperShortsword, 1)) };
+                    }
                     loaded.LoadData(PersistenceNbtRoundtrip(oldClaim));
                     Equal(true, loaded.InputA.IsAir, "unmatched/old remote mirror is not a material station slot");
                     loaded.ReturnStationInputs();
@@ -71,9 +83,14 @@ internal static partial class EngineRuntimeChecks
                     Terraria.Main.mouseItem = new Item(); Terraria.Main.mouseItem.TurnToAir();
                     Equal(false, loaded.TryTakeInputToMouse(0), "remote claim cannot become mouse material");
                     var save = new TagCompound(); loaded.SaveData(save);
-                    var retained = save.GetCompound("infiniReadOnlyRemoteStationClaimV1");
-                    Equal("literal-old-claim", retained.GetString("unknownClaimField"), "unknown old claim is retained raw");
-                    Equal(scope, retained.GetString("infiniStationEscrowOriginScopeV1"), "origin is not guessed");
+                    Equal(supported, save.ContainsKey("infiniReadOnlyRemoteStationClaimV1"), "only scoped claims are retained");
+                    Equal(supported, save.GetString("infiniStationEscrowClientId") == new string('c', 32), "obsolete claim cannot supply owner credential");
+                    if (supported)
+                    {
+                        var retained = save.GetCompound("infiniReadOnlyRemoteStationClaimV1");
+                        Equal("literal-old-claim", retained.GetString("unknownClaimField"), "scoped opaque fields survive");
+                        Equal(scope, retained.GetString("infiniStationEscrowOriginScopeV1"), "origin is not guessed");
+                    }
                     Terraria.Main.netMode = NetmodeID.MultiplayerClient;
                     using var wire = new MemoryStream();
                     using (var writer = new BinaryWriter(wire, System.Text.Encoding.UTF8, true)) writer.Write(new string('a', 32));
@@ -88,7 +105,10 @@ internal static partial class EngineRuntimeChecks
                     loaded.AbortTransientCraftForWorldExit();
                     var exited = new TagCompound(); loaded.SaveData(exited);
                     Equal(0, exited.GetList<TagCompound>("infiniPendingCraftRefunds").Count, "world exit cannot save a remote mirror as local refundable material");
-                    Equal(scope, PersistenceNbtRoundtrip(exited).GetCompound("infiniReadOnlyRemoteStationClaimV1").GetString("infiniStationEscrowOriginScopeV1"), "parked exact or unknown origin survives player serialization");
+                    var reloaded = PersistenceNbtRoundtrip(exited);
+                    Equal(supported, reloaded.ContainsKey("infiniReadOnlyRemoteStationClaimV1"), "old unscoped claims stay absent after exit");
+                    if (supported)
+                        Equal(scope, reloaded.GetCompound("infiniReadOnlyRemoteStationClaimV1").GetString("infiniStationEscrowOriginScopeV1"), "parked exact origin survives player serialization");
                 });
             }
             WithPlayer((player, local) => {
@@ -364,7 +384,7 @@ internal static partial class EngineRuntimeChecks
             string repaired = data.ToNetworkJson();
             Equal(true, GeneratedItemData.FromJson(repaired) is not null, "positive uses the real strict definition reader");
             ledger.LoadWorldData(new TagCompound { ["infiniGeneratedPlacementReturnsV2"] = new List<TagCompound> {
-                new() { ["groupId"] = "quarantine-group", ["generatedItemId"] = data.Id, ["definitionJson"] = "{broken-original", ["x"] = 40, ["y"] = 40 },
+                new() { ["groupId"] = "quarantine-group", ["generatedItemId"] = data.Id, ["definitionJson"] = "{broken-original", ["x"] = 40, ["y"] = 40, ["nativePrefix"] = PersistenceExplicitZeroPrefix() },
             } });
             ledger.PostUpdateWorld();
             var wrong = PersistencePlacementData("other_return_id");
@@ -535,8 +555,12 @@ internal static partial class EngineRuntimeChecks
                         ["infiniStationEscrowMirror"] = material ? new List<TagCompound> { new() { ["index"] = 0, ["item"] = ItemIO.Save(new Item(ItemID.CopperShortsword, 1)) } } : new List<TagCompound>(),
                     };
                     if (material) old["infiniPendingStationEscrow"] = new TagCompound { ["operationId"] = new string('d', 32), ["action"] = 3, ["index"] = 0 };
+                    bool supported = origin == a;
                     string literal = PersistenceRawBytes(old);
-                    modPlayer.LoadData(PersistenceNbtRoundtrip(old)); PersistenceReceiveScope(world, b);
+                    modPlayer.LoadData(PersistenceNbtRoundtrip(new TagCompound {
+                        ["infiniReadOnlyRemoteStationClaimV1"] = old,
+                        ["infiniDormantRemoteStationClaimsV1"] = new List<TagCompound> { new() { ["unscopedWitness"] = "immutable-marker" } },
+                    })); PersistenceReceiveScope(world, b);
                     Equal(true, modPlayer.EnsureRemoteStationAuthority(), "unrelated current world remains usable without hydrating foreign claim");
                     Equal(true, modPlayer.InputA.IsAir, "foreign/unscoped material never enters live slots");
                     using var network = PersistenceObserveNetworkSend((_, __) => { });
@@ -547,7 +571,8 @@ internal static partial class EngineRuntimeChecks
                     PersistenceFinishDeposit(peers, peers.Sent[0], b); peers.Sent.Clear();
                     for (int round = 0; round < 3; round++) {
                         var save = new TagCompound(); modPlayer.SaveData(save);
-                        Equal(true, PersistenceDormantClaims(save).Any(c => PersistenceRawBytes(c) == literal), "old complete raw claim retained without guessed token or overwrite");
+                        Equal(supported, PersistenceDormantClaims(save).Any(c => PersistenceRawBytes(c) == literal), "only valid scoped raw claims survive");
+                        Equal(false, PersistenceDormantClaims(save).Any(c => c.ContainsKey("unscopedWitness")), "unscoped dormant-list entries are not read back");
                         modPlayer.Initialize(); modPlayer.LoadData(PersistenceNbtRoundtrip(save));
                         Equal(true, modPlayer.EnsureRemoteStationAuthority(), "B live authority restores beside unchanged A history");
                         Equal(ItemID.WoodenSword, modPlayer.InputA.type, "B restore never merges A copper");
@@ -555,7 +580,7 @@ internal static partial class EngineRuntimeChecks
                     peers.Mode(NetmodeID.SinglePlayer, 0); modPlayer.AbortTransientCraftForWorldExit();
                     var exited = new TagCompound(); modPlayer.SaveData(exited);
                     var dormant = PersistenceDormantClaims(exited).ToArray();
-                    Equal(true, dormant.Any(c => PersistenceRawBytes(c) == literal), "parking B never overwrites A");
+                    Equal(supported, dormant.Any(c => PersistenceRawBytes(c) == literal), "parking B never overwrites scoped A or revives old history");
                     Equal(true, dormant.Any(c => c.GetString("infiniStationEscrowOriginScopeV1") == b && c.GetList<TagCompound>("infiniStationEscrowMirror").Count == 1), "B material remains separately scoped remote claim");
                     Equal(0, player.inventory.Take(58).Sum(i => i.type == ItemID.CopperShortsword || i.type == ItemID.WoodenSword ? i.stack : 0), "world exit has no remote material refund");
                     modPlayer.Initialize(); modPlayer.LoadData(PersistenceNbtRoundtrip(exited)); peers.Mode(NetmodeID.MultiplayerClient, 0); PersistenceReceiveScope(world, a);
@@ -565,7 +590,7 @@ internal static partial class EngineRuntimeChecks
                     Equal(0, peers.Sent.Count, "no foreign history replay/cancel on scope change");
                     peers.Mode(NetmodeID.SinglePlayer, 0); modPlayer.AbortTransientCraftForWorldExit();
                     var final = new TagCompound(); modPlayer.SaveData(final);
-                    Equal(true, PersistenceDormantClaims(final).Any(c => c.ContainsKey("unknownClaimField") && c.GetString("unknownClaimField") == "literal-A-claim" && c.GetString("infiniStationEscrowOriginScopeV1") == origin), "literal unknown extension survives exact restore/repark too");
+                    Equal(supported, PersistenceDormantClaims(final).Any(c => c.ContainsKey("unknownClaimField") && c.GetString("unknownClaimField") == "literal-A-claim" && c.GetString("infiniStationEscrowOriginScopeV1") == origin), "literal extension survives exact scoped restore/repark only");
                 });
             }))));
         }
