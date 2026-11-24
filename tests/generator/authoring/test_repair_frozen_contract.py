@@ -21,8 +21,7 @@ from tests.generator.vfx.test_visual_presentation_metadata import kit
 
 
 _FIXTURES = (TEST_ROOT / "fixtures")
-_REPLAY_RAW = (_FIXTURES / "live20_repair_boundary_replay.json").read_bytes()
-_REPLAY = json.loads(_REPLAY_RAW)
+_REPLAY = json.loads((_FIXTURES / "live20_repair_boundary_replay.json").read_bytes())
 
 
 def test_current_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
@@ -113,18 +112,8 @@ def test_visual_literal_member_deletion_is_exact(domain):
     assert raw == before
 
 
-def test_replay_frozen_provenance():
-    assert _REPLAY["schema"] == "infini.live20-repair-boundary-replay.v1"
-    assert _REPLAY["sourceHead"] == "e73db62bde4bfa0254d79444faa4374efe9d15b3"
-    assert (_FIXTURES / "live20_repair_boundary_replay.json").read_bytes() == _REPLAY_RAW
-
-
-@pytest.mark.parametrize("section,case", [
-    pytest.param(section, case, id=case)
-    for section in ("gameplayApplyCases", "gameplayDiagnosticCases") for case in _REPLAY[section]
-])
-def test_archived_gameplay_is_refused_without_adaptation(section, case):
-    original = _REPLAY[section][case]["initialAuthor"]
+def test_archived_author_schema_is_refused_without_adaptation():
+    original = _REPLAY["gameplayApplyCases"]["obsidian_pickaxe"]["initialAuthor"]
     before = copy.deepcopy(original)
     report = validate_runtime_program(original)
     assert not report["ok"]

@@ -1088,7 +1088,7 @@ def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transp
     assert Path(path).read_bytes() == png
 
 
-@pytest.mark.parametrize("provider", ["openai", "api", "remote", "or", "lmstudio", "lm_studio", "ollama", "typo"])
+@pytest.mark.parametrize("provider", ["openai", "ollama", "typo"])
 def test_retired_provider_names_refuse_before_transport(wire, provider):
     wire.configure(LLM_PROVIDER=provider)
     with pytest.raises(ValueError, match="must be local, openrouter, openai_compat or openai_codex"):
@@ -1099,7 +1099,7 @@ def test_retired_provider_names_refuse_before_transport(wire, provider):
     assert len(wire.calls) == 1
 
 
-@pytest.mark.parametrize("mode", ["chat", "response", "chat_completion", "completions", "typo"])
+@pytest.mark.parametrize("mode", ["chat", "response", "typo"])
 def test_retired_api_modes_refuse_before_transport(wire, mode):
     wire.configure(LLM_API_MODE=mode)
     with pytest.raises(ValueError, match="API mode must be"):

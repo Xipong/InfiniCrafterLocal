@@ -77,6 +77,7 @@ def test_buff_hp_rate_retains_enclosing_unproved_guards_and_receiver():
     {'value': True}, {'value': float('inf')}, {'nativeMember': 'Other.Player.lifeRegen'},
     {'units': 'unknown_units'}, {'futureCondition': 'must_not_discard'},
     {'operation': 'operator_call_and_assign', 'nativeOperator': 'Whatever.op_Addition'},
+    {'operation': {'future': True}}, {'storageType': ['int32']},
 ])
 def test_unknown_effects_stay_literal_not_silently_interpreted(mutation):
     reference = regeneration()
@@ -139,14 +140,6 @@ def test_npc_counter_rate_requires_producer_unit_evidence_and_keeps_cadence_cond
         without = copy.deepcopy(source)
         del without['item']['nativeBuffEffectReference']['fragments'][0]['operations'][0][key]
         assert parent_stat_context(without) == without
-
-
-@pytest.mark.parametrize('mutation', [{'operation': {'future': True}}, {'storageType': ['int32']}])
-def test_future_nonscalar_operation_metadata_is_literal(mutation):
-    reference = regeneration()
-    reference['fragments'][0]['operations'][0].update(mutation)
-    source = {'item': {'nativeBuffEffectReference': reference}}
-    assert parent_stat_context(source) == source
 
 
 def test_environment_regen_keeps_local_scene_guard_and_scope():

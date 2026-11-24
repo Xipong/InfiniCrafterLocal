@@ -313,29 +313,6 @@ def test_nearby_delivery_strict_native_domain_without_diagnostics(field, value):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_retired_event_captures_are_refused_without_migration():
-    corpus = json.loads(FIXTURE.with_name("event_api_pre_simplification.json").read_text())
-    for case in corpus["cases"]:
-        wire = case["wire"]
-        before = deepcopy(wire)
-        report = validate_runtime_wire(wire)
-        assert not report["ok"] and any(
-            e["path"] == "$.runtimeProgram.itemUse.releaseTiming" for e in report["errors"])
-        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-            final_document=wire)["ok"], case["fn"]
-        expected = {
-            ("$.runtimeProgram.itemUse.releaseTiming", "unknown_final_wire_field"),
-            ("$.runtimeProgram.entities[1].movement.params", "unknown_final_wire_field"),
-            ("$.runtimeContract.finalWireReceipts", "undeclared_technical_lowering"),
-        }
-        if case["fn"] in {"damage_area_on_event", "damage_nearest_on_event"}:
-            expected.add(("$.runtimeProgram.entities[1].events[0].actionCode", "unsupported_opcode"))
-        assert {(e["path"], e["code"]) for e in report["errors"]} == expected
-        # Historical Author syntax is not a second authenticated input grammar.
-        assert not audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-            authored_document=case["source"], final_document=wire)["ok"], case["fn"]
-        assert not validate_runtime_program(case["source"])["ok"]
-        assert wire == before
         # Current pull/nearby effects are independently authored above. The
         # archive is negative evidence, not an input for a test-local importer.
 

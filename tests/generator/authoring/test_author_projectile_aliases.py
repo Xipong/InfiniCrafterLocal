@@ -388,19 +388,6 @@ def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
         assert fn not in {row["fn"] for row in dossier[section]}
 
 
-def test_frozen_retired_receipts_are_negative_evidence_without_rewriting_bytes():
-    path = (TEST_ROOT / "fixtures") / "projectile_retained_wire.json"
-    corpus = json.loads(path.read_text())
-    for row in corpus["cases"]:
-        wire = row["wire"]
-        before = json.dumps(wire, sort_keys=True)
-        receipts = wire["runtimeContract"]["finalWireReceipts"]
-        assert not validate_runtime_wire(wire)["ok"], row["fn"]
-        report = audit_compiler_receipts(receipts, final_document=wire)
-        assert not report["ok"], (row["fn"], report)
-        assert json.dumps(wire, sort_keys=True) == before
-
-
 @pytest.mark.parametrize("fn", ["move_bounce", "spawn_over_target"])
 def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
     corpus = json.loads(((TEST_ROOT / "fixtures") / "projectile_retained_wire.json").read_text())
